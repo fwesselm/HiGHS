@@ -152,8 +152,7 @@ class HighsHashTree {
 
         if (pos < size) {
           std::move_backward(&entries[pos], &entries[size], &entries[size + 1]);
-          memmove(&hashes[pos + 1], &hashes[pos],
-                  sizeof(hashes[0]) * (size - pos));
+          std::move_backward(&hashes[pos], &hashes[size], &hashes[size + 1]);
         }
 
         entries[pos] = std::move(entry);
@@ -166,8 +165,7 @@ class HighsHashTree {
         if (pos < size) {
           while (hashes[pos] > hash) ++pos;
           std::move_backward(&entries[pos], &entries[size], &entries[size + 1]);
-          memmove(&hashes[pos + 1], &hashes[pos],
-                  sizeof(hashes[0]) * (size - pos));
+          std::move_backward(&hashes[pos], &hashes[size], &hashes[size + 1]);
         }
 
         entries[pos] = std::move(entry);
@@ -271,8 +269,7 @@ class HighsHashTree {
           uint64_t hash = hashes[i];
           auto entry = std::move(entries[i]);
           std::move_backward(&entries[pos], &entries[i], &entries[i + 1]);
-          memmove(&hashes[pos + 1], &hashes[pos],
-                  sizeof(hashes[0]) * (size - pos));
+          std::move_backward(&hashes[pos], &hashes[i], &hashes[i + 1]);
           hashes[pos] = hash;
           entries[pos] = std::move(entry);
         }
