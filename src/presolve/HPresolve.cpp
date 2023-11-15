@@ -1554,6 +1554,13 @@ void HPresolve::addToMatrix(const HighsInt row, const HighsInt col,
     if (std::abs(sum) <= options->small_matrix_value) {
       unlink(pos);
     } else {
+      // first remove the locks and contribution to implied (dual) row bounds,
+      // then modify the implied bounds, and finally add the non-zeros again.
+      // The order is important since method 'remove' relies on the sources for
+      // the implied bounds.
+      impliedRowBounds.remove(row, col, Avalue[pos]);
+      impliedDualRowBounds.remove(col, row, Avalue[pos]);
+
       // remove implied bounds on the row dual that where implied by this
       // columns dual constraint
       if (rowDualUpperSource[row] == col)
@@ -1567,12 +1574,8 @@ void HPresolve::addToMatrix(const HighsInt row, const HighsInt col,
 
       if (colLowerSource[col] == row) changeImplColLower(col, -kHighsInf, -1);
 
-      // remove the locks and contribution to implied (dual) row bounds, then
-      // add then again
-      impliedRowBounds.remove(row, col, Avalue[pos]);
-      impliedDualRowBounds.remove(col, row, Avalue[pos]);
-      Avalue[pos] = sum;
       // value not zero, add new contributions and locks with opposite sign
+      Avalue[pos] = sum;
       impliedRowBounds.add(row, col, Avalue[pos]);
       impliedDualRowBounds.add(col, row, Avalue[pos]);
     }
