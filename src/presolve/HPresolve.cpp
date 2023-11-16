@@ -1380,8 +1380,7 @@ HPresolve::Result HPresolve::runProbing(HighsPostsolveStack& postsolve_stack) {
         std::max(mipsolver->submip ? HighsInt{0} : HighsInt{100000},
                  10 * numNonzeros());
     HighsInt numFail = 0;
-    for (const std::tuple<int64_t, HighsInt, HighsInt, HighsInt>& binvar :
-         binaries) {
+    for (const auto& binvar : binaries) {
       HighsInt i = std::get<3>(binvar);
 
       if (cliquetable.getSubstitution(i) != nullptr) continue;
@@ -1472,11 +1471,9 @@ HPresolve::Result HPresolve::runProbing(HighsPostsolveStack& postsolve_stack) {
 
     // add nonzeros from clique lifting before removing fixed variables, since
     // this might lead to stronger constraint sides
-    std::vector<std::pair<HighsInt, HighsCliqueTable::CliqueVar>>&
-        extensionvars = cliquetable.getCliqueExtensions();
+    auto& extensionvars = cliquetable.getCliqueExtensions();
     HighsInt addednnz = extensionvars.size();
-    for (std::pair<HighsInt, HighsCliqueTable::CliqueVar> cliqueextension :
-         extensionvars) {
+    for (const auto& cliqueextension : extensionvars) {
       if (rowDeleted[cliqueextension.first]) {
         --addednnz;
         continue;
@@ -1494,11 +1491,16 @@ HPresolve::Result HPresolve::runProbing(HighsPostsolveStack& postsolve_stack) {
 
     // now remove fixed columns and tighten domains
     for (HighsInt i = 0; i != model->num_col_; ++i) {
+      HighsInt cnt = 0;
       if (colDeleted[i]) continue;
-      if (model->col_lower_[i] < domain.col_lower_[i])
+      if (model->col_lower_[i] < domain.col_lower_[i]) {
         changeColLower(i, domain.col_lower_[i]);
-      if (model->col_upper_[i] > domain.col_upper_[i])
+        cnt++;
+      }
+      if (model->col_upper_[i] > domain.col_upper_[i]) {
+        cnt++;
         changeColUpper(i, domain.col_upper_[i]);
+      }
       if (domain.isFixed(i)) {
         postsolve_stack.removedFixedCol(i, model->col_lower_[i], 0.0,
                                         HighsEmptySlice());
@@ -3587,6 +3589,30 @@ HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
   impliedRowUpper = impliedRowBounds.getSumUpperOrig(row);
   impliedRowLower = impliedRowBounds.getSumLowerOrig(row);
 
+  // Allow removal of redundant rows
+  if (impliedRowLower > model->row_upper_[row] + primal_feastol ||
+      impliedRowUpper < model->row_lower_[row] - primal_feastol) {
+    // model infeasible
+    return Result::kPrimalInfeasible;
+  }
+
+  if (impliedRowLower >= model->row_lower_[row] - primal_feastol &&
+      impliedRowUpper <= model->row_upper_[row] + primal_feastol) {
+    // row is redundant
+    if (logging_on) analysis_.startPresolveRuleLog(kPresolveRuleRedundantRow);
+    postsolve_stack.redundantRow(row);
+    removeRow(row);
+    analysis_.logging_on_ = logging_on;
+    if (logging_on) analysis_.stopPresolveRuleLog(kPresolveRuleRedundantRow);
+    return checkLimits(postsolve_stack);
+  }
+
+  HighsDomain* domain = nullptr;
+  if (mipsolver != nullptr) {
+    mipsolver->mipdata_->setupDomainPropagation();
+    domain = &mipsolver->mipdata_->domain;
+  }
+
   // printf("implied bounds without tightenings: [%g,%g]\n", baseiRLower,
   //        baseiRUpper);
 
@@ -3626,7 +3652,8 @@ HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
         // already mark the row as deleted, since otherwise it would be
         // registered as changed/singleton in the process of fixing and removing
         // the contained columns
-        markRowDeleted(row);
+        // markRowDeleted(row);
+        double rowactivity = 0.0;
         for (const HighsSliceNonzero& nonzero : rowVector) {
           if (nonzero.value() > 0) {
             // the upper bound of the column is as tight as the implied upper
@@ -3642,6 +3669,10 @@ HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
               changeColLower(nonzero.index(),
                              model->col_upper_[nonzero.index()]);
             removeFixedCol(nonzero.index());
+            if (domain != nullptr) {
+              domain->propagate();
+              if (domain->infeasible()) return Result::kPrimalInfeasible;
+            }
           } else {
             postsolve_stack.fixedColAtLower(nonzero.index(),
                                             model->col_lower_[nonzero.index()],
@@ -3652,11 +3683,17 @@ HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
               changeColUpper(nonzero.index(),
                              model->col_lower_[nonzero.index()]);
             removeFixedCol(nonzero.index());
+            if (domain != nullptr) {
+              domain->propagate();
+              if (domain->infeasible()) return Result::kPrimalInfeasible;
+            }
           }
+          rowactivity += nonzero.value() * model->col_lower_[nonzero.index()];
         }
         // now the row might be empty, but not necessarily because the implied
         // column bounds might be implied by other rows in which case we cannot
         // fix the column
+        markRowDeleted(row);
         postsolve_stack.redundantRow(row);
         // Row removal accounted for above
 
@@ -3683,11 +3720,13 @@ HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
             ++nfixings;
         }
       }
+
       if (nfixings == rowsize[row]) {
         if (logging_on) analysis_.startPresolveRuleLog(kPresolveRuleForcingRow);
         postsolve_stack.forcingRow(row, rowVector, model->row_upper_[row],
                                    HighsPostsolveStack::RowType::kLeq);
-        markRowDeleted(row);
+        // markRowDeleted(row);
+        double rowactivity = 0.0;
         for (const HighsSliceNonzero& nonzero : rowVector) {
           if (nonzero.value() < 0) {
             if (model->integrality_[nonzero.index()] !=
@@ -3711,8 +3750,11 @@ HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
                 model->col_upper_[nonzero.index()])
               changeColLower(nonzero.index(),
                              model->col_upper_[nonzero.index()]);
-
             removeFixedCol(nonzero.index());
+            if (domain != nullptr) {
+              domain->propagate();
+              if (domain->infeasible()) return Result::kPrimalInfeasible;
+            }
           } else {
             if (model->integrality_[nonzero.index()] !=
                 HighsVarType::kContinuous) {
@@ -3737,8 +3779,14 @@ HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
                              model->col_lower_[nonzero.index()]);
 
             removeFixedCol(nonzero.index());
+            if (domain != nullptr) {
+              domain->propagate();
+              if (domain->infeasible()) return Result::kPrimalInfeasible;
+            }
           }
+          rowactivity += nonzero.value() * model->col_lower_[nonzero.index()];
         }
+        markRowDeleted(row);
         postsolve_stack.redundantRow(row);
         // Row removal accounted for above
 
