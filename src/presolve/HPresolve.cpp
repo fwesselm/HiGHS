@@ -3606,7 +3606,6 @@ HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
     if (logging_on) analysis_.stopPresolveRuleLog(kPresolveRuleRedundantRow);
     return checkLimits(postsolve_stack);
   }
-  
 
   // printf("implied bounds without tightenings: [%g,%g]\n", baseiRLower,
   //        baseiRUpper);
