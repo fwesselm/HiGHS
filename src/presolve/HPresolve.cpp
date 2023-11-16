@@ -3606,12 +3606,7 @@ HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
     if (logging_on) analysis_.stopPresolveRuleLog(kPresolveRuleRedundantRow);
     return checkLimits(postsolve_stack);
   }
-
-  HighsDomain* domain = nullptr;
-  if (mipsolver != nullptr) {
-    mipsolver->mipdata_->setupDomainPropagation();
-    domain = &mipsolver->mipdata_->domain;
-  }
+  
 
   // printf("implied bounds without tightenings: [%g,%g]\n", baseiRLower,
   //        baseiRUpper);
@@ -3669,9 +3664,11 @@ HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
               changeColLower(nonzero.index(),
                              model->col_upper_[nonzero.index()]);
             removeFixedCol(nonzero.index());
-            if (domain != nullptr) {
-              domain->propagate();
-              if (domain->infeasible()) return Result::kPrimalInfeasible;
+            if (mipsolver != nullptr) {
+              mipsolver->mipdata_->setupDomainPropagation();
+              HighsDomain& domain = mipsolver->mipdata_->domain;
+              domain.propagate();
+              if (domain.infeasible()) return Result::kPrimalInfeasible;
             }
           } else {
             postsolve_stack.fixedColAtLower(nonzero.index(),
@@ -3683,9 +3680,11 @@ HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
               changeColUpper(nonzero.index(),
                              model->col_lower_[nonzero.index()]);
             removeFixedCol(nonzero.index());
-            if (domain != nullptr) {
-              domain->propagate();
-              if (domain->infeasible()) return Result::kPrimalInfeasible;
+            if (mipsolver != nullptr) {
+              mipsolver->mipdata_->setupDomainPropagation();
+              HighsDomain& domain = mipsolver->mipdata_->domain;
+              domain.propagate();
+              if (domain.infeasible()) return Result::kPrimalInfeasible;
             }
           }
           rowactivity += nonzero.value() * model->col_lower_[nonzero.index()];
@@ -3751,9 +3750,11 @@ HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
               changeColLower(nonzero.index(),
                              model->col_upper_[nonzero.index()]);
             removeFixedCol(nonzero.index());
-            if (domain != nullptr) {
-              domain->propagate();
-              if (domain->infeasible()) return Result::kPrimalInfeasible;
+            if (mipsolver != nullptr) {
+              mipsolver->mipdata_->setupDomainPropagation();
+              HighsDomain& domain = mipsolver->mipdata_->domain;
+              domain.propagate();
+              if (domain.infeasible()) return Result::kPrimalInfeasible;
             }
           } else {
             if (model->integrality_[nonzero.index()] !=
@@ -3779,9 +3780,11 @@ HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
                              model->col_lower_[nonzero.index()]);
 
             removeFixedCol(nonzero.index());
-            if (domain != nullptr) {
-              domain->propagate();
-              if (domain->infeasible()) return Result::kPrimalInfeasible;
+            if (mipsolver != nullptr) {
+              mipsolver->mipdata_->setupDomainPropagation();
+              HighsDomain& domain = mipsolver->mipdata_->domain;
+              domain.propagate();
+              if (domain.infeasible()) return Result::kPrimalInfeasible;
             }
           }
           rowactivity += nonzero.value() * model->col_lower_[nonzero.index()];
