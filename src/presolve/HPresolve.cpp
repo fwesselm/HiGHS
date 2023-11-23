@@ -3620,7 +3620,7 @@ HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
           // If a non-continuous variable is fixed at a fractional
           // value then the problem is infeasible
           const double upper = model->col_upper_[nonzero.index()];
-          const double fraction = upper - std::floor(upper);
+          const double fraction = upper - std::floor(upper + primal_feastol);
           assert(fraction >= 0);
           const bool non_fractional =
               fraction <= mipsolver->options_mip_->mip_feasibility_tolerance;
@@ -3643,7 +3643,7 @@ HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
           // If a non-continuous variable is fixed at a fractional
           // value then the problem is infeasible
           const double lower = model->col_lower_[nonzero.index()];
-          const double fraction = std::ceil(lower) - lower;
+          const double fraction = std::ceil(lower - primal_feastol) - lower;
           assert(fraction >= 0);
           const bool non_fractional =
               fraction <= mipsolver->options_mip_->mip_feasibility_tolerance;
