@@ -3588,7 +3588,8 @@ HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
   //        baseiRUpper);
 
   auto checkForcingRow = [&](HighsInt direction, double rowSide,
-                             HighsPostsolveStack::RowType rowType) {
+                             HighsPostsolveStack::RowType rowType,
+                             bool& isForcingRow) {
     // store row
     storeRow(row);
     auto rowVector = getStoredRow();
@@ -3604,7 +3605,8 @@ HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
       }
     }
 
-    if (nfixings != rowsize[row]) return Result::kOk;
+    isForcingRow = nfixings == rowsize[row];
+    if (!isForcingRow) return Result::kOk;
 
     if (logging_on) analysis_.startPresolveRuleLog(kPresolveRuleForcingRow);
     postsolve_stack.forcingRow(row, rowVector, rowSide, rowType);
@@ -3685,15 +3687,19 @@ HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
       // primal and dual values as the dual values are required to find
       // the proper dual multiplier for the row and the column that we put
       // in the basis.
-      Result res = checkForcingRow(HighsInt{1}, model->row_lower_[row],
-                                   HighsPostsolveStack::RowType::kGeq);
-      if (res != Result::kOk) return res;
+      bool isForcingRow;
+      Result res =
+          checkForcingRow(HighsInt{1}, model->row_lower_[row],
+                          HighsPostsolveStack::RowType::kGeq, isForcingRow);
+      if (isForcingRow) return res;
 
     } else if (impliedRowLower >= model->row_upper_[row] - primal_feastol) {
       // forcing row in the other direction
-      Result res = checkForcingRow(HighsInt{-1}, model->row_upper_[row],
-                                   HighsPostsolveStack::RowType::kLeq);
-      if (res != Result::kOk) return res;
+      bool isForcingRow;
+      Result res =
+          checkForcingRow(HighsInt{-1}, model->row_upper_[row],
+                          HighsPostsolveStack::RowType::kLeq, isForcingRow);
+      if (isForcingRow) return res;
     }
   }
 
