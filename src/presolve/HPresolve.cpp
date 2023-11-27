@@ -3393,7 +3393,8 @@ HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
         };
 
         auto scaleRowBack = [&](HighsInt row, HighsCDouble roundLhs,
-                                HighsCDouble roundRhs, double scalar) {
+                                HighsCDouble roundRhs, double scalar,
+                                bool checkDelta) {
           // scale the row
           if (roundLhs > -kHighsInf)
             model->row_lower_[row] = double(roundLhs / scalar);
@@ -3402,7 +3403,7 @@ HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
           for (size_t i = 0; i < rowCoefs.size(); ++i) {
             double delta = double(HighsCDouble(rowCoefs[i]) / scalar -
                                   Avalue[rowpositions[i]]);
-            if (std::fabs(delta) > options->small_matrix_value)
+            if (!checkDelta || std::fabs(delta) > options->small_matrix_value)
               addToMatrix(row, rowIndex[i], delta);
           }
         };
@@ -3414,7 +3415,7 @@ HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
           if (maxVal > 1000.0 && intScale > 100.0) return false;
           // the scale value is reasonably small, change the row values to be
           // integral
-          scaleRowBack(row, roundLhs, roundRhs, 1.0);
+          scaleRowBack(row, roundLhs, roundRhs, 1.0, false);
           return true;
         };
 
@@ -3462,7 +3463,7 @@ HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
                   // constraint the scaled back constraint must be stronger
                   // than the original constraint for this to make sense with
                   // is checked with the condition above
-                  scaleRowBack(row, roundLhs, roundRhs, intScale);
+                  scaleRowBack(row, roundLhs, roundRhs, intScale, true);
                 }
               }
             }
