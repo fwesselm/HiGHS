@@ -2955,55 +2955,34 @@ HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
     return checkLimits(postsolve_stack);
   }
 
+  auto checkRedundantBounds = [&](HighsInt col) {
+    assert(model->col_cost_[col] != 0.0);
+    if (colsize[col] == 1) {
+      if (model->col_cost_[col] > 0) {
+        assert(model->col_lower_[col] == -kHighsInf ||
+               (model->col_lower_[col] <= implColLower[col] + primal_feastol &&
+                colLowerSource[col] == row));
+        if (model->col_lower_[col] > implColLower[col] - primal_feastol)
+          changeColLower(col, -kHighsInf);
+      } else {
+        assert(model->col_upper_[col] == kHighsInf ||
+               (model->col_upper_[col] >= implColUpper[col] - primal_feastol &&
+                colUpperSource[col] == row));
+        if (model->col_upper_[col] < implColUpper[col] + primal_feastol)
+          changeColUpper(col, kHighsInf);
+      }
+    }
+  };
+
   if (model->row_lower_[row] != model->row_upper_[row]) {
     if (implRowDualLower[row] > options->dual_feasibility_tolerance) {
       model->row_upper_[row] = model->row_lower_[row];
-      if (mipsolver == nullptr) {
-        HighsInt col = rowDualLowerSource[row];
-        assert(model->col_cost_[col] != 0.0);
-        if (colsize[col] == 1) {
-          if (model->col_cost_[col] > 0) {
-            assert(
-                model->col_lower_[col] == -kHighsInf ||
-                (model->col_lower_[col] <= implColLower[col] + primal_feastol &&
-                 colLowerSource[col] == row));
-            if (model->col_lower_[col] > implColLower[col] - primal_feastol)
-              changeColLower(col, -kHighsInf);
-          } else {
-            assert(
-                model->col_upper_[col] == kHighsInf ||
-                (model->col_upper_[col] >= implColUpper[col] - primal_feastol &&
-                 colUpperSource[col] == row));
-            if (model->col_upper_[col] < implColUpper[col] + primal_feastol)
-              changeColUpper(col, kHighsInf);
-          }
-        }
-      }
+      if (mipsolver == nullptr) checkRedundantBounds(rowDualLowerSource[row]);
     }
 
     if (implRowDualUpper[row] < -options->dual_feasibility_tolerance) {
       model->row_lower_[row] = model->row_upper_[row];
-      if (mipsolver == nullptr) {
-        HighsInt col = rowDualUpperSource[row];
-        assert(model->col_cost_[col] != 0.0);
-        if (colsize[col] == 1) {
-          if (model->col_cost_[col] > 0) {
-            assert(
-                model->col_lower_[col] == -kHighsInf ||
-                (model->col_lower_[col] <= implColLower[col] + primal_feastol &&
-                 colLowerSource[col] == row));
-            if (model->col_lower_[col] > implColLower[col] - primal_feastol)
-              changeColLower(col, -kHighsInf);
-          } else {
-            assert(
-                model->col_upper_[col] == kHighsInf ||
-                (model->col_upper_[col] >= implColUpper[col] - primal_feastol &&
-                 colUpperSource[col] == row));
-            if (model->col_upper_[col] < implColUpper[col] + primal_feastol)
-              changeColUpper(col, kHighsInf);
-          }
-        }
-      }
+      if (mipsolver == nullptr) checkRedundantBounds(rowDualUpperSource[row]);
     }
   }
 
@@ -3474,27 +3453,32 @@ HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
         }
       }
 
-      if (model->row_lower_[row] == -kHighsInf &&
-          impliedRowUpper != kHighsInf) {
-        double maxCoefValue = impliedRowUpper - model->row_upper_[row];
-        HighsCDouble rhs = model->row_upper_[row];
+      auto strengthenCoefs = [&](HighsCDouble& rhs, HighsInt direction,
+                                 double maxCoefValue) {
         for (const HighsSliceNonzero& nonz : getStoredRow()) {
           if (model->integrality_[nonz.index()] == HighsVarType::kContinuous)
             continue;
 
-          if (nonz.value() > maxCoefValue + primal_feastol) {
+          if (direction * nonz.value() > maxCoefValue + primal_feastol) {
             // <= constraint, we decrease the coefficient value and the right
             // hand side
-            double delta = maxCoefValue - nonz.value();
+            double delta = direction * maxCoefValue - nonz.value();
             addToMatrix(row, nonz.index(), delta);
             rhs += delta * model->col_upper_[nonz.index()];
-          } else if (nonz.value() < -maxCoefValue - primal_feastol) {
-            double delta = -maxCoefValue - nonz.value();
+          } else if (direction * nonz.value() <
+                     -maxCoefValue - primal_feastol) {
+            double delta = -direction * maxCoefValue - nonz.value();
             addToMatrix(row, nonz.index(), delta);
             rhs += delta * model->col_lower_[nonz.index()];
           }
         }
+      };
 
+      if (model->row_lower_[row] == -kHighsInf &&
+          impliedRowUpper != kHighsInf) {
+        double maxCoefValue = impliedRowUpper - model->row_upper_[row];
+        HighsCDouble rhs = model->row_upper_[row];
+        strengthenCoefs(rhs, 1, maxCoefValue);
         model->row_upper_[row] = double(rhs);
       }
 
@@ -3502,21 +3486,7 @@ HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
           impliedRowLower != -kHighsInf) {
         double maxCoefValue = model->row_lower_[row] - impliedRowLower;
         HighsCDouble rhs = model->row_lower_[row];
-        for (const HighsSliceNonzero& nonz : getStoredRow()) {
-          if (model->integrality_[nonz.index()] == HighsVarType::kContinuous)
-            continue;
-
-          if (nonz.value() > maxCoefValue + primal_feastol) {
-            double delta = maxCoefValue - nonz.value();
-            addToMatrix(row, nonz.index(), delta);
-            rhs += delta * model->col_lower_[nonz.index()];
-          } else if (nonz.value() < -maxCoefValue - primal_feastol) {
-            double delta = -maxCoefValue - nonz.value();
-            addToMatrix(row, nonz.index(), delta);
-            rhs += delta * model->col_upper_[nonz.index()];
-          }
-        }
-
+        strengthenCoefs(rhs, -1, maxCoefValue);
         model->row_lower_[row] = double(rhs);
       }
     }
