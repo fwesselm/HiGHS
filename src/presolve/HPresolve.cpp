@@ -3078,7 +3078,7 @@ HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
               // nonzCol = colUb - (colUb - colLb)(binCol - binLb)
               // nonzCol = colUb + binLb * (colUb - colLb) - (colUb - colLb) *
               // binCol
-              remDoubletonEq(model->col_upper_[nonz.index()], 1);
+              remDoubletonEq(model->col_upper_[nonz.index()], HighsInt{1});
             } else {
               // This case yields the following implications:
               // binCol = lb -> nonzCol = lb
@@ -3087,7 +3087,7 @@ HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
               // nonzCol = colLb + (colUb - colLb)(binCol - binLb)
               // nonzCol =
               //    colLb - binLb*(colUb - colLb) + (colUb - colLb)*binCol
-              remDoubletonEq(model->col_lower_[nonz.index()], -1);
+              remDoubletonEq(model->col_lower_[nonz.index()], HighsInt{-1});
             }
           }
 
@@ -3472,7 +3472,7 @@ HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
           impliedRowUpper != kHighsInf) {
         double maxCoefValue = impliedRowUpper - model->row_upper_[row];
         HighsCDouble rhs = model->row_upper_[row];
-        strengthenCoefs(rhs, 1, maxCoefValue);
+        strengthenCoefs(rhs, HighsInt{1}, maxCoefValue);
         model->row_upper_[row] = double(rhs);
       }
 
@@ -3480,7 +3480,7 @@ HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
           impliedRowLower != -kHighsInf) {
         double maxCoefValue = model->row_lower_[row] - impliedRowLower;
         HighsCDouble rhs = model->row_lower_[row];
-        strengthenCoefs(rhs, -1, maxCoefValue);
+        strengthenCoefs(rhs, HighsInt{-1}, maxCoefValue);
         model->row_lower_[row] = double(rhs);
       }
     }
