@@ -3417,8 +3417,8 @@ HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
             if (isInfeasible) return Result::kPrimalInfeasible;
             // only accept row whose sides were strengthened
             if ((rhs >= kHighsInf && strengthenedLhs) ||
-                (lhs <= -kHighsInf && strengthenedRhs ||
-                 (strengthenedLhs && strengthenedRhs))) {
+                (lhs <= -kHighsInf && strengthenedRhs) ||
+                (strengthenedLhs && strengthenedRhs)) {
               // check if constraint can be scaled to integral values
               if (!scaleRowIntVals(row, roundLhs, roundRhs, maxVal,
                                    strengthenedLhs, strengthenedRhs)) {
