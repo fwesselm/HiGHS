@@ -3761,8 +3761,8 @@ HPresolve::Result HPresolve::colPresolve(HighsPostsolveStack& postsolve_stack,
   // column is not (weakly) dominated
 
   // the associated dual constraint has an upper bound if there is an infinite
-  // or redundant column lower bound as then the reduced cost of the column
-  // must not be positive i.e. <= 0
+  // or redundant column lower bound as then the reduced cost of the column must
+  // not be positive i.e. <= 0
   bool dualConsHasUpper = isUpperImplied(col);
   bool dualConsHasLower = isLowerImplied(col);
 
@@ -3853,8 +3853,8 @@ HPresolve::Result HPresolve::colPresolve(HighsPostsolveStack& postsolve_stack,
 HPresolve::Result HPresolve::initialRowAndColPresolve(
     HighsPostsolveStack& postsolve_stack) {
   // do a full scan over the rows as the singleton arrays and the changed row
-  // arrays are not initialized, also unset changedRowFlag so that the row
-  // will be added to the changed row vector when it is changed after it was
+  // arrays are not initialized, also unset changedRowFlag so that the row will
+  // be added to the changed row vector when it is changed after it was
   // processed
   for (HighsInt row = 0; row != model->num_row_; ++row) {
     if (rowDeleted[row]) continue;
@@ -3917,8 +3917,8 @@ HPresolve::Result HPresolve::presolve(HighsPostsolveStack& postsolve_stack) {
   //    - fast presolve loop
   //    - parallel rows and columns
   //    - if (changes found) fast presolve loop
-  //    - aggregator // add limit that catches many substitutions but stops
-  //    when many failures, do not run exhaustively as now
+  //    - aggregator // add limit that catches many substitutions but stops when
+  //    many failures, do not run exhaustively as now
   //    - if (changes found) start main loop from beginning
   //    - primal and dual matrix sparsification
   //    - if (changes found) fast presolve loop
@@ -4461,9 +4461,8 @@ HPresolve::Result HPresolve::removeDependentFreeCols(
   //  HighsSparseMatrix matrix;
   //  matrix.num_col_ = freeCols.size();
   //  highsLogDev(options->log_options, HighsLogType::kInfo,
-  //              "HPresolve::removeDependentFreeCols Got %d free cols,
-  //              checking " "for dependent free cols\n",
-  //              (int)matrix.num_col_);
+  //              "HPresolve::removeDependentFreeCols Got %d free cols, checking
+  //              " "for dependent free cols\n", (int)matrix.num_col_);
   //  matrix.num_row_ = model->num_row_ + 1;
   //  matrix.start_.resize(matrix.num_col_ + 1);
   //  matrix.start_[0] = 0;
@@ -4495,9 +4494,8 @@ HPresolve::Result HPresolve::removeDependentFreeCols(
   //  // Must not have timed out
   //  assert(rank_deficiency >= 0);
   //  highsLogDev(options->log_options, HighsLogType::kInfo,
-  //              "HPresolve::removeDependentFreeCols Got %d free cols,
-  //              checking " "for dependent free cols\n",
-  //              (int)matrix.num_col_);
+  //              "HPresolve::removeDependentFreeCols Got %d free cols, checking
+  //              " "for dependent free cols\n", (int)matrix.num_col_);
   //  // Analyse what's been removed
   //  HighsInt num_removed_row = 0;
   //  HighsInt num_removed_nz = 0;
@@ -4513,8 +4511,8 @@ HPresolve::Result HPresolve::removeDependentFreeCols(
   //  }
   //  highsLogDev(
   //      options->log_options, HighsLogType::kInfo,
-  //      "HPresolve::removeDependentFreeCols Removed %d rows and %d
-  //      nonzeros", (int)num_removed_row, (int)num_removed_nz);
+  //      "HPresolve::removeDependentFreeCols Removed %d rows and %d nonzeros",
+  //      (int)num_removed_row, (int)num_removed_nz);
   //  if (num_fictitious_cols_skipped)
   //    highsLogDev(options->log_options, HighsLogType::kInfo,
   //                ", avoiding %d fictitious rows",
@@ -4749,8 +4747,8 @@ void HPresolve::fixColToLower(HighsPostsolveStack& postsolve_stack,
 
   // printf("fixing column %" HIGHSINT_FORMAT " to %.15g\n", col, fixval);
 
-  // mark the column as deleted first so that it is not registered as
-  // singleton column upon removing its nonzeros
+  // mark the column as deleted first so that it is not registered as singleton
+  // column upon removing its nonzeros
   postsolve_stack.fixedColAtLower(col, fixval, model->col_cost_[col],
                                   getColumnVector(col));
   markColDeleted(col);
@@ -4796,8 +4794,8 @@ void HPresolve::fixColToUpper(HighsPostsolveStack& postsolve_stack,
   assert(fixval != kHighsInf);
   // printf("fixing column %" HIGHSINT_FORMAT " to %.15g\n", col, fixval);
 
-  // mark the column as deleted first so that it is not registered as
-  // singleton column upon removing its nonzeros
+  // mark the column as deleted first so that it is not registered as singleton
+  // column upon removing its nonzeros
   postsolve_stack.fixedColAtUpper(col, fixval, model->col_cost_[col],
                                   getColumnVector(col));
   markColDeleted(col);
@@ -4841,8 +4839,8 @@ void HPresolve::fixColToZero(HighsPostsolveStack& postsolve_stack,
   if (logging_on) analysis_.startPresolveRuleLog(kPresolveRuleFixedCol);
   postsolve_stack.fixedColAtZero(col, model->col_cost_[col],
                                  getColumnVector(col));
-  // mark the column as deleted first so that it is not registered as
-  // singleton column upon removing its nonzeros
+  // mark the column as deleted first so that it is not registered as singleton
+  // column upon removing its nonzeros
   markColDeleted(col);
 
   for (HighsInt coliter = colhead[col]; coliter != -1;) {
@@ -5270,9 +5268,8 @@ HPresolve::Result HPresolve::detectParallelRowsAndCols(
   rowHashes.assign(rowsize.begin(), rowsize.end());
   colHashes.assign(colsize.begin(), colsize.end());
 
-  // Step 1: Determine scales for rows and columns and remove column
-  // singletons from the initial row hashes which are initialized with the row
-  // sizes
+  // Step 1: Determine scales for rows and columns and remove column singletons
+  // from the initial row hashes which are initialized with the row sizes
   for (HighsInt i = 0; i != nnz; ++i) {
     if (Avalue[i] == 0.0) continue;
     assert(!colDeleted[Acol[i]]);
@@ -5286,9 +5283,9 @@ HPresolve::Result HPresolve::detectParallelRowsAndCols(
     double absRowMax = std::abs(rowMax[Arow[i]].first);
 
     // among the largest values which are equal in tolerance
-    // we use the nonzero with the smallest row/column index for the
-    // column/row scale so that we ensure that duplicate rows/columns are
-    // scaled to have the same sign
+    // we use the nonzero with the smallest row/column index for the column/row
+    // scale so that we ensure that duplicate rows/columns are scaled to have
+    // the same sign
     if (absVal >= absRowMax - options->small_matrix_value) {
       // we are greater or equal with tolerances, check if we are either
       // strictly larger or equal with a smaller index and remember the signed
@@ -5327,9 +5324,9 @@ HPresolve::Result HPresolve::detectParallelRowsAndCols(
     }
   }
 
-  // Step 3: Loop over the rows and columns and put them into buckets using
-  // the computed hash values. Whenever a bucket already contains a
-  // row/column, check if we can apply a (nearly) parallel row reduction or a
+  // Step 3: Loop over the rows and columns and put them into buckets using the
+  // computed hash values. Whenever a bucket already contains a row/column,
+  // check if we can apply a (nearly) parallel row reduction or a
   // parallel/dominated column reduction.
   std::unordered_multimap<std::uint64_t, HighsInt> buckets;
 
@@ -5353,12 +5350,12 @@ HPresolve::Result HPresolve::detectParallelRowsAndCols(
       // we want to check if the columns are parallel, first rule out
       // hash collisions with different size columns
       if (colsize[i] != colsize[parallelColCandidate]) continue;
-      // The columns have the same length. Next we determine whether
-      // domination is possible in one of the directions, and if it is we
-      // designate the dominating column as column 2. The first thing we check
-      // is whether the the objective value of one of the (scaled) columns is
-      // strictly better then the objective value of the other column which
-      // rules out domination in one direction.
+      // The columns have the same length. Next we determine whether domination
+      // is possible in one of the directions, and if it is we designate the
+      // dominating column as column 2. The first thing we check is whether the
+      // the objective value of one of the (scaled) columns is strictly better
+      // then the objective value of the other column which rules out domination
+      // in one direction.
 
       HighsInt col = -1;
       HighsInt duplicateCol = -1;
@@ -5367,30 +5364,29 @@ HPresolve::Result HPresolve::detectParallelRowsAndCols(
       // helpers for checking dominance between parallel columns which is
       // possible for different cases of the variable types: if col can be
       // increased infinitely in which case duplicateCol can be fixed to its
-      // lower bound. duplicateCol can be decreased infinitely in which case
-      // col can be fixed to its upper bound. for both cases we exploit that
-      // the column that remains unfixed can always compensate for the fixed
-      // column. This only holds if the compensating column can compensate
-      // exactly for feasible value of the fixed column. In the continuous
-      // case this trivially holds. In the case where both variables are
-      // integer and the scale is +- 1 this also holds trivially. If the scale
-      // is > 1 and both variables are integer, this only holds in one
-      // direction. We can apply the reduction due to the following reasoning:
-      // Applying the scale to col, means we change its meaning and it is not
-      // an integer variable anymore, but a variable that moves on multiples
-      // of 1/scale. As we have taken care that the scale is >=1 and integral
-      // for two integer variables, the scaled column can always exactly
-      // compensate for the other column as it can move by 1/k with k being
-      // integer. Hence every kth allowed value is integral and no integral
-      // value is skipped. If the compensating column is integral
+      // lower bound. duplicateCol can be decreased infinitely in which case col
+      // can be fixed to its upper bound. for both cases we exploit that the
+      // column that remains unfixed can always compensate for the fixed column.
+      // This only holds if the compensating column can compensate exactly for
+      // feasible value of the fixed column. In the continuous case this
+      // trivially holds. In the case where both variables are integer and the
+      // scale is +- 1 this also holds trivially. If the scale is > 1 and both
+      // variables are integer, this only holds in one direction. We can apply
+      // the reduction due to the following reasoning: Applying the scale to
+      // col, means we change its meaning and it is not an integer variable
+      // anymore, but a variable that moves on multiples of 1/scale. As we have
+      // taken care that the scale is >=1 and integral for two integer
+      // variables, the scaled column can always exactly compensate for the
+      // other column as it can move by 1/k with k being integer. Hence every
+      // kth allowed value is integral and no integral value is skipped. If the
+      // compensating column is integral
       bool checkColImplBounds = true;
       bool checkDuplicateColImplBounds = true;
       auto colUpperInf = [&]() {
         if (!checkColImplBounds) return false;
         if (mipsolver == nullptr) {
           // for LP we check strict redundancy of the bounds as otherwise dual
-          // postsolve might fail when the bound is used in the optimal
-          // solution
+          // postsolve might fail when the bound is used in the optimal solution
           return colScale > 0 ? model->col_upper_[col] == kHighsInf ||
                                     implColUpper[col] <
                                         model->col_upper_[col] - primal_feastol
@@ -5398,8 +5394,8 @@ HPresolve::Result HPresolve::detectParallelRowsAndCols(
                                     implColLower[col] >
                                         model->col_lower_[col] + primal_feastol;
         } else {
-          // for MIP we do not need dual postsolve so the reduction is valid
-          // if the bound is weakly redundant
+          // for MIP we do not need dual postsolve so the reduction is valid if
+          // the bound is weakly redundant
           return colScale > 0 ? model->col_upper_[col] == kHighsInf ||
                                     implColUpper[col] <=
                                         model->col_upper_[col] + primal_feastol
@@ -5460,8 +5456,8 @@ HPresolve::Result HPresolve::detectParallelRowsAndCols(
       if (model->integrality_[i] == HighsVarType::kInteger &&
           model->integrality_[parallelColCandidate] == HighsVarType::kInteger) {
         // both variables are integral, hence the scale must be integral
-        // therefore first choose the smaller colMax value for col2, then
-        // check integrality of colMax[col1] / colMax[col2].
+        // therefore first choose the smaller colMax value for col2, then check
+        // integrality of colMax[col1] / colMax[col2].
         if (std::abs(colMax[i].first) <
             std::abs(colMax[parallelColCandidate].first)) {
           col = i;
@@ -5477,9 +5473,9 @@ HPresolve::Result HPresolve::detectParallelRowsAndCols(
         if (std::abs(colScale - scaleCand) > options->small_matrix_value)
           continue;
 
-        // if the scale is larger than 1, duplicate column cannot compensate
-        // for all values of scaled col due to integrality as the scaled
-        // column moves on a grid of 1/scale.
+        // if the scale is larger than 1, duplicate column cannot compensate for
+        // all values of scaled col due to integrality as the scaled column
+        // moves on a grid of 1/scale.
         //
         // ToDo: Check whether this is too restrictive
         if (colScale != 1.0) checkDuplicateColImplBounds = false;
@@ -5488,8 +5484,8 @@ HPresolve::Result HPresolve::detectParallelRowsAndCols(
         duplicateCol = parallelColCandidate;
         colScale = colMax[duplicateCol].first / colMax[col].first;
 
-        // as col is integral and duplicateCol is not col cannot compensate
-        // for duplicate col
+        // as col is integral and duplicateCol is not col cannot compensate for
+        // duplicate col
         checkColImplBounds = false;
       } else {
         col = parallelColCandidate;
@@ -5689,8 +5685,8 @@ HPresolve::Result HPresolve::detectParallelRowsAndCols(
           // by updating the bounds properly, the unlink calls will update the
           // implied row upper bounds to the correct values. For finite bounds
           // simply setting the bounds of duplicate col to zero suffices. For
-          // infinite bounds we need to make sure the counters for the number
-          // of infinite bounds that contribute to the implied row bounds are
+          // infinite bounds we need to make sure the counters for the number of
+          // infinite bounds that contribute to the implied row bounds are
           // updated correctly and that all finite contributions are removed.
 
           double mergeLower = 0;
@@ -5708,9 +5704,9 @@ HPresolve::Result HPresolve::detectParallelRowsAndCols(
 
             if (mergeLower == -kHighsInf &&
                 model->col_lower_[col] != -kHighsInf)
-              // make sure that upon removal of the duplicate column the
-              // finite contribution of col's lower bound is removed and the
-              // infinite contribution of duplicateCol is retained
+              // make sure that upon removal of the duplicate column the finite
+              // contribution of col's lower bound is removed and the infinite
+              // contribution of duplicateCol is retained
               model->col_lower_[duplicateCol] =
                   model->col_lower_[col] / colScale;
             else
@@ -5728,9 +5724,9 @@ HPresolve::Result HPresolve::detectParallelRowsAndCols(
 
             if (mergeLower == -kHighsInf &&
                 model->col_lower_[col] != -kHighsInf)
-              // make sure that upon removal of the duplicate column the
-              // finite contribution of col's lower bound is removed and the
-              // infinite contribution of duplicateCol is retained
+              // make sure that upon removal of the duplicate column the finite
+              // contribution of col's lower bound is removed and the infinite
+              // contribution of duplicateCol is retained
               model->col_upper_[duplicateCol] =
                   model->col_lower_[col] / colScale;
             else
@@ -5779,8 +5775,8 @@ HPresolve::Result HPresolve::detectParallelRowsAndCols(
 
           if (colUpperSource[col] != -1) changeImplColUpper(col, kHighsInf, -1);
 
-          // if an implicit integer and an integer column where merge, check
-          // if merged continuous column is implicit integer after merge
+          // if an implicit integer and an integer column where merge, check if
+          // merged continuous column is implicit integer after merge
           if (rowsizeIntReduction &&
               model->integrality_[duplicateCol] ==
                   HighsVarType::kImplicitInteger &&
@@ -5851,8 +5847,8 @@ HPresolve::Result HPresolve::detectParallelRowsAndCols(
         // we only handle the case where the rows have at most one extra
         // singleton except when one row has no extra singleton and is an
         // equation. In that case we sparsify the other row by adding the
-        // equation and can subsequently solve it as an individual component
-        // as it is a row which only contains singletons
+        // equation and can subsequently solve it as an individual component as
+        // it is a row which only contains singletons
         if ((numSingleton != 0 ||
              model->row_lower_[i] != model->row_upper_[i]) &&
             (numSingletonCandidate != 0 ||
@@ -5863,8 +5859,8 @@ HPresolve::Result HPresolve::detectParallelRowsAndCols(
         // if only one of the two constraints has an extra singleton,
         // we require at least one of the constraints to be an equation
         // if that is the case we can add that equation to the other row
-        // and will make it into either a row singleton or a doubleton
-        // equation which is removed afterwards
+        // and will make it into either a row singleton or a doubleton equation
+        // which is removed afterwards
         if (model->row_lower_[i] != model->row_upper_[i] &&
             model->row_lower_[parallelRowCand] !=
                 model->row_upper_[parallelRowCand])
@@ -5986,8 +5982,8 @@ HPresolve::Result HPresolve::detectParallelRowsAndCols(
         for (const HighsSliceNonzero& rowNz : getStoredRow()) {
           HighsInt pos = findNonzero(parallelRowCand, rowNz.index());
           if (pos != -1)
-            unlink(pos);  // all common nonzeros are cancelled, as the rows
-                          // are parallel
+            unlink(pos);  // all common nonzeros are cancelled, as the rows are
+                          // parallel
           else            // might introduce a singleton
             addToMatrix(parallelRowCand, rowNz.index(),
                         -rowScale * rowNz.value());
@@ -6002,9 +5998,9 @@ HPresolve::Result HPresolve::detectParallelRowsAndCols(
               double(model->row_lower_[parallelRowCand] -
                      HighsCDouble(rowScale) * model->row_upper_[i]);
 
-        // parallelRowCand is now a singleton row, doubleton equation, or a
-        // row that contains only singletons and we let the normal row
-        // presolve handle the cases
+        // parallelRowCand is now a singleton row, doubleton equation, or a row
+        // that contains only singletons and we let the normal row presolve
+        // handle the cases
         HPRESOLVE_CHECKED_CALL(rowPresolve(postsolve_stack, parallelRowCand));
         delRow = parallelRowCand;
       } else if (model->row_lower_[parallelRowCand] ==
@@ -6020,8 +6016,8 @@ HPresolve::Result HPresolve::detectParallelRowsAndCols(
         for (const HighsSliceNonzero& rowNz : getRowVector(parallelRowCand)) {
           HighsInt pos = findNonzero(i, rowNz.index());
           if (pos != -1)
-            unlink(pos);  // all common nonzeros are cancelled, as the rows
-                          // are parallel
+            unlink(pos);  // all common nonzeros are cancelled, as the rows are
+                          // parallel
           else            // might introduce a singleton
             addToMatrix(i, rowNz.index(), scale * rowNz.value());
         }
@@ -6050,13 +6046,13 @@ HPresolve::Result HPresolve::detectParallelRowsAndCols(
           rowLower = model->row_upper_[i] * rowScale;
           rowUpper = model->row_lower_[i] * rowScale;
         }
-        // todo: two inequalities with one singleton. check whether the rows
-        // can be converted to equations by introducing a shared slack
-        // variable which is the case if the singletons have similar
-        // properties (objective sign, bounds, scaled coefficient) and the
-        // scaled right hand sides match. Then the case reduces to adding one
-        // equation to the other and substituting one of the singletons due to
-        // the resulting doubleton equation.
+        // todo: two inequalities with one singleton. check whether the rows can
+        // be converted to equations by introducing a shared slack variable
+        // which is the case if the singletons have similar properties
+        // (objective sign, bounds, scaled coefficient) and the scaled right
+        // hand sides match. Then the case reduces to adding one equation to the
+        // other and substituting one of the singletons due to the resulting
+        // doubleton equation.
         //        printf("todo, two inequalities with one additional
         //        singleton\n");
         (void)rowLower;
@@ -6324,9 +6320,9 @@ HPresolve::Result HPresolve::sparsify(HighsPostsolveStack& postsolve_stack) {
       possibleScales.clear();
 
       HighsInt misses = 0;
-      // allow no fillin if a completely continuous row is used to cancel a
-      // row that has integers as there are instances where this leads to a
-      // huge deterioration of cut performance
+      // allow no fillin if a completely continuous row is used to cancel a row
+      // that has integers as there are instances where this leads to a huge
+      // deterioration of cut performance
       HighsInt maxMisses = 1;
       if (rowsizeInteger[eqrow] == 0 && rowsizeInteger[candRow] != 0)
         --maxMisses;
@@ -6430,8 +6426,8 @@ HPresolve::Result HPresolve::sparsify(HighsPostsolveStack& postsolve_stack) {
           } else {
             HighsInt nzPos = findNonzero(candRow, nonzero.index());
             if (nzPos == -1) {
-              // we already have a miss for the sparsest column, so with
-              // another one we want to skip the row
+              // we already have a miss for the sparsest column, so with another
+              // one we want to skip the row
               skip = true;
               break;
             }
@@ -6448,12 +6444,11 @@ HPresolve::Result HPresolve::sparsify(HighsPostsolveStack& postsolve_stack) {
               std::abs(it->first - scale) <= scaleTolerance) {
             // there already is a scale that is very close and could produces
             // a matrix value for this nonzero that is below the allowed
-            // threshold. Therefore we check if the matrix value is small
-            // enough for this nonzero to be deleted, in which case the number
-            // of deleted nonzeros for the other scale is increased. If it is
-            // not small enough we do not use this scale or the other one
-            // because such small matrix values may lead to numerical
-            // troubles.
+            // threshold. Therefore we check if the matrix value is small enough
+            // for this nonzero to be deleted, in which case the number of
+            // deleted nonzeros for the other scale is increased. If it is not
+            // small enough we do not use this scale or the other one because
+            // such small matrix values may lead to numerical troubles.
 
             // scale is already marked to be numerically bad
             if (it->second == -1) continue;
@@ -6486,8 +6481,8 @@ HPresolve::Result HPresolve::sparsify(HighsPostsolveStack& postsolve_stack) {
 
         assert(scale != 0.0 || numCancel == 0);
 
-        // cancels at least one nonzero if the scale cancels more than there
-        // is fillin
+        // cancels at least one nonzero if the scale cancels more than there is
+        // fillin
         if (numCancel > 1) sparsifyRows.emplace_back(candRow, scale);
       }
     }
@@ -6512,8 +6507,8 @@ HPresolve::Result HPresolve::sparsify(HighsPostsolveStack& postsolve_stack) {
       if (model->row_lower_[row] == model->row_upper_[row] &&
           eqiters[row] != equations.end() &&
           eqiters[row]->first != rowsize[row]) {
-        // if that is the case reinsert it into the equation set that is
-        // ordered by sparsity
+        // if that is the case reinsert it into the equation set that is ordered
+        // by sparsity
         equations.erase(eqiters[row]);
         eqiters[row] = equations.emplace(rowsize[row], row).first;
       }
