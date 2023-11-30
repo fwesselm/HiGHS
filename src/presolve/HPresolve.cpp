@@ -3293,16 +3293,15 @@ HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
         double intScale =
             HighsIntegers::integralScale(rowCoefs, deltaDown, deltaUp);
 
-        auto checkScaledLhsRhs = [&](HighsCDouble& lhs, HighsCDouble& rhs,
-                                     HighsCDouble& roundLhs,
-                                     HighsCDouble& roundRhs,
-                                     HighsCDouble& fractionLhs,
-                                     HighsCDouble& fractionRhs,
-                                     double& minLhsTightening,
-                                     double& minRhsTightening, double& maxVal,
-                                     bool& strengthenedLhs,
-                                     bool& strengthenedRhs,
-                                     bool& isInfeasible) {
+        auto checkScaledRow = [&](HighsCDouble& lhs, HighsCDouble& rhs,
+                                  HighsCDouble& roundLhs,
+                                  HighsCDouble& roundRhs,
+                                  HighsCDouble& fractionLhs,
+                                  HighsCDouble& fractionRhs,
+                                  double& minLhsTightening,
+                                  double& minRhsTightening, double& maxVal,
+                                  bool& strengthenedLhs, bool& strengthenedRhs,
+                                  bool& isInfeasible) {
           if (lhs > -kHighsInf) lhs = lhs * intScale;
           if (rhs < kHighsInf) rhs = rhs * intScale;
           roundLhs = -kHighsInf;
@@ -3410,10 +3409,10 @@ HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
           bool strengthenedLhs;
           bool strengthenedRhs;
           bool isInfeasible;
-          if (checkScaledLhsRhs(lhs, rhs, roundLhs, roundRhs, fractionLhs,
-                                fractionRhs, minLhsTightening, minRhsTightening,
-                                maxVal, strengthenedLhs, strengthenedRhs,
-                                isInfeasible)) {
+          if (checkScaledRow(lhs, rhs, roundLhs, roundRhs, fractionLhs,
+                             fractionRhs, minLhsTightening, minRhsTightening,
+                             maxVal, strengthenedLhs, strengthenedRhs,
+                             isInfeasible)) {
             // check for infeasibility
             if (isInfeasible) return Result::kPrimalInfeasible;
             // only accept row whose sides were strengthened
