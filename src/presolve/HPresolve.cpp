@@ -3051,7 +3051,12 @@ HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
               continue;
             }
 
-            auto remDoubletonEq = [&](double bound, HighsInt direction) {
+            auto remDoubletonEq = [&](HighsInt direction) {
+              double bound;
+              if (direction == 1)
+                bound = model->col_upper_[nonz.index()];
+              else
+                bound = model->col_lower_[nonz.index()];
               double scale = direction * (model->col_lower_[nonz.index()] -
                                           model->col_upper_[nonz.index()]);
               double offset = bound - model->col_lower_[binCol] * scale;
@@ -3078,7 +3083,7 @@ HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
               // nonzCol = colUb - (colUb - colLb)(binCol - binLb)
               // nonzCol = colUb + binLb * (colUb - colLb) - (colUb - colLb) *
               // binCol
-              remDoubletonEq(model->col_upper_[nonz.index()], HighsInt{1});
+              remDoubletonEq(HighsInt{1});
             } else {
               // This case yields the following implications:
               // binCol = lb -> nonzCol = lb
@@ -3087,7 +3092,7 @@ HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
               // nonzCol = colLb + (colUb - colLb)(binCol - binLb)
               // nonzCol =
               //    colLb - binLb*(colUb - colLb) + (colUb - colLb)*binCol
-              remDoubletonEq(model->col_lower_[nonz.index()], HighsInt{-1});
+              remDoubletonEq(HighsInt{-1});
             }
           }
 
