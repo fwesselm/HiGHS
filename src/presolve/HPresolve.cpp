@@ -4885,6 +4885,9 @@ void HPresolve::substitute(HighsInt substcol, HighsInt staycol, double offset,
     // printf("after substitution: ");
     // debugPrintRow(colrow);
 
+    // recompute implied column bounds affected by the substitution
+    recomputeColImpliedBounds(colrow);
+
     // check if this is an equation row and it now has a different size
     if (model->row_lower_[colrow] == model->row_upper_[colrow] &&
         eqiters[colrow] != equations.end() &&
@@ -4907,6 +4910,9 @@ void HPresolve::substitute(HighsInt substcol, HighsInt staycol, double offset,
       model->col_cost_[staycol] = 0.0;
     model->col_cost_[substcol] = 0.0;
   }
+
+  // recompute implied row dual bounds affected by substitution
+  recomputeRowDualImpliedBounds(staycol);
 }
 
 void HPresolve::fixColToLower(HighsPostsolveStack& postsolve_stack,
