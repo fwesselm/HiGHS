@@ -292,6 +292,8 @@ class HPresolve {
 
   Result emptyCol(HighsPostsolveStack& postsolve_stack, HighsInt col);
 
+  bool computeImplRowDualBound(HighsInt col);
+
   Result singletonCol(HighsPostsolveStack& postsolve_stack, HighsInt col);
 
   Result rowPresolve(HighsPostsolveStack& postsolve_stack, HighsInt row);

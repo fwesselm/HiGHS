@@ -672,7 +672,10 @@ void HPresolve::recomputeRowDualImpliedBounds(HighsInt col) {
       changeImplRowDualLower(*it, -kHighsInf, -1);
     if (rowDualUpperSource[*it] == col)
       changeImplRowDualUpper(*it, kHighsInf, -1);
+  }
 
+  bool success = computeImplRowDualBound(col);
+  for (auto it = affectedRows.cbegin(); it != affectedRows.cend(); it++) {
     // iterate over row and recompute the implied bounds
     for (const HighsSliceNonzero& nonz : getRowVector(*it)) {
       // integer columns cannot be used to tighten bounds on dual multipliers
@@ -3836,6 +3839,50 @@ HPresolve::Result HPresolve::emptyCol(HighsPostsolveStack& postsolve_stack,
   return checkLimits(postsolve_stack);
 }
 
+bool HPresolve::computeImplRowDualBound(HighsInt col) {
+  if (mipsolver == nullptr) return false;
+
+  auto changeImplRowDualBound = [&](HighsInt direction) {
+    bool dualConsHasBnd;
+    HighsInt implDualRowBndsNumInfs;
+    HighsInt row;
+
+    if (direction >= 0) {
+      dualConsHasBnd = isUpperImplied(col);
+      implDualRowBndsNumInfs = impliedDualRowBounds.getNumInfSumUpperOrig(col);
+      row = colLowerSource[col];
+    } else {
+      dualConsHasBnd = isLowerImplied(col);
+      implDualRowBndsNumInfs = impliedDualRowBounds.getNumInfSumLowerOrig(col);
+      row = colUpperSource[col];
+    }
+
+    if (!dualConsHasBnd || row == -1 || implDualRowBndsNumInfs != 1 ||
+        direction * model->col_cost_[col] < 0)
+      return false;
+
+    if (model->row_lower_[row] != -kHighsInf &&
+        model->row_upper_[row] != kHighsInf)
+      return false;
+
+    HighsInt nzPos = findNonzero(row, col);
+    if (model->integrality_[col] == HighsVarType::kInteger &&
+        (rowsizeInteger[row] != rowsize[row] ||
+         !rowCoefficientsIntegral(row, 1.0 / Avalue[nzPos])))
+      return false;
+
+    if (direction * Avalue[nzPos] > 0)
+      changeImplRowDualLower(row, 0.0, col);
+    else
+      changeImplRowDualUpper(row, 0.0, col);
+    return true;
+  };
+  // check if bounds on row duals can be tightened
+  bool successLower = changeImplRowDualBound(1);
+  bool successUpper = changeImplRowDualBound(-1);
+  return successLower || successUpper;
+}
+
 HPresolve::Result HPresolve::colPresolve(HighsPostsolveStack& postsolve_stack,
                                          HighsInt col) {
   assert(!colDeleted[col]);
@@ -3944,50 +3991,10 @@ HPresolve::Result HPresolve::colPresolve(HighsPostsolveStack& postsolve_stack,
   // the associated dual constraint has an upper bound if there is an infinite
   // or redundant column lower bound as then the reduced cost of the column must
   // not be positive i.e. <= 0
-  bool dualConsHasUpper = isUpperImplied(col);
-  bool dualConsHasLower = isLowerImplied(col);
 
   // integer columns cannot be used to tighten bounds on dual multipliers
   if (mipsolver != nullptr) {
-    if (dualConsHasLower && colLowerSource[col] != -1 &&
-        impliedDualRowBounds.getNumInfSumUpperOrig(col) == 1 &&
-        model->col_cost_[col] >= 0) {
-      HighsInt row = colLowerSource[col];
-
-      if (model->row_lower_[row] == -kHighsInf ||
-          model->row_upper_[row] == kHighsInf) {
-        HighsInt nzPos = findNonzero(row, col);
-
-        if (model->integrality_[col] != HighsVarType::kInteger ||
-            (rowsizeInteger[row] == rowsize[row] &&
-             rowCoefficientsIntegral(row, 1.0 / Avalue[nzPos]))) {
-          if (Avalue[nzPos] > 0)
-            changeImplRowDualLower(row, 0.0, col);
-          else
-            changeImplRowDualUpper(row, 0.0, col);
-        }
-      }
-    }
-
-    if (dualConsHasUpper && colUpperSource[col] != -1 &&
-        impliedDualRowBounds.getNumInfSumLowerOrig(col) == 1 &&
-        model->col_cost_[col] <= 0) {
-      HighsInt row = colUpperSource[col];
-
-      if (model->row_lower_[row] == -kHighsInf ||
-          model->row_upper_[row] == kHighsInf) {
-        HighsInt nzPos = findNonzero(row, col);
-
-        if (model->integrality_[col] != HighsVarType::kInteger ||
-            (rowsizeInteger[row] == rowsize[row] &&
-             rowCoefficientsIntegral(row, 1.0 / Avalue[nzPos]))) {
-          if (Avalue[nzPos] > 0)
-            changeImplRowDualUpper(row, 0.0, col);
-          else
-            changeImplRowDualLower(row, 0.0, col);
-        }
-      }
-    }
+    computeImplRowDualBound(col);
 
     if (model->integrality_[col] == HighsVarType::kContinuous &&
         isImpliedInteger(col)) {
@@ -4022,8 +4029,10 @@ HPresolve::Result HPresolve::colPresolve(HighsPostsolveStack& postsolve_stack,
   }
 
   // now check if we can expect to tighten at least one bound
-  if ((dualConsHasLower && impliedDualRowBounds.getNumInfSumUpper(col) <= 1) ||
-      (dualConsHasUpper && impliedDualRowBounds.getNumInfSumLower(col) <= 1)) {
+  if ((isLowerImplied(col) &&
+       impliedDualRowBounds.getNumInfSumUpper(col) <= 1) ||
+      (isUpperImplied(col) &&
+       impliedDualRowBounds.getNumInfSumLower(col) <= 1)) {
     for (const HighsSliceNonzero& nonzero : getColumnVector(col))
       updateRowDualImpliedBounds(nonzero.index(), col, nonzero.value());
   }
