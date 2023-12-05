@@ -3777,7 +3777,7 @@ HPresolve::Result HPresolve::colPresolve(HighsPostsolveStack& postsolve_stack,
   // integer columns cannot be used to tighten bounds on dual multipliers
 
   if (mipsolver != nullptr) {
-    auto checkImpRowDualBounds = [&](HighsInt col, HighsInt direction) {
+    auto checkImplRowDualBounds = [&](HighsInt col, HighsInt direction) {
       bool hasBnd;
       HighsInt numInfs;
       HighsInt row;
@@ -3810,8 +3810,8 @@ HPresolve::Result HPresolve::colPresolve(HighsPostsolveStack& postsolve_stack,
       }
     };
 
-    checkImpRowDualBounds(col, HighsInt{1});
-    checkImpRowDualBounds(col, HighsInt{-1});
+    checkImplRowDualBounds(col, HighsInt{1});
+    checkImplRowDualBounds(col, HighsInt{-1});
 
     convertImpliedInteger(col);
 
