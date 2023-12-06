@@ -3506,7 +3506,7 @@ HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
   // printf("implied bounds without tightenings: [%g,%g]\n", baseiRLower,
   //        baseiRUpper);
 
-  auto checkForcingRow = [&](HighsInt direction, double rowSide,
+  auto checkForcingRow = [&](HighsInt row, HighsInt direction, double rowSide,
                              HighsPostsolveStack::RowType rowType,
                              bool& isForcingRow) {
     // store row
@@ -3608,7 +3608,7 @@ HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
       // in the basis.
       bool isForcingRow;
       Result res =
-          checkForcingRow(HighsInt{1}, model->row_lower_[row],
+          checkForcingRow(row, HighsInt{1}, model->row_lower_[row],
                           HighsPostsolveStack::RowType::kGeq, isForcingRow);
       if (isForcingRow) return res;
 
@@ -3616,7 +3616,7 @@ HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
       // forcing row in the other direction
       bool isForcingRow;
       Result res =
-          checkForcingRow(HighsInt{-1}, model->row_upper_[row],
+          checkForcingRow(row, HighsInt{-1}, model->row_upper_[row],
                           HighsPostsolveStack::RowType::kLeq, isForcingRow);
       if (isForcingRow) return res;
     }
