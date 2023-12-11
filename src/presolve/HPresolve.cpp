@@ -1475,8 +1475,7 @@ HPresolve::Result HPresolve::runProbing(HighsPostsolveStack& postsolve_stack) {
         // when a large percentage of columns have been deleted, stop this round
         // of probing
         // if (numDel > std::max(model->num_col_ * 0.2, 1000.)) break;
-        if (numDel >
-            std::max(1000., (model->num_row_ + model->num_col_) * 0.05)) {
+        if (numDel > std::max(1000, (model->num_row_ + model->num_col_) / 20)) {
           probingEarlyAbort = true;
           break;
         }
@@ -4090,8 +4089,8 @@ HPresolve::Result HPresolve::presolve(HighsPostsolveStack& postsolve_stack) {
 
       if (analysis_.allow_rule_[kPresolveRuleParallelRowsAndCols] &&
           numParallelRowColCalls < 5) {
-        if (shrinkProblemEnabled && (numDeletedCols >= 0.5 * model->num_col_ ||
-                                     numDeletedRows >= 0.5 * model->num_row_)) {
+        if (shrinkProblemEnabled && (numDeletedCols >= model->num_col_ / 2 ||
+                                     numDeletedRows >= model->num_row_ / 2)) {
           shrinkProblem(postsolve_stack);
 
           toCSC(model->a_matrix_.value_, model->a_matrix_.index_,
@@ -4138,8 +4137,8 @@ HPresolve::Result HPresolve::presolve(HighsPostsolveStack& postsolve_stack) {
       }
 
       if (!dependentEquationsCalled) {
-        if (shrinkProblemEnabled && (numDeletedCols >= 0.5 * model->num_col_ ||
-                                     numDeletedRows >= 0.5 * model->num_row_)) {
+        if (shrinkProblemEnabled && (numDeletedCols >= model->num_col_ / 2 ||
+                                     numDeletedRows >= model->num_row_ / 2)) {
           shrinkProblem(postsolve_stack);
 
           toCSC(model->a_matrix_.value_, model->a_matrix_.index_,
@@ -5051,9 +5050,7 @@ HighsInt HPresolve::strengthenInequalities() {
       continue;
 
     // do not run on very dense rows as this could get expensive
-    if (rowsize[row] >
-        std::max(HighsInt{1000},
-                 HighsInt(0.05 * (model->num_col_ - numDeletedCols))))
+    if (rowsize[row] > std::max(1000, (model->num_col_ - numDeletedCols) / 20))
       continue;
 
     // printf("strengthening knapsack of %" HIGHSINT_FORMAT " vars\n",
