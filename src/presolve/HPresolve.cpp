@@ -1475,7 +1475,8 @@ HPresolve::Result HPresolve::runProbing(HighsPostsolveStack& postsolve_stack) {
         // when a large percentage of columns have been deleted, stop this round
         // of probing
         // if (numDel > std::max(model->num_col_ * 0.2, 1000.)) break;
-        if (numDel > std::max(1000, (model->num_row_ + model->num_col_) / 20)) {
+        if (numDel > std::max(HighsInt{1000},
+                              (model->num_row_ + model->num_col_) / 20)) {
           probingEarlyAbort = true;
           break;
         }
@@ -5050,7 +5051,8 @@ HighsInt HPresolve::strengthenInequalities() {
       continue;
 
     // do not run on very dense rows as this could get expensive
-    if (rowsize[row] > std::max(1000, (model->num_col_ - numDeletedCols) / 20))
+    if (rowsize[row] >
+        std::max(HighsInt{1000}, (model->num_col_ - numDeletedCols) / 20))
       continue;
 
     // printf("strengthening knapsack of %" HIGHSINT_FORMAT " vars\n",
