@@ -882,8 +882,7 @@ void HPresolve::shrinkProblem(HighsPostsolveStack& postsolve_stack) {
   impliedRowBounds.shrink(newRowIndex, model->num_row_);
   impliedDualRowBounds.shrink(newColIndex, model->num_col_);
 
-  HighsInt numNnz = Avalue.size();
-  for (HighsInt i = 0; i != numNnz; ++i) {
+  for (size_t i = 0; i != Avalue.size(); ++i) {
     if (Avalue[i] == 0) continue;
     assert(newColIndex[Acol[i]] != -1);
     assert(newRowIndex[Arow[i]] != -1);
@@ -2443,10 +2442,10 @@ void HPresolve::substitute(HighsInt row, HighsInt col, double rhs) {
 void HPresolve::toCSC(std::vector<double>& Aval, std::vector<HighsInt>& Aindex,
                       std::vector<HighsInt>& Astart) {
   // set up the column starts using the column size array
-  HighsInt numcol = colsize.size();
+  size_t numcol = colsize.size();
   Astart.resize(numcol + 1);
   HighsInt nnz = 0;
-  for (HighsInt i = 0; i != numcol; ++i) {
+  for (size_t i = 0; i != numcol; ++i) {
     Astart[i] = nnz;
     nnz += colsize[i];
   }
@@ -2457,9 +2456,9 @@ void HPresolve::toCSC(std::vector<double>& Aval, std::vector<HighsInt>& Aindex,
   // for determining the position of each nonzero
   Aval.resize(nnz);
   Aindex.resize(nnz);
-  HighsInt numslots = Avalue.size();
-  assert(numslots - int(freeslots.size()) == nnz);
-  for (HighsInt i = 0; i != numslots; ++i) {
+  size_t numslots = Avalue.size();
+  assert(numslots - freeslots.size() == static_cast<size_t>(nnz));
+  for (size_t i = 0; i != numslots; ++i) {
     if (Avalue[i] == 0.0) continue;
     assert(Acol[i] >= 0 && Acol[i] < model->num_col_);
     HighsInt pos = Astart[Acol[i] + 1] - colsize[Acol[i]];
@@ -2474,10 +2473,10 @@ void HPresolve::toCSR(std::vector<double>& ARval,
                       std::vector<HighsInt>& ARindex,
                       std::vector<HighsInt>& ARstart) {
   // set up the row starts using the row size array
-  HighsInt numrow = rowsize.size();
+  size_t numrow = rowsize.size();
   ARstart.resize(numrow + 1);
   HighsInt nnz = 0;
-  for (HighsInt i = 0; i != numrow; ++i) {
+  for (size_t i = 0; i != numrow; ++i) {
     ARstart[i] = nnz;
     nnz += rowsize[i];
   }
@@ -5173,16 +5172,14 @@ HighsInt HPresolve::strengthenInequalities() {
             return reducedcost[i1] < reducedcost[i2];
           });
 
-      HighsInt coverend = cover.size();
-
       double al = reducedcost[alpos];
-      coefs.resize(coverend);
+      coefs.resize(cover.size());
       double coverrhs =
           std::max(std::ceil(double(lambda / al - primal_feastol)), 1.0);
       HighsCDouble slackupper = -coverrhs;
 
       double step = kHighsInf;
-      for (HighsInt i = 0; i != coverend; ++i) {
+      for (size_t i = 0; i != cover.size(); ++i) {
         coefs[i] =
             std::ceil(std::min(reducedcost[cover[i]], double(lambda)) / al -
                       options->small_matrix_value);
@@ -5196,7 +5193,7 @@ HighsInt HPresolve::strengthenInequalities() {
       reducedcost.push_back(step);
       upper.push_back(double(slackupper));
 
-      for (HighsInt i = 0; i != coverend; ++i)
+      for (size_t i = 0; i != cover.size(); ++i)
         reducedcost[cover[i]] -= step * coefs[i];
 
       indices.erase(std::remove_if(indices.begin(), indices.end(),
@@ -5281,13 +5278,12 @@ HPresolve::Result HPresolve::detectParallelRowsAndCols(
 
   HighsHashTable<HighsInt, HighsInt> numRowSingletons;
 
-  HighsInt nnz = Avalue.size();
   rowHashes.assign(rowsize.begin(), rowsize.end());
   colHashes.assign(colsize.begin(), colsize.end());
 
   // Step 1: Determine scales for rows and columns and remove column singletons
   // from the initial row hashes which are initialized with the row sizes
-  for (HighsInt i = 0; i != nnz; ++i) {
+  for (size_t i = 0; i != Avalue.size(); ++i) {
     if (Avalue[i] == 0.0) continue;
     assert(!colDeleted[Acol[i]]);
     if (colsize[Acol[i]] == 1) {
@@ -5326,7 +5322,7 @@ HPresolve::Result HPresolve::detectParallelRowsAndCols(
 
   // Step 2: Compute hash values for rows and columns excluding singleton
   // columns
-  for (HighsInt i = 0; i != nnz; ++i) {
+  for (size_t i = 0; i != Avalue.size(); ++i) {
     if (Avalue[i] == 0.0) continue;
     assert(!rowDeleted[Arow[i]] && !colDeleted[Acol[i]]);
     if (colsize[Acol[i]] == 1) {
