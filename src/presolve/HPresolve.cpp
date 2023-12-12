@@ -1075,8 +1075,7 @@ HPresolve::Result HPresolve::dominatedColumns(
     return true;
   };
 
-  HighsInt numNz = Avalue.size();
-  for (HighsInt i = 0; i < numNz; ++i) {
+  for (size_t i = 0; i < Avalue.size(); ++i) {
     if (Avalue[i] == 0) continue;
 
     HighsInt row = Arow[i];
@@ -1941,9 +1940,7 @@ void HPresolve::scaleMIP(HighsPostsolveStack& postsolve_stack) {
 
     double maxAbsVal = 0.0;
 
-    HighsInt rowlen = rowpositions.size();
-
-    for (HighsInt j = 0; j < rowlen; ++j) {
+    for (size_t j = 0; j < rowpositions.size(); ++j) {
       HighsInt nzPos = rowpositions[j];
       if (model->integrality_[Acol[nzPos]] != HighsVarType::kContinuous)
         continue;
@@ -2176,7 +2173,7 @@ HighsInt HPresolve::countFillin(HighsInt row) {
 bool HPresolve::checkFillin(HighsHashTable<HighsInt, HighsInt>& fillinCache,
                             HighsInt row, HighsInt col) {
   // check numerics against markowitz tolerance
-  assert(int(rowpositions.size()) == rowsize[row]);
+  assert(rowpositions.size() == static_cast<size_t>(rowsize[row]));
 
   // check fillin against max fillin
   HighsInt fillin = -(rowsize[row] + colsize[col] - 1);
@@ -4902,7 +4899,7 @@ void HPresolve::fixColToZero(HighsPostsolveStack& postsolve_stack,
 }
 
 void HPresolve::removeRow(HighsInt row) {
-  assert(row < int(rowroot.size()));
+  assert(static_cast<size_t>(row) < rowroot.size());
   assert(row >= 0);
   // first mark the row as logically deleted, so that it is not register as
   // singleton row upon removing its nonzeros
@@ -5156,12 +5153,13 @@ HighsInt HPresolve::strengthenInequalities() {
       cover.clear();
       cover.reserve(indices.size());
 
-      for (HighsInt i = indices.size() - 1; i >= 0; --i) {
-        double delta = upper[indices[i]] * reducedcost[indices[i]];
+      for (size_t i = indices.size(); i > 0; --i) {
+        HighsInt index = indices[i - 1];
+        double delta = upper[index] * reducedcost[index];
 
-        if (upper[indices[i]] <= 1000.0 && reducedcost[indices[i]] > smallVal &&
+        if (upper[index] <= 1000.0 && reducedcost[index] > smallVal &&
             lambda - delta <= smallVal)
-          cover.push_back(indices[i]);
+          cover.push_back(index);
         else
           lambda -= delta;
       }
@@ -5213,7 +5211,8 @@ HighsInt HPresolve::strengthenInequalities() {
 
     indices.erase(std::remove_if(indices.begin(), indices.end(),
                                  [&](HighsInt i) {
-                                   return i >= (HighsInt)positions.size() ||
+                                   return static_cast<size_t>(i) >=
+                                              positions.size() ||
                                           std::abs(reducedcost[i]) <= threshold;
                                  }),
                   indices.end());
