@@ -3660,7 +3660,7 @@ HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
       // primal and dual values as the dual values are required to find
       // the proper dual multiplier for the row and the column that we put
       // in the basis.
-      bool isForcingRow;
+      bool isForcingRow = false;
       Result res =
           checkForcingRow(row, HighsInt{1}, model->row_lower_[row],
                           HighsPostsolveStack::RowType::kGeq, isForcingRow);
@@ -3668,7 +3668,7 @@ HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
 
     } else if (impliedRowLower >= model->row_upper_[row] - primal_feastol) {
       // forcing row in the other direction
-      bool isForcingRow;
+      bool isForcingRow = false;
       Result res =
           checkForcingRow(row, HighsInt{-1}, model->row_upper_[row],
                           HighsPostsolveStack::RowType::kLeq, isForcingRow);
