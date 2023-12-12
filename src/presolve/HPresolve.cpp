@@ -691,7 +691,8 @@ void HPresolve::shrinkProblem(HighsPostsolveStack& postsolve_stack) {
   model->num_col_ = 0;
   std::vector<HighsInt> newColIndex(oldNumCol);
   const bool have_col_names = model->col_names_.size() > 0;
-  assert(!have_col_names || HighsInt(model->col_names_.size()) == oldNumCol);
+  assert(!have_col_names ||
+         model->col_names_.size() == static_cast<size_t>(oldNumCol));
   for (HighsInt i = 0; i != oldNumCol; ++i) {
     if (colDeleted[i])
       newColIndex[i] = -1;
@@ -734,7 +735,8 @@ void HPresolve::shrinkProblem(HighsPostsolveStack& postsolve_stack) {
   numDeletedCols = 0;
   HighsInt oldNumRow = model->num_row_;
   const bool have_row_names = model->row_names_.size() > 0;
-  assert(!have_row_names || HighsInt(model->row_names_.size()) == oldNumRow);
+  assert(!have_row_names ||
+         model->row_names_.size() == static_cast<size_t>(oldNumRow));
   model->num_row_ = 0;
   std::vector<HighsInt> newRowIndex(oldNumRow);
   for (HighsInt i = 0; i != oldNumRow; ++i) {
@@ -6474,7 +6476,8 @@ HighsInt HPresolve::debugGetCheckCol() const {
   HighsInt check_col = -1;
   if (check_col_name == "") return check_col;
   if (model->col_names_.size()) {
-    if (HighsInt(model->col_hash_.name2index.size()) != model->num_col_)
+    if (model->col_hash_.name2index.size() !=
+        static_cast<size_t>(model->num_col_))
       model->col_hash_.form(model->col_names_);
     auto search = model->col_hash_.name2index.find(check_col_name);
     if (search != model->col_hash_.name2index.end()) {
@@ -6490,7 +6493,8 @@ HighsInt HPresolve::debugGetCheckRow() const {
   HighsInt check_row = -1;
   if (check_row_name == "") return check_row;
   if (model->row_names_.size()) {
-    if (HighsInt(model->row_hash_.name2index.size()) != model->num_row_)
+    if (model->row_hash_.name2index.size() !=
+        static_cast<size_t>(model->num_row_))
       model->row_hash_.form(model->row_names_);
     auto search = model->row_hash_.name2index.find(check_row_name);
     if (search != model->row_hash_.name2index.end()) {
