@@ -510,51 +510,41 @@ void HPresolve::updateRowDualImpliedBounds(HighsInt row, HighsInt col,
           ? model->col_cost_[col]
           : kHighsInf;
 
-  if (dualRowUpper != kHighsInf) {
+  auto checkImpliedBound = [&](HighsInt row, HighsInt col, double val,
+                               double dualRowBnd, double residualAct,
+                               HighsInt direction) {
+    if (-direction * residualAct >= kHighsInf) return;
+    double impliedBound =
+        double((HighsCDouble(dualRowBnd) - residualAct) / val);
+
+    if (std::abs(impliedBound) * kHighsTiny >
+        options->dual_feasibility_tolerance)
+      return;
+
+    if (direction * val > 0) {
+      // only tighten bound if it is tighter by a wide enough margin
+      if (impliedBound <
+          implRowDualUpper[row] - 1000 * options->dual_feasibility_tolerance)
+        changeImplRowDualUpper(row, impliedBound, col);
+    } else {
+      if (impliedBound > implRowDualLower[row] + 1000 * primal_feastol)
+        changeImplRowDualLower(row, impliedBound, col);
+    }
+  };
+
+  if (dualRowUpper != kHighsInf)
     // get minimal value of other row duals in the column
-    double residualMinAct =
-        impliedDualRowBounds.getResidualSumLowerOrig(col, row, val);
-    if (residualMinAct != -kHighsInf) {
-      double impliedBound =
-          double((HighsCDouble(dualRowUpper) - residualMinAct) / val);
+    checkImpliedBound(
+        row, col, val, dualRowUpper,
+        impliedDualRowBounds.getResidualSumLowerOrig(col, row, val),
+        HighsInt{1});
 
-      if (std::abs(impliedBound) * kHighsTiny <=
-          options->dual_feasibility_tolerance) {
-        if (val > 0) {
-          // only tighten bound if it is tighter by a wide enough margin
-          if (impliedBound < implRowDualUpper[row] -
-                                 1000 * options->dual_feasibility_tolerance)
-            changeImplRowDualUpper(row, impliedBound, col);
-        } else {
-          if (impliedBound > implRowDualLower[row] + 1000 * primal_feastol)
-            changeImplRowDualLower(row, impliedBound, col);
-        }
-      }
-    }
-  }
-
-  if (dualRowLower != -kHighsInf) {
+  if (dualRowLower != -kHighsInf)
     // get maximal value of other columns in the row
-    double residualMaxAct =
-        impliedDualRowBounds.getResidualSumUpperOrig(col, row, val);
-    if (residualMaxAct != kHighsInf) {
-      double impliedBound =
-          double((HighsCDouble(dualRowLower) - residualMaxAct) / val);
-
-      if (std::abs(impliedBound) * kHighsTiny <=
-          options->dual_feasibility_tolerance) {
-        if (val > 0) {
-          // only tighten bound if it is tighter by a wide enough margin
-          if (impliedBound > implRowDualLower[row] + 1000 * primal_feastol)
-            changeImplRowDualLower(row, impliedBound, col);
-        } else {
-          if (impliedBound < implRowDualUpper[row] -
-                                 1000 * options->dual_feasibility_tolerance)
-            changeImplRowDualUpper(row, impliedBound, col);
-        }
-      }
-    }
-  }
+    checkImpliedBound(
+        row, col, val, dualRowLower,
+        impliedDualRowBounds.getResidualSumUpperOrig(col, row, val),
+        HighsInt{-1});
 }
 
 void HPresolve::updateColImpliedBounds(HighsInt row, HighsInt col, double val) {
@@ -569,130 +559,77 @@ void HPresolve::updateColImpliedBounds(HighsInt row, HighsInt col, double val) {
   assert(rowLower != kHighsInf);
   assert(rowUpper != -kHighsInf);
 
-  if (rowUpper != kHighsInf) {
+  auto checkImpliedBound = [&](HighsInt row, HighsInt col, double val,
+                               double rowBnd, double residualAct,
+                               HighsInt direction) {
+    if (-direction * residualAct >= kHighsInf) return;
+    double impliedBound = double((HighsCDouble(rowBnd) - residualAct) / val);
+
+    if (std::abs(impliedBound) * kHighsTiny > primal_feastol) return;
+
+    if (direction * val > 0) {
+      // bound is an upper bound
+      // check if we may round the bound due to integrality restrictions
+      if (mipsolver != nullptr) {
+        if (model->integrality_[col] != HighsVarType::kContinuous) {
+          double roundedBound = std::floor(impliedBound + primal_feastol);
+
+          if (roundedBound < model->col_upper_[col])
+            changeColUpper(col, roundedBound);
+        }
+
+        if (mipsolver->mipdata_->postSolveStack.getOrigRowIndex(row) >=
+            mipsolver->orig_model_->num_row_) {
+          if (impliedBound < model->col_upper_[col] - 1000 * primal_feastol)
+            changeColUpper(col, impliedBound);
+
+          impliedBound = kHighsInf;
+        }
+      }
+
+      // only tighten bound if it is tighter by a wide enough margin
+      if (impliedBound < implColUpper[col] - 1000 * primal_feastol)
+        changeImplColUpper(col, impliedBound, row);
+    } else {
+      // bound is a lower bound
+      // check if we may round the bound due to integrality restrictions
+      if (mipsolver != nullptr) {
+        if (model->integrality_[col] != HighsVarType::kContinuous) {
+          double roundedBound = std::ceil(impliedBound - primal_feastol);
+
+          if (roundedBound > model->col_lower_[col])
+            changeColLower(col, roundedBound);
+        }
+
+        // do not use the implied bound if this a not a model row, since the
+        // row can be removed and should not be used, e.g., to identify a
+        // column as implied free
+        if (mipsolver->mipdata_->postSolveStack.getOrigRowIndex(row) >=
+            mipsolver->orig_model_->num_row_) {
+          if (impliedBound > model->col_lower_[col] + 1000 * primal_feastol)
+            changeColLower(col, impliedBound);
+
+          impliedBound = -kHighsInf;
+        }
+      }
+
+      // only tighten bound if it is tighter by a wide enough margin
+      if (impliedBound > implColLower[col] + 1000 * primal_feastol)
+        changeImplColLower(col, impliedBound, row);
+    }
+  };
+
+  if (rowUpper != kHighsInf)
     // get minimal value of other columns in the row
-    double residualMinAct =
-        impliedRowBounds.getResidualSumLowerOrig(row, col, val);
-    if (residualMinAct != -kHighsInf) {
-      double impliedBound =
-          double((HighsCDouble(rowUpper) - residualMinAct) / val);
+    checkImpliedBound(row, col, val, rowUpper,
+                      impliedRowBounds.getResidualSumLowerOrig(row, col, val),
+                      HighsInt{1});
 
-      if (std::abs(impliedBound) * kHighsTiny <= primal_feastol) {
-        if (val > 0) {
-          // bound is an upper bound
-          // check if we may round the bound due to integrality restrictions
-          if (mipsolver != nullptr) {
-            if (model->integrality_[col] != HighsVarType::kContinuous) {
-              double roundedBound = std::floor(impliedBound + primal_feastol);
-
-              if (roundedBound < model->col_upper_[col])
-                changeColUpper(col, roundedBound);
-            }
-
-            if (mipsolver->mipdata_->postSolveStack.getOrigRowIndex(row) >=
-                mipsolver->orig_model_->num_row_) {
-              if (impliedBound < model->col_upper_[col] - 1000 * primal_feastol)
-                changeColUpper(col, impliedBound);
-
-              impliedBound = kHighsInf;
-            }
-          }
-
-          // only tighten bound if it is tighter by a wide enough margin
-          if (impliedBound < implColUpper[col] - 1000 * primal_feastol)
-            changeImplColUpper(col, impliedBound, row);
-        } else {
-          // bound is a lower bound
-          // check if we may round the bound due to integrality restrictions
-          if (mipsolver != nullptr) {
-            if (model->integrality_[col] != HighsVarType::kContinuous) {
-              double roundedBound = std::ceil(impliedBound - primal_feastol);
-
-              if (roundedBound > model->col_lower_[col])
-                changeColLower(col, roundedBound);
-            }
-
-            // do not use the implied bound if this a not a model row, since the
-            // row can be removed and should not be used, e.g., to identify a
-            // column as implied free
-            if (mipsolver->mipdata_->postSolveStack.getOrigRowIndex(row) >=
-                mipsolver->orig_model_->num_row_) {
-              if (impliedBound > model->col_lower_[col] + 1000 * primal_feastol)
-                changeColLower(col, impliedBound);
-
-              impliedBound = -kHighsInf;
-            }
-          }
-
-          // only tighten bound if it is tighter by a wide enough margin
-          if (impliedBound > implColLower[col] + 1000 * primal_feastol)
-            changeImplColLower(col, impliedBound, row);
-        }
-      }
-    }
-  }
-
-  if (rowLower != -kHighsInf) {
+  if (rowLower != -kHighsInf)
     // get maximal value of other columns in the row
-    double residualMaxAct =
-        impliedRowBounds.getResidualSumUpperOrig(row, col, val);
-    if (residualMaxAct != kHighsInf) {
-      double impliedBound =
-          double((HighsCDouble(rowLower) - residualMaxAct) / val);
-
-      if (std::abs(impliedBound) * kHighsTiny <= primal_feastol) {
-        if (val > 0) {
-          // bound is a lower bound
-          // check if we may round the bound due to integrality restrictions
-          if (mipsolver != nullptr) {
-            if (model->integrality_[col] != HighsVarType::kContinuous) {
-              double roundedBound = std::ceil(impliedBound - primal_feastol);
-
-              // change bounds of integers immediately
-              if (roundedBound > model->col_lower_[col])
-                changeColLower(col, roundedBound);
-            }
-
-            if (mipsolver->mipdata_->postSolveStack.getOrigRowIndex(row) >=
-                mipsolver->orig_model_->num_row_) {
-              if (impliedBound > model->col_lower_[col] + 1000 * primal_feastol)
-                changeColLower(col, impliedBound);
-
-              impliedBound = -kHighsInf;
-            }
-          }
-
-          // only tighten bound if it is tighter by a wide enough margin
-          if (impliedBound > implColLower[col] + 1000 * primal_feastol)
-            changeImplColLower(col, impliedBound, row);
-        } else {
-          // bound is an upper bound
-          // check if we may round the bound due to integrality restrictions
-          if (mipsolver != nullptr) {
-            if (model->integrality_[col] != HighsVarType::kContinuous) {
-              double roundedBound = std::floor(impliedBound + primal_feastol);
-
-              // change bounds of integers immediately
-              if (roundedBound < model->col_upper_[col])
-                changeColUpper(col, roundedBound);
-            }
-
-            if (mipsolver->mipdata_->postSolveStack.getOrigRowIndex(row) >=
-                mipsolver->orig_model_->num_row_) {
-              if (impliedBound < model->col_upper_[col] - 1000 * primal_feastol)
-                changeColUpper(col, impliedBound);
-
-              impliedBound = kHighsInf;
-            }
-          }
-
-          // only tighten bound if it is tighter by a wide enough margin
-          if (impliedBound < implColUpper[col] - 1000 * primal_feastol)
-            changeImplColUpper(col, impliedBound, row);
-        }
-      }
-    }
-  }
+    checkImpliedBound(row, col, val, rowLower,
+                      impliedRowBounds.getResidualSumUpperOrig(row, col, val),
+                      HighsInt{-1});
 }
 
 void HPresolve::recomputeColImpliedBounds(HighsInt row) {
