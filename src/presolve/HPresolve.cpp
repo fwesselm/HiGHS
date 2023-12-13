@@ -2783,37 +2783,34 @@ bool HPresolve::weaklyDominatedCol(HighsPostsolveStack& postsolve_stack,
     analysis_.logging_on_ = logging_on;
     if (logging_on) analysis_.stopPresolveRuleLog(kPresolveRuleDominatedCol);
     return true;
-  } else {
-    if (colSum == 0.0 && analysis_.allow_rule_[kPresolveRuleForcingCol]) {
-      // todo: forcing column, since this implies direction * colDual >= 0 and
-      // we already checked that direction * colDual <= 0 and since the cost
-      // are 0.0 all the rows are at a dual multiplier of zero and we can
-      // determine one nonbasic row in postsolve, and make the other
-      // rows and the column basic. The columns primal value is
-      // computed from the nonbasic row which is chosen such that the
-      // values of all rows are primal feasible printf("removing
-      // forcing column of size %" HIGHSINT_FORMAT "\n",
-      // colsize[col]);
-      if (logging_on) analysis_.startPresolveRuleLog(kPresolveRuleForcingCol);
-      postsolve_stack.forcingColumn(
-          col, getColumnVector(col), model->col_cost_[col], oppositeBoundVal,
-          fixToUpperBnd, model->integrality_[col] == HighsVarType::kInteger);
-      markColDeleted(col);
-      HighsInt coliter = colhead[col];
-      HighsInt direction = fixToUpperBnd ? 1 : -1;
-      while (coliter != -1) {
-        HighsInt row = Arow[coliter];
-        double rhs = direction * Avalue[coliter] > 0.0 ? model->row_lower_[row]
-                                                       : model->row_upper_[row];
-        coliter = Anext[coliter];
-        postsolve_stack.forcingColumnRemovedRow(col, row, rhs,
-                                                getRowVector(row));
-        removeRow(row);
-      }
-      analysis_.logging_on_ = logging_on;
-      if (logging_on) analysis_.stopPresolveRuleLog(kPresolveRuleForcingCol);
-      return true;
+  } else if (colSum == 0.0 && analysis_.allow_rule_[kPresolveRuleForcingCol]) {
+    // todo: forcing column, since this implies direction * colDual >= 0 and
+    // we already checked that direction * colDual <= 0 and since the cost
+    // are 0.0 all the rows are at a dual multiplier of zero and we can
+    // determine one nonbasic row in postsolve, and make the other
+    // rows and the column basic. The columns primal value is
+    // computed from the nonbasic row which is chosen such that the
+    // values of all rows are primal feasible printf("removing
+    // forcing column of size %" HIGHSINT_FORMAT "\n",
+    // colsize[col]);
+    if (logging_on) analysis_.startPresolveRuleLog(kPresolveRuleForcingCol);
+    postsolve_stack.forcingColumn(
+        col, getColumnVector(col), model->col_cost_[col], oppositeBoundVal,
+        fixToUpperBnd, model->integrality_[col] == HighsVarType::kInteger);
+    markColDeleted(col);
+    HighsInt coliter = colhead[col];
+    HighsInt direction = fixToUpperBnd ? 1 : -1;
+    while (coliter != -1) {
+      HighsInt row = Arow[coliter];
+      double rhs = direction * Avalue[coliter] > 0.0 ? model->row_lower_[row]
+                                                     : model->row_upper_[row];
+      coliter = Anext[coliter];
+      postsolve_stack.forcingColumnRemovedRow(col, row, rhs, getRowVector(row));
+      removeRow(row);
     }
+    analysis_.logging_on_ = logging_on;
+    if (logging_on) analysis_.stopPresolveRuleLog(kPresolveRuleForcingCol);
+    return true;
   }
   return false;
 }
