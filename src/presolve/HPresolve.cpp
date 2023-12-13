@@ -3058,7 +3058,7 @@ HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
 
             auto remDoubletonEq = [&](HighsInt direction) {
               double bound;
-              if (direction == 1)
+              if (direction >= 0)
                 bound = model->col_upper_[nonz.index()];
               else
                 bound = model->col_lower_[nonz.index()];
