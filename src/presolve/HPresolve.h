@@ -271,6 +271,9 @@ class HPresolve {
 
   double problemSizeReduction();
 
+  bool weaklyDominatedCol(HighsPostsolveStack& postsolve_stack, HighsInt col,
+                          bool fixToUpperBnd);
+
  public:
   // for LP presolve
   void setInput(HighsLp& model_, const HighsOptions& options_,
