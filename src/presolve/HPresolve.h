@@ -271,8 +271,8 @@ class HPresolve {
 
   double problemSizeReduction();
 
-  bool weaklyDominatedCol(HighsPostsolveStack& postsolve_stack, HighsInt col,
-                          bool fixToUpperBnd);
+  Result weaklyDominatedCol(HighsPostsolveStack& postsolve_stack, HighsInt col,
+                            bool fixToUpperBnd);
 
  public:
   // for LP presolve

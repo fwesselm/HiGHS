@@ -2759,8 +2759,8 @@ HPresolve::Result HPresolve::singletonRow(HighsPostsolveStack& postsolve_stack,
   return checkLimits(postsolve_stack);
 }
 
-bool HPresolve::weaklyDominatedCol(HighsPostsolveStack& postsolve_stack,
-                                   HighsInt col, bool fixToUpperBnd) {
+HPresolve::Result HPresolve::weaklyDominatedCol(
+    HighsPostsolveStack& postsolve_stack, HighsInt col, bool fixToUpperBnd) {
   const bool logging_on = analysis_.logging_on_;
   bool bndIsFinite;
   double oppositeBoundVal;
@@ -2782,7 +2782,6 @@ bool HPresolve::weaklyDominatedCol(HighsPostsolveStack& postsolve_stack,
       fixColToLower(postsolve_stack, col);
     analysis_.logging_on_ = logging_on;
     if (logging_on) analysis_.stopPresolveRuleLog(kPresolveRuleDominatedCol);
-    return true;
   } else if (colSum == 0.0 && analysis_.allow_rule_[kPresolveRuleForcingCol]) {
     // todo: forcing column, since this implies direction * colDual >= 0 and
     // we already checked that direction * colDual <= 0 and since the cost
@@ -2810,9 +2809,8 @@ bool HPresolve::weaklyDominatedCol(HighsPostsolveStack& postsolve_stack,
     }
     analysis_.logging_on_ = logging_on;
     if (logging_on) analysis_.stopPresolveRuleLog(kPresolveRuleForcingCol);
-    return true;
   }
-  return false;
+  return checkLimits(postsolve_stack);
 }
 
 HPresolve::Result HPresolve::singletonCol(HighsPostsolveStack& postsolve_stack,
@@ -2860,13 +2858,13 @@ HPresolve::Result HPresolve::singletonCol(HighsPostsolveStack& postsolve_stack,
 
   // check for weakly dominated column
   if (colDualUpper <= options->dual_feasibility_tolerance) {
-    if (weaklyDominatedCol(postsolve_stack, col, true))
-      return checkLimits(postsolve_stack);
+    HPRESOLVE_CHECKED_CALL(weaklyDominatedCol(postsolve_stack, col, true));
+    if (colDeleted[col]) return Result::kOk;
   }
 
   if (colDualLower >= -options->dual_feasibility_tolerance) {
-    if (weaklyDominatedCol(postsolve_stack, col, false))
-      return checkLimits(postsolve_stack);
+    HPRESOLVE_CHECKED_CALL(weaklyDominatedCol(postsolve_stack, col, false));
+    if (colDeleted[col]) return Result::kOk;
   }
 
   if (mipsolver != nullptr) convertImpliedInteger(col, row);
@@ -3697,7 +3695,8 @@ HPresolve::Result HPresolve::colPresolve(HighsPostsolveStack& postsolve_stack,
 
   // check for weakly dominated column
   if (colDualUpper <= options->dual_feasibility_tolerance) {
-    if (weaklyDominatedCol(postsolve_stack, col, true)) {
+    HPRESOLVE_CHECKED_CALL(weaklyDominatedCol(postsolve_stack, col, true));
+    if (colDeleted[col]) {
       HPRESOLVE_CHECKED_CALL(removeRowSingletons(postsolve_stack));
       return checkLimits(postsolve_stack);
     }
@@ -3705,7 +3704,8 @@ HPresolve::Result HPresolve::colPresolve(HighsPostsolveStack& postsolve_stack,
 
   if (colDualLower >= -options->dual_feasibility_tolerance) {
     // symmetric case for fixing to the lower bound
-    if (weaklyDominatedCol(postsolve_stack, col, false)) {
+    HPRESOLVE_CHECKED_CALL(weaklyDominatedCol(postsolve_stack, col, false));
+    if (colDeleted[col]) {
       HPRESOLVE_CHECKED_CALL(removeRowSingletons(postsolve_stack));
       return checkLimits(postsolve_stack);
     }
