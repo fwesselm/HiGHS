@@ -1307,21 +1307,17 @@ HPresolve::Result HPresolve::runProbing(HighsPostsolveStack& postsolve_stack) {
   // first tighten all bounds if they have an implied bound that is tighter
   // than their column bound before probing this is not done for continuous
   // columns since it may allow stronger dual presolve and more aggregations
-  double hugeBound = primal_feastol / kHighsTiny;
+  const double hugeBound = primal_feastol / kHighsTiny;
   for (HighsInt i = 0; i != model->num_col_; ++i) {
-    if (model->col_lower_[i] >= implColLower[i] &&
-        model->col_upper_[i] <= implColUpper[i])
+    const double newLb = implColLower[i];
+    const double newUb = implColUpper[i];
+    if (model->col_lower_[i] >= newLb && model->col_upper_[i] <= newUb)
       continue;
 
-    if (std::abs(implColLower[i]) <= hugeBound) {
-      double newLb = implColLower[i];
-      if (newLb > model->col_lower_[i]) changeColLower(i, newLb);
-    }
-
-    if (std::abs(implColUpper[i]) <= hugeBound) {
-      double newUb = implColUpper[i];
-      if (newUb < model->col_upper_[i]) changeColUpper(i, newUb);
-    }
+    if (std::abs(newLb) <= hugeBound && newLb > model->col_lower_[i])
+      changeColLower(i, newLb);
+    if (std::abs(newUb) <= hugeBound && newUb < model->col_upper_[i])
+      changeColUpper(i, newUb);
   }
 
   HighsInt oldNumProbed = numProbed;
@@ -1370,15 +1366,14 @@ HPresolve::Result HPresolve::runProbing(HighsPostsolveStack& postsolve_stack) {
     binaries.reserve(model->num_col_);
     HighsRandom random(options->random_seed);
     for (HighsInt i = 0; i != model->num_col_; ++i) {
-      if (domain.isBinary(i)) {
-        HighsInt implicsUp = cliquetable.getNumImplications(i, 1);
-        HighsInt implicsDown = cliquetable.getNumImplications(i, 0);
-        binaries.emplace_back(
-            -std::min(int64_t{5000}, int64_t(implicsUp) * implicsDown) /
-                (1.0 + numProbes[i]),
-            -std::min(HighsInt{100}, implicsUp + implicsDown), random.integer(),
-            i);
-      }
+      if (!domain.isBinary(i)) continue;
+      HighsInt implicsUp = cliquetable.getNumImplications(i, 1);
+      HighsInt implicsDown = cliquetable.getNumImplications(i, 0);
+      binaries.emplace_back(
+          -std::min(int64_t{5000}, int64_t(implicsUp) * implicsDown) /
+              (1.0 + numProbes[i]),
+          -std::min(HighsInt{100}, implicsUp + implicsDown), random.integer(),
+          i);
     }
   }
   if (!binaries.empty()) {
@@ -1408,76 +1403,73 @@ HPresolve::Result HPresolve::runProbing(HighsPostsolveStack& postsolve_stack) {
 
       if (cliquetable.getSubstitution(i) != nullptr) continue;
 
-      if (domain.isBinary(i)) {
-        // when a large percentage of columns have been deleted, stop this round
-        // of probing
-        // if (numDel > std::max(model->num_col_ * 0.2, 1000.)) break;
-        if (numDel > std::max(HighsInt{1000},
-                              (model->num_row_ + model->num_col_) / 20)) {
-          probingEarlyAbort = true;
-          break;
-        }
+      if (!domain.isBinary(i)) continue;
 
-        // break in case of too many new implications to not spent ages in
-        // probing
-        if (cliquetable.isFull() ||
-            cliquetable.numCliques() - numCliquesStart >
-                std::max(HighsInt{1000000}, 2 * numNonzeros()) ||
-            implications.getNumImplications() - numImplicsStart >
-                std::max(HighsInt{1000000}, 2 * numNonzeros()))
-          break;
+      // when a large percentage of columns have been deleted, stop this round
+      // of probing
+      // if (numDel > std::max(model->num_col_ * 0.2, 1000.)) break;
+      probingEarlyAbort =
+          numDel >
+          std::max(HighsInt{1000}, (model->num_row_ + model->num_col_) / 20);
+      if (probingEarlyAbort) break;
 
-        // if (numProbed % 10 == 0)
-        //   printf(
-        //       "numprobed=%d  numDel=%d  newcliques=%d "
-        //       "numNeighbourhoodQueries=%ld  "
-        //       "splayContingent=%ld\n",
-        //       numProbed, numDel, cliquetable.numCliques() - numCliquesStart,
-        //       cliquetable.numNeighbourhoodQueries, splayContingent);
-        if (cliquetable.numNeighbourhoodQueries > splayContingent) break;
+      // break in case of too many new implications to not spent ages in
+      // probing
+      if (cliquetable.isFull() ||
+          cliquetable.numCliques() - numCliquesStart >
+              std::max(HighsInt{1000000}, 2 * numNonzeros()) ||
+          implications.getNumImplications() - numImplicsStart >
+              std::max(HighsInt{1000000}, 2 * numNonzeros()))
+        break;
 
-        if (probingContingent - numProbed < 0) break;
+      // if (numProbed % 10 == 0)
+      //   printf(
+      //       "numprobed=%d  numDel=%d  newcliques=%d "
+      //       "numNeighbourhoodQueries=%ld  "
+      //       "splayContingent=%ld\n",
+      //       numProbed, numDel, cliquetable.numCliques() - numCliquesStart,
+      //       cliquetable.numNeighbourhoodQueries, splayContingent);
+      if (cliquetable.numNeighbourhoodQueries > splayContingent) break;
 
-        HighsInt numBoundChgs = 0;
-        HighsInt numNewCliques = -cliquetable.numCliques();
-        if (!implications.runProbing(i, numBoundChgs)) continue;
-        probingContingent += numBoundChgs;
-        numNewCliques += cliquetable.numCliques();
-        numNewCliques = std::max(numNewCliques, HighsInt{0});
-        while (domain.getChangedCols().size() != numChangedCols) {
-          if (domain.isFixed(domain.getChangedCols()[numChangedCols++]))
-            ++probingNumDelCol;
-        }
-        HighsInt newNumDel = probingNumDelCol - numDelStart +
-                             implications.substitutions.size() +
-                             cliquetable.getSubstitutions().size();
+      if (probingContingent - numProbed < 0) break;
 
-        if (newNumDel > numDel) {
-          probingContingent += numDel;
-          if (!mipsolver->submip) {
-            splayContingent += 100 * (newNumDel + numDelStart);
-            splayContingent += 1000 * numNewCliques;
-          }
-          numDel = newNumDel;
-          numFail = 0;
-        } else if (mipsolver->submip || numNewCliques == 0) {
-          splayContingent -= 100 * numFail;
-          ++numFail;
-        } else {
-          splayContingent += 1000 * numNewCliques;
-          numFail = 0;
-        }
-
-        ++numProbed;
-        numProbes[i] += 1;
-
-        // printf("nprobed: %" HIGHSINT_FORMAT ", numCliques: %" HIGHSINT_FORMAT
-        // "\n", nprobed,
-        //       cliquetable.numCliques());
-        if (domain.infeasible()) {
-          return Result::kPrimalInfeasible;
-        }
+      HighsInt numBoundChgs = 0;
+      HighsInt numNewCliques = -cliquetable.numCliques();
+      if (!implications.runProbing(i, numBoundChgs)) continue;
+      probingContingent += numBoundChgs;
+      numNewCliques += cliquetable.numCliques();
+      numNewCliques = std::max(numNewCliques, HighsInt{0});
+      while (domain.getChangedCols().size() != numChangedCols) {
+        if (domain.isFixed(domain.getChangedCols()[numChangedCols++]))
+          ++probingNumDelCol;
       }
+      HighsInt newNumDel = probingNumDelCol - numDelStart +
+                           implications.substitutions.size() +
+                           cliquetable.getSubstitutions().size();
+
+      if (newNumDel > numDel) {
+        probingContingent += numDel;
+        if (!mipsolver->submip) {
+          splayContingent += 100 * (newNumDel + numDelStart);
+          splayContingent += 1000 * numNewCliques;
+        }
+        numDel = newNumDel;
+        numFail = 0;
+      } else if (mipsolver->submip || numNewCliques == 0) {
+        splayContingent -= 100 * numFail;
+        ++numFail;
+      } else {
+        splayContingent += 1000 * numNewCliques;
+        numFail = 0;
+      }
+
+      ++numProbed;
+      numProbes[i] += 1;
+
+      // printf("nprobed: %" HIGHSINT_FORMAT ", numCliques: %" HIGHSINT_FORMAT
+      // "\n", nprobed,
+      //       cliquetable.numCliques());
+      if (domain.infeasible()) return Result::kPrimalInfeasible;
     }
 
     cliquetable.cleanupFixed(domain);
