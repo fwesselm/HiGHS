@@ -1592,9 +1592,10 @@ void HighsCliqueTable::processInfeasibleVertices(HighsDomain& globaldom) {
       // may be found by probing and will be deleted upon rebuild anyways
       vHashLists.for_each([&](HighsInt cliqueid) {
         cliques[cliqueid].numZeroFixed += 1;
-        if (cliques[cliqueid].end - cliques[cliqueid].start -
-                cliques[cliqueid].numZeroFixed <=
-            1)
+        if (!cliques[cliqueid].equality &&
+            cliques[cliqueid].end - cliques[cliqueid].start -
+                    cliques[cliqueid].numZeroFixed <=
+                1)
           removeClique(cliqueid);
       });
       continue;
@@ -1609,9 +1610,10 @@ void HighsCliqueTable::processInfeasibleVertices(HighsDomain& globaldom) {
       // assert(cliqueentries[entry.value()].val == 1 - v.val);
 
       cliques[cliqueid].numZeroFixed += 1;
-      if (cliques[cliqueid].end - cliques[cliqueid].start -
-              cliques[cliqueid].numZeroFixed <=
-          1) {
+      if (!cliques[cliqueid].equality &&
+          cliques[cliqueid].end - cliques[cliqueid].start -
+                  cliques[cliqueid].numZeroFixed <=
+              1) {
         removeClique(cliqueid);
       } else if (cliques[cliqueid].numZeroFixed >=
                  std::max(
