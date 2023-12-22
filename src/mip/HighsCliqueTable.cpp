@@ -923,10 +923,7 @@ void HighsCliqueTable::extractCliques(
 
     for (auto j = 0; j != nbin; ++j) {
       HighsInt pos = perm[j];
-      if (complementation[pos] == -1)
-        clique.emplace_back(inds[pos], 0);
-      else
-        clique.emplace_back(inds[pos], 1);
+      clique.emplace_back(inds[pos], complementation[pos] == -1 ? 0 : 1);
     }
 
     addClique(mipsolver, clique.data(), nbin);
@@ -949,16 +946,10 @@ void HighsCliqueTable::extractCliques(
 
     for (auto j = perm.begin(); j != cliqueend; ++j) {
       HighsInt pos = *j;
-      if (complementation[pos] == -1)
-        clique.emplace_back(inds[pos], 0);
-      else
-        clique.emplace_back(inds[pos], 1);
+      clique.emplace_back(inds[pos], complementation[pos] == -1 ? 0 : 1);
     }
 
-    if (complementation[perm[k]] == -1)
-      clique.emplace_back(inds[perm[k]], 0);
-    else
-      clique.emplace_back(inds[perm[k]], 1);
+    clique.emplace_back(inds[perm[k]], complementation[perm[k]] == -1 ? 0 : 1);
 
     // printf("extracted this clique:\n");
     // printClique(clique);
@@ -1243,16 +1234,10 @@ void HighsCliqueTable::extractCliquesFromCut(const HighsMipSolver& mipsolver,
 
     for (auto j = perm.begin(); j != cliqueend; ++j) {
       HighsInt pos = *j;
-      if (vals[pos] < 0)
-        clique.emplace_back(inds[pos], 0);
-      else
-        clique.emplace_back(inds[pos], 1);
+      clique.emplace_back(inds[pos], vals[pos] < 0 ? 0 : 1);
     }
 
-    if (vals[perm[k]] < 0)
-      clique.emplace_back(inds[perm[k]], 0);
-    else
-      clique.emplace_back(inds[perm[k]], 1);
+    clique.emplace_back(inds[perm[k]], vals[perm[k]] < 0 ? 0 : 1);
 
     // printf("extracted this clique:\n");
     // printClique(clique);
@@ -1493,16 +1478,10 @@ void HighsCliqueTable::extractObjCliques(HighsMipSolver& mipsolver) {
 
     for (auto j = perm.begin(); j != cliqueend; ++j) {
       HighsInt pos = *j;
-      if (vals[pos] < 0)
-        clique.emplace_back(inds[pos], 0);
-      else
-        clique.emplace_back(inds[pos], 1);
+      clique.emplace_back(inds[pos], vals[pos] < 0 ? 0 : 1);
     }
 
-    if (vals[perm[k]] < 0)
-      clique.emplace_back(inds[perm[k]], 0);
-    else
-      clique.emplace_back(inds[perm[k]], 1);
+    clique.emplace_back(inds[perm[k]], vals[perm[k]] < 0 ? 0 : 1);
 
     // printf("extracted this clique from obj:\n");
     // printClique(clique);
@@ -1826,8 +1805,8 @@ void HighsCliqueTable::addImplications(HighsDomain& domain, HighsInt col,
   CliqueVar v(col, val);
 
   while (colsubstituted[v.col]) {
-    assert(substitutions.size() >
-           static_cast<size_t>(colsubstituted[v.col] - 1));
+    assert(substitutions.size() + 1 >
+           static_cast<size_t>(colsubstituted[v.col]));
     Substitution subst = substitutions[colsubstituted[v.col] - 1];
     v = v.val == 1 ? subst.replace : subst.replace.complement();
     if (v.val == 1) {
