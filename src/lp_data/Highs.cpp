@@ -1431,7 +1431,7 @@ HighsStatus Highs::run() {
         this_postsolve_time += -timer_.read(timer_.postsolve_clock);
         presolve_.info_.postsolve_time = this_postsolve_time;
 
-        // Check postsolved solution for original problem
+        // Check postsolved dual solution for original problem
         checkDualSolution(model_.lp_, presolve_.data_.recovered_solution_,
                           residual);
 
