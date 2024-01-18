@@ -1419,6 +1419,7 @@ HighsStatus Highs::run() {
         presolve_.data_.recovered_solution_ = solution_;
         presolve_.data_.recovered_basis_ = basis_;
 
+        // Check dual solution for presolved problem before postsolve
         std::vector<double> residual;
         checkDualSolution(presolve_.data_.reduced_lp_, solution_,
                           residual);
@@ -1430,6 +1431,7 @@ HighsStatus Highs::run() {
         this_postsolve_time += -timer_.read(timer_.postsolve_clock);
         presolve_.info_.postsolve_time = this_postsolve_time;
 
+        // Check postsolved solution for original problem
         checkDualSolution(model_.lp_, presolve_.data_.recovered_solution_,
                           residual);
 
