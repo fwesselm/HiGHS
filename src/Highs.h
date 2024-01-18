@@ -38,6 +38,8 @@ HighsInt highsVersionMinor();
 HighsInt highsVersionPatch();
 const char* highsGithash();
 const char* highsCompilationDate();
+void checkDualSolution(const HighsLp& lp, const HighsSolution& solution,
+                       std::vector<double>& residual);
 
 /**
  * @brief Class to set parameters and run HiGHS

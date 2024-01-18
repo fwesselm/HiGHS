@@ -50,6 +50,19 @@ HighsInt highsVersionPatch() { return HIGHS_VERSION_PATCH; }
 const char* highsGithash() { return HIGHS_GITHASH; }
 const char* highsCompilationDate() { return HIGHS_COMPILATION_DATE; }
 
+void checkDualSolution(const HighsLp& lp, const HighsSolution& solution,
+                       std::vector<double>& residual) {
+  residual.resize(lp.num_col_, 0.0);
+  for (size_t j = 0; j != lp.num_col_; j++) {
+    residual[j] = lp.col_cost_[j] - solution.col_dual[j];
+    for (HighsInt i = lp.a_matrix_.start_[j]; i != lp.a_matrix_.start_[j + 1];
+         i++) {
+      residual[j] -=
+          solution.row_dual[lp.a_matrix_.index_[i]] * lp.a_matrix_.value_[i];
+    }
+  }
+}
+
 Highs::Highs() {}
 
 HighsStatus Highs::clear() {
@@ -1406,12 +1419,19 @@ HighsStatus Highs::run() {
         presolve_.data_.recovered_solution_ = solution_;
         presolve_.data_.recovered_basis_ = basis_;
 
+        std::vector<double> residual;
+        checkDualSolution(presolve_.data_.reduced_lp_, solution_,
+                          residual);
+
         this_postsolve_time = -timer_.read(timer_.postsolve_clock);
         timer_.start(timer_.postsolve_clock);
         HighsPostsolveStatus postsolve_status = runPostsolve();
         timer_.stop(timer_.postsolve_clock);
         this_postsolve_time += -timer_.read(timer_.postsolve_clock);
         presolve_.info_.postsolve_time = this_postsolve_time;
+
+        checkDualSolution(model_.lp_, presolve_.data_.recovered_solution_,
+                          residual);
 
         if (postsolve_status == HighsPostsolveStatus::kSolutionRecovered) {
           highsLogDev(log_options, HighsLogType::kVerbose,
