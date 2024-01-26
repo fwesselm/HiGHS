@@ -1929,12 +1929,12 @@ HPresolve::Result HPresolve::applyConflictGraphSubstitutions(
 
     ++probingNumDelCol;
 
-    postsolve_stack.doubletonEquation(-1, substitution.substcol,
-                                      substitution.staycol, 1.0,
-                                      -substitution.scale, substitution.offset,
-                                      model->col_lower_[substitution.substcol],
-                                      model->col_upper_[substitution.substcol],
-                                      0.0, false, false, HighsEmptySlice());
+    postsolve_stack.doubletonEquation(
+        -1, substitution.substcol, substitution.staycol, 1.0,
+        -substitution.scale, substitution.offset,
+        model->col_lower_[substitution.substcol],
+        model->col_upper_[substitution.substcol], 0.0, false, false,
+        HighsPostsolveStack::RowType::kEq, HighsEmptySlice());
     markColDeleted(substitution.substcol);
     substitute(substitution.substcol, substitution.staycol, substitution.offset,
                substitution.scale);
@@ -1962,7 +1962,8 @@ HPresolve::Result HPresolve::applyConflictGraphSubstitutions(
     postsolve_stack.doubletonEquation(
         -1, subst.substcol, subst.replace.col, 1.0, -scale, offset,
         model->col_lower_[subst.substcol], model->col_upper_[subst.substcol],
-        0.0, false, false, HighsEmptySlice());
+        0.0, false, false, HighsPostsolveStack::RowType::kEq,
+        HighsEmptySlice());
     markColDeleted(subst.substcol);
     substitute(subst.substcol, subst.replace.col, offset, scale);
     HPRESOLVE_CHECKED_CALL(checkLimits(postsolve_stack));
@@ -2442,7 +2443,8 @@ void HPresolve::toCSR(std::vector<double>& ARval,
 }
 
 HPresolve::Result HPresolve::doubletonEq(HighsPostsolveStack& postsolve_stack,
-                                         HighsInt row) {
+                                         HighsInt row,
+                                         HighsPostsolveStack::RowType rowType) {
   assert(analysis_.allow_rule_[kPresolveRuleDoubletonEquation]);
   const bool logging_on = analysis_.logging_on_;
   if (logging_on)
@@ -2456,113 +2458,94 @@ HPresolve::Result HPresolve::doubletonEq(HighsPostsolveStack& postsolve_stack,
   HighsInt nzPos1 = rowroot[row];
   HighsInt nzPos2 = ARright[nzPos1] != -1 ? ARright[nzPos1] : ARleft[nzPos1];
 
+  auto colAtPos1Better = [&]() {
+    if (model->integrality_[Acol[nzPos1]] == HighsVarType::kInteger) {
+      if (model->integrality_[Acol[nzPos2]] == HighsVarType::kInteger) {
+        // both columns integer. For substitution choose smaller absolute
+        // coefficient value, or sparser column if values are equal
+        if (std::fabs(Avalue[nzPos1]) <
+            std::fabs(Avalue[nzPos2]) - options->small_matrix_value) {
+          return true;
+        } else if (std::fabs(Avalue[nzPos2]) <
+                   std::fabs(Avalue[nzPos1]) - options->small_matrix_value) {
+          return false;
+        } else if (colsize[Acol[nzPos1]] < colsize[Acol[nzPos2]]) {
+          return true;
+        } else {
+          return false;
+        }
+      } else {
+        // one col is integral, substitute the continuous one
+        return false;
+      }
+    } else {
+      if (model->integrality_[Acol[nzPos2]] == HighsVarType::kInteger) {
+        // one col is integral, substitute the continuous one
+        return true;
+      } else {
+        // both columns continuous the one with a larger absolute coefficient
+        // value if the difference is more than factor 2, and otherwise the one
+        // with fewer nonzeros if those are equal
+        HighsInt col1Size = colsize[Acol[nzPos1]];
+        if (col1Size == 1)
+          return true;
+        else {
+          HighsInt col2Size = colsize[Acol[nzPos2]];
+          if (col2Size == 1)
+            return false;
+          else {
+            double abs1Val = std::fabs(Avalue[nzPos1]);
+            double abs2Val = std::fabs(Avalue[nzPos2]);
+            if (col1Size != col2Size &&
+                std::max(abs1Val, abs2Val) <= 2.0 * std::min(abs1Val, abs2Val))
+              return (col1Size < col2Size);
+            else if (abs1Val > abs2Val)
+              return true;
+            else
+              return false;
+          }
+        }
+      }
+    }
+  };
+
   HighsInt substcol;
   HighsInt staycol;
   double substcoef;
   double staycoef;
-  double rhs = model->row_upper_[row];
-  if (model->integrality_[Acol[nzPos1]] == HighsVarType::kInteger) {
-    if (model->integrality_[Acol[nzPos2]] == HighsVarType::kInteger) {
-      // both columns integer. For substitution choose smaller absolute
-      // coefficient value, or sparser column if values are equal
-      if (std::abs(Avalue[nzPos1]) <
-          std::abs(Avalue[nzPos2]) - options->small_matrix_value) {
-        substcol = Acol[nzPos1];
-        staycol = Acol[nzPos2];
 
-        substcoef = Avalue[nzPos1];
-        staycoef = Avalue[nzPos2];
-      } else if (std::abs(Avalue[nzPos2]) <
-                 std::abs(Avalue[nzPos1]) - options->small_matrix_value) {
-        substcol = Acol[nzPos2];
-        staycol = Acol[nzPos1];
+  if (colAtPos1Better()) {
+    substcol = Acol[nzPos1];
+    staycol = Acol[nzPos2];
 
-        substcoef = Avalue[nzPos2];
-        staycoef = Avalue[nzPos1];
-      } else if (colsize[Acol[nzPos1]] < colsize[Acol[nzPos2]]) {
-        substcol = Acol[nzPos1];
-        staycol = Acol[nzPos2];
-
-        substcoef = Avalue[nzPos1];
-        staycoef = Avalue[nzPos2];
-      } else {
-        substcol = Acol[nzPos2];
-        staycol = Acol[nzPos1];
-
-        substcoef = Avalue[nzPos2];
-        staycoef = Avalue[nzPos1];
-      }
-
-      // check integrality conditions
-      double roundCoef = std::round(staycoef / substcoef) * substcoef;
-      if (std::abs(roundCoef - staycoef) > options->small_matrix_value)
-        return Result::kOk;
-      staycoef = roundCoef;
-      double roundRhs = std::round(rhs / substcoef) * substcoef;
-      if (std::abs(rhs - roundRhs) > primal_feastol)
-        return Result::kPrimalInfeasible;
-      rhs = roundRhs;
-    } else {
-      // one col is integral, substitute the continuous one
-      substcol = Acol[nzPos2];
-      staycol = Acol[nzPos1];
-
-      substcoef = Avalue[nzPos2];
-      staycoef = Avalue[nzPos1];
-    }
+    substcoef = Avalue[nzPos1];
+    staycoef = Avalue[nzPos2];
   } else {
-    if (model->integrality_[Acol[nzPos2]] == HighsVarType::kInteger) {
-      // one col is integral, substitute the continuous one
-      substcol = Acol[nzPos1];
-      staycol = Acol[nzPos2];
+    substcol = Acol[nzPos2];
+    staycol = Acol[nzPos1];
 
-      substcoef = Avalue[nzPos1];
-      staycoef = Avalue[nzPos2];
-    } else {
-      // both columns continuous the one with a larger absolute coefficient
-      // value if the difference is more than factor 2, and otherwise the one
-      // with fewer nonzeros if those are equal
-      bool colAtPos1Better;
-      HighsInt col1Size = colsize[Acol[nzPos1]];
-      if (col1Size == 1)
-        colAtPos1Better = true;
-      else {
-        HighsInt col2Size = colsize[Acol[nzPos2]];
-        if (col2Size == 1)
-          colAtPos1Better = false;
-        else {
-          double abs1Val = std::fabs(Avalue[nzPos1]);
-          double abs2Val = std::fabs(Avalue[nzPos2]);
-          if (col1Size != col2Size &&
-              std::max(abs1Val, abs2Val) <= 2.0 * std::min(abs1Val, abs2Val))
-            colAtPos1Better = col1Size < col2Size;
-          else if (abs1Val > abs2Val)
-            colAtPos1Better = true;
-          else
-            colAtPos1Better = false;
-        }
-      }
-
-      if (colAtPos1Better) {
-        substcol = Acol[nzPos1];
-        staycol = Acol[nzPos2];
-
-        substcoef = Avalue[nzPos1];
-        staycoef = Avalue[nzPos2];
-      } else {
-        substcol = Acol[nzPos2];
-        staycol = Acol[nzPos1];
-
-        substcoef = Avalue[nzPos2];
-        staycoef = Avalue[nzPos1];
-      }
-    }
+    substcoef = Avalue[nzPos2];
+    staycoef = Avalue[nzPos1];
   }
 
-  const double oldStayLower = model->col_lower_[staycol];
-  const double oldStayUpper = model->col_upper_[staycol];
-  const double substLower = model->col_lower_[substcol];
-  const double substUpper = model->col_upper_[substcol];
+  double rhs = model->row_upper_[row];
+  if (model->integrality_[substcol] == HighsVarType::kInteger &&
+      model->integrality_[staycol] == HighsVarType::kInteger) {
+    // check integrality conditions
+    double roundCoef = std::round(staycoef / substcoef) * substcoef;
+    if (std::fabs(roundCoef - staycoef) > options->small_matrix_value)
+      return Result::kOk;
+    staycoef = roundCoef;
+    double roundRhs = std::round(rhs / substcoef) * substcoef;
+    if (std::fabs(rhs - roundRhs) > primal_feastol)
+      return Result::kPrimalInfeasible;
+    rhs = roundRhs;
+  }
+
+  double oldStayLower = model->col_lower_[staycol];
+  double oldStayUpper = model->col_upper_[staycol];
+  double substLower = model->col_lower_[substcol];
+  double substUpper = model->col_upper_[substcol];
 
   double stayImplLower;
   double stayImplUpper;
@@ -2596,15 +2579,16 @@ HPresolve::Result HPresolve::doubletonEq(HighsPostsolveStack& postsolve_stack,
   }
 
   // possibly tighten bounds of the column that stays
-  const bool lowerTightened = stayImplLower > oldStayLower + primal_feastol;
-  const bool upperTightened = stayImplUpper < oldStayUpper - primal_feastol;
+  bool lowerTightened = stayImplLower > oldStayLower + primal_feastol;
   if (lowerTightened) changeColLower(staycol, stayImplLower);
+
+  bool upperTightened = stayImplUpper < oldStayUpper - primal_feastol;
   if (upperTightened) changeColUpper(staycol, stayImplUpper);
 
-  postsolve_stack.doubletonEquation(row, substcol, staycol, substcoef, staycoef,
-                                    rhs, substLower, substUpper,
-                                    model->col_cost_[substcol], lowerTightened,
-                                    upperTightened, getColumnVector(substcol));
+  postsolve_stack.doubletonEquation(
+      row, substcol, staycol, substcoef, staycoef, rhs, substLower, substUpper,
+      model->col_cost_[substcol], lowerTightened, upperTightened, rowType,
+      getColumnVector(substcol));
 
   // finally modify matrix
   markColDeleted(substcol);
@@ -2971,24 +2955,37 @@ HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
     }
   };
 
+  // Store original bounds
+  double origRowUpper = model->row_upper_[row];
+  double origRowLower = model->row_lower_[row];
+
   if (model->row_lower_[row] != model->row_upper_[row]) {
     if (implRowDualLower[row] > options->dual_feasibility_tolerance) {
       model->row_upper_[row] = model->row_lower_[row];
       if (mipsolver == nullptr) checkRedundantBounds(rowDualLowerSource[row]);
-    }
-
-    if (implRowDualUpper[row] < -options->dual_feasibility_tolerance) {
+    } else if (implRowDualUpper[row] < -options->dual_feasibility_tolerance) {
       model->row_lower_[row] = model->row_upper_[row];
       if (mipsolver == nullptr) checkRedundantBounds(rowDualUpperSource[row]);
     }
   }
 
+  // Get row bounds
   double rowUpper = model->row_upper_[row];
   double rowLower = model->row_lower_[row];
 
-  if (rowsize[row] == 2 && rowLower == rowUpper) {
-    if (analysis_.allow_rule_[kPresolveRuleDoubletonEquation])
-      return doubletonEq(postsolve_stack, row);
+  // Handle doubleton equations
+  if (rowsize[row] == 2 && rowLower == rowUpper &&
+      analysis_.allow_rule_[kPresolveRuleDoubletonEquation]) {
+    HighsPostsolveStack::RowType rowType;
+    if (origRowLower == origRowUpper) {
+      rowType = HighsPostsolveStack::RowType::kEq;
+    } else if (origRowUpper != kHighsInf) {
+      rowType = HighsPostsolveStack::RowType::kLeq;
+    } else {
+      assert(origRowLower != -kHighsInf);
+      rowType = HighsPostsolveStack::RowType::kGeq;
+    }
+    return doubletonEq(postsolve_stack, row, rowType);
   }
 
   // todo: do additional single row presolve for mip here. It may assume a
