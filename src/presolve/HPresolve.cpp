@@ -3058,7 +3058,7 @@ HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
                   -1, nonz.index(), binCol, 1.0, -scale, offset,
                   model->col_lower_[nonz.index()],
                   model->col_upper_[nonz.index()], 0.0, false, false,
-                  HighsEmptySlice());
+                  HighsPostsolveStack::RowType::kEq, HighsEmptySlice());
               substitute(nonz.index(), binCol, offset, scale);
             };
 
