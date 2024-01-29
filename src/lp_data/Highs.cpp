@@ -1420,6 +1420,23 @@ HighsStatus Highs::run() {
           solution_.clear();
           solution_ = presolve_.data_.recovered_solution_;
           solution_.value_valid = true;
+
+          assert(std::count_if(solution_.col_value.cbegin(),
+                               solution_.col_value.cend(),
+                               [](double d) { return std::isnan(d); }) == 0);
+
+          assert(std::count_if(solution_.row_value.cbegin(),
+                               solution_.row_value.cend(),
+                               [](double d) { return std::isnan(d); }) == 0);
+
+          assert(std::count_if(solution_.col_dual.cbegin(),
+                               solution_.col_dual.cend(),
+                               [](double d) { return std::isnan(d); }) == 0);
+
+          assert(std::count_if(solution_.row_dual.cbegin(),
+                               solution_.row_dual.cend(),
+                               [](double d) { return std::isnan(d); }) == 0);
+
           //          if (ipx_no_crossover) {
           if (!basis_.valid) {
             // Have a primal-dual solution, but no basis, since IPX

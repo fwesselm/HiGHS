@@ -553,11 +553,13 @@ class HighsPostsolveStack {
   void undoIterateBackwards(std::vector<T>& values,
                             const std::vector<HighsInt>& index,
                             HighsInt origSize) {
-    values.resize(origSize);
+    std::vector<T> valuesNew;
+    valuesNew.resize(origSize, std::numeric_limits<T>::signaling_NaN());
     for (size_t i = index.size(); i > 0; --i) {
       assert(static_cast<size_t>(index[i - 1]) >= i - 1);
-      values[index[i - 1]] = values[i - 1];
+      valuesNew[index[i - 1]] = values[i - 1];
     }
+    values = std::move(valuesNew);
   }
 
   /// undo presolve steps for primal dual solution and basis
