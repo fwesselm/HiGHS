@@ -559,7 +559,8 @@ class HighsPostsolveStack {
       assert(static_cast<size_t>(index[i - 1]) >= i - 1);
       valuesNew[index[i - 1]] = values[i - 1];
     }
-    values = std::move(valuesNew);
+    values.resize(origSize);
+    std::copy(valuesNew.cbegin(), valuesNew.cend(), values.begin());
   }
 
   /// undo presolve steps for primal dual solution and basis
