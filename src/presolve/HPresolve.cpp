@@ -2474,7 +2474,7 @@ void HPresolve::toCSR(std::vector<double>& ARval,
 }
 
 HPresolve::Result HPresolve::doubletonEq(HighsPostsolveStack& postsolve_stack,
-                                         HighsInt row,
+                                         HighsInt row, double rhs,
                                          HighsPostsolveStack::RowType rowType) {
   assert(analysis_.allow_rule_[kPresolveRuleDoubletonEquation]);
   const bool logging_on = analysis_.logging_on_;
@@ -2482,7 +2482,7 @@ HPresolve::Result HPresolve::doubletonEq(HighsPostsolveStack& postsolve_stack,
     analysis_.startPresolveRuleLog(kPresolveRuleDoubletonEquation);
   assert(!rowDeleted[row]);
   assert(rowsize[row] == 2);
-  assert(model->row_lower_[row] == model->row_upper_[row]);
+  assert(isDualImpliedFree(row));
 
   // printf("doubleton equation: ");
   // debugPrintRow(row);
@@ -2559,7 +2559,6 @@ HPresolve::Result HPresolve::doubletonEq(HighsPostsolveStack& postsolve_stack,
     staycoef = Avalue[nzPos1];
   }
 
-  double rhs = model->row_upper_[row];
   if (model->integrality_[substcol] == HighsVarType::kInteger &&
       model->integrality_[staycol] == HighsVarType::kInteger) {
     // check integrality conditions
@@ -2995,56 +2994,17 @@ HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
     return checkLimits(postsolve_stack);
   }
 
-  auto checkRedundantBounds = [&](HighsInt col) {
-    // check if column singleton has redundant bounds
-    assert(model->col_cost_[col] != 0.0);
-    if (colsize[col] != 1) return;
-    if (model->col_cost_[col] > 0) {
-      assert(model->col_lower_[col] == -kHighsInf ||
-             (model->col_lower_[col] <= implColLower[col] + primal_feastol &&
-              colLowerSource[col] == row));
-      if (model->col_lower_[col] > implColLower[col] - primal_feastol)
-        changeColLower(col, -kHighsInf);
-    } else {
-      assert(model->col_upper_[col] == kHighsInf ||
-             (model->col_upper_[col] >= implColUpper[col] - primal_feastol &&
-              colUpperSource[col] == row));
-      if (model->col_upper_[col] < implColUpper[col] + primal_feastol)
-        changeColUpper(col, kHighsInf);
-    }
-  };
-
-  // Store original bounds
-  double origRowUpper = model->row_upper_[row];
-  double origRowLower = model->row_lower_[row];
-
-  if (model->row_lower_[row] != model->row_upper_[row]) {
-    if (implRowDualLower[row] > options->dual_feasibility_tolerance) {
-      model->row_upper_[row] = model->row_lower_[row];
-      if (mipsolver == nullptr) checkRedundantBounds(rowDualLowerSource[row]);
-    } else if (implRowDualUpper[row] < -options->dual_feasibility_tolerance) {
-      model->row_lower_[row] = model->row_upper_[row];
-      if (mipsolver == nullptr) checkRedundantBounds(rowDualUpperSource[row]);
-    }
-  }
-
   // Get row bounds
   double rowUpper = model->row_upper_[row];
   double rowLower = model->row_lower_[row];
 
   // Handle doubleton equations
-  if (rowsize[row] == 2 && rowLower == rowUpper &&
+  if (rowsize[row] == 2 && isDualImpliedFree(row) &&
       analysis_.allow_rule_[kPresolveRuleDoubletonEquation]) {
+    double rhs;
     HighsPostsolveStack::RowType rowType;
-    if (origRowLower == origRowUpper) {
-      rowType = HighsPostsolveStack::RowType::kEq;
-    } else if (origRowUpper != kHighsInf) {
-      rowType = HighsPostsolveStack::RowType::kLeq;
-    } else {
-      assert(origRowLower != -kHighsInf);
-      rowType = HighsPostsolveStack::RowType::kGeq;
-    }
-    return doubletonEq(postsolve_stack, row, rowType);
+    dualImpliedFreeGetRhsAndRowType(row, rhs, rowType);
+    return doubletonEq(postsolve_stack, row, rhs, rowType);
   }
 
   // todo: do additional single row presolve for mip here. It may assume a

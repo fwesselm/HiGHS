@@ -293,7 +293,7 @@ class HPresolve {
   Result dominatedColumns(HighsPostsolveStack& postsolve_stack);
 
   Result doubletonEq(HighsPostsolveStack& postsolve_stack, HighsInt row,
-                     HighsPostsolveStack::RowType rowType);
+                     double rhs, HighsPostsolveStack::RowType rowType);
 
   Result singletonRow(HighsPostsolveStack& postsolve_stack, HighsInt row);
 
