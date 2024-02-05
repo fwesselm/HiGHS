@@ -4725,8 +4725,6 @@ HPresolve::Result HPresolve::aggregator(HighsPostsolveStack& postsolve_stack) {
       HighsPostsolveStack::RowType rowType;
       dualImpliedFreeGetRhsAndRowType(row, rhs, rowType, true);
 
-      storeRow(row);
-
       postsolve_stack.freeColSubstitution(row, col, rhs, model->col_cost_[col],
                                           rowType, getStoredRow(),
                                           getColumnVector(col));
@@ -4738,6 +4736,7 @@ HPresolve::Result HPresolve::aggregator(HighsPostsolveStack& postsolve_stack) {
     // in the case where the row has length two or the column has length two
     // we always do the substitution since the fillin can never be problematic
     if (rowsize[row] == 2 || colsize[col] == 2) {
+      storeRow(row);
       freeColSubstitute(i, row, col);
       HPRESOLVE_CHECKED_CALL(removeRowSingletons(postsolve_stack));
       HPRESOLVE_CHECKED_CALL(checkLimits(postsolve_stack));
@@ -4756,6 +4755,7 @@ HPresolve::Result HPresolve::aggregator(HighsPostsolveStack& postsolve_stack) {
       }
     }
 
+    storeRow(row);
     HighsInt fillin = -(rowsize[row] + colsize[col] - 1);
     for (const auto& nz : getColumnVector(col)) {
       if (nz.index() == row) continue;
