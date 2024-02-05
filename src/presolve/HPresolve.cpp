@@ -4720,9 +4720,7 @@ HPresolve::Result HPresolve::aggregator(HighsPostsolveStack& postsolve_stack) {
       if (!impliedIntegral) continue;
     }
 
-    // in the case where the row has length two or the column has length two
-    // we always do the substitution since the fillin can never be problematic
-    if (rowsize[row] == 2 || colsize[col] == 2) {
+    auto freeColSubstitute = [&](size_t index, HighsInt row, HighsInt col) {
       double rhs;
       HighsPostsolveStack::RowType rowType;
       dualImpliedFreeGetRhsAndRowType(row, rhs, rowType, true);
@@ -4732,9 +4730,15 @@ HPresolve::Result HPresolve::aggregator(HighsPostsolveStack& postsolve_stack) {
       postsolve_stack.freeColSubstitution(row, col, rhs, model->col_cost_[col],
                                           rowType, getStoredRow(),
                                           getColumnVector(col));
-      substitutionOpportunities[i].first = -1;
+      substitutionOpportunities[index].first = -1;
 
       substitute(row, col, rhs);
+    };
+
+    // in the case where the row has length two or the column has length two
+    // we always do the substitution since the fillin can never be problematic
+    if (rowsize[row] == 2 || colsize[col] == 2) {
+      freeColSubstitute(i, row, col);
       HPRESOLVE_CHECKED_CALL(removeRowSingletons(postsolve_stack));
       HPRESOLVE_CHECKED_CALL(checkLimits(postsolve_stack));
       continue;
@@ -4752,7 +4756,6 @@ HPresolve::Result HPresolve::aggregator(HighsPostsolveStack& postsolve_stack) {
       }
     }
 
-    storeRow(row);
     HighsInt fillin = -(rowsize[row] + colsize[col] - 1);
     for (const auto& nz : getColumnVector(col)) {
       if (nz.index() == row) continue;
@@ -4771,15 +4774,7 @@ HPresolve::Result HPresolve::aggregator(HighsPostsolveStack& postsolve_stack) {
     }
 
     nfail = 0;
-    double rhs;
-    HighsPostsolveStack::RowType rowType;
-    dualImpliedFreeGetRhsAndRowType(row, rhs, rowType, true);
-
-    postsolve_stack.freeColSubstitution(row, col, rhs, model->col_cost_[col],
-                                        rowType, getStoredRow(),
-                                        getColumnVector(col));
-    substitutionOpportunities[i].first = -1;
-    substitute(row, col, rhs);
+    freeColSubstitute(i, row, col);
     HPRESOLVE_CHECKED_CALL(removeRowSingletons(postsolve_stack));
     HPRESOLVE_CHECKED_CALL(checkLimits(postsolve_stack));
   }
