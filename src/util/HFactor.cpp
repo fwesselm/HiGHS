@@ -1039,7 +1039,7 @@ HighsInt HFactor::buildKernel() {
       }
     }
     // 1.4. If we found nothing: tell singular
-    if (!foundPivot) {
+    if (!foundPivot && merit_pivot >= merit_limit) {
       rank_deficiency = nwork + 1;
       highsLogDev(log_options, HighsLogType::kWarning,
                   "Factorization identifies rank deficiency of %d\n",
