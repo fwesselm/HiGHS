@@ -1000,9 +1000,9 @@ HighsInt HFactor::buildKernel() {
           if (searchCount++ >= searchLimit && merit_pivot < merit_limit)
             foundPivot = true;
           if (foundPivot) break;
-
-          fake_search += count;
         }
+
+        fake_search += count;
       }
 
       // Row count cannot exceed the number of basic variables
