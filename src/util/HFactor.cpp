@@ -1039,6 +1039,8 @@ HighsInt HFactor::buildKernel() {
       }
     }
     // 1.4. If we found nothing: tell singular
+    foundPivot = foundPivot || (jColPivot != -1 && iRowPivot != -1 &&
+                                merit_pivot < merit_limit);
     if (!foundPivot) {
       rank_deficiency = nwork + 1;
       highsLogDev(log_options, HighsLogType::kWarning,
