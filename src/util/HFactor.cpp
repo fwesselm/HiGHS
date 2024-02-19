@@ -1039,8 +1039,7 @@ HighsInt HFactor::buildKernel() {
       }
     }
     // 1.4. If we found nothing: tell singular
-    foundPivot = foundPivot || (jColPivot != -1 && iRowPivot != -1 &&
-                                merit_pivot < merit_limit);
+    foundPivot = foundPivot || merit_pivot < merit_limit;
     if (!foundPivot) {
       rank_deficiency = nwork + 1;
       highsLogDev(log_options, HighsLogType::kWarning,
@@ -1053,6 +1052,7 @@ HighsInt HFactor::buildKernel() {
      * 2. Elimination other elements by the pivot
      */
 #ifndef NDEBUG
+    assert(jColPivot != -1 && iRowPivot != -1);
     const HighsInt original_pivotal_row_count = mr_count[iRowPivot];
     const HighsInt original_pivotal_col_count = mc_count_a[jColPivot];
 #endif
