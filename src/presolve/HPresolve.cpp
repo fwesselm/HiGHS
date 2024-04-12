@@ -2995,20 +2995,18 @@ HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
     return checkLimits(postsolve_stack);
   }
 
-  auto checkRedundantBounds = [&](HighsInt col) {
+  auto checkRedundantBounds = [&](HighsInt col, HighsInt row) {
     // check if column singleton has redundant bounds
     assert(model->col_cost_[col] != 0.0);
     if (colsize[col] != 1) return;
     if (model->col_cost_[col] > 0) {
-      assert(model->col_lower_[col] == -kHighsInf ||
-             (model->col_lower_[col] <= implColLower[col] + primal_feastol &&
-              colLowerSource[col] == row));
+      assert(model->col_lower_[col] == -kHighsInf || !isLowerImplied(col) ||
+             colLowerSource[col] == row);
       if (model->col_lower_[col] > implColLower[col] - primal_feastol)
         changeColLower(col, -kHighsInf);
     } else {
-      assert(model->col_upper_[col] == kHighsInf ||
-             (model->col_upper_[col] >= implColUpper[col] - primal_feastol &&
-              colUpperSource[col] == row));
+      assert(model->col_upper_[col] == kHighsInf || !isUpperImplied(col) ||
+             colUpperSource[col] == row);
       if (model->col_upper_[col] < implColUpper[col] + primal_feastol)
         changeColUpper(col, kHighsInf);
     }
@@ -3021,10 +3019,12 @@ HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
   if (model->row_lower_[row] != model->row_upper_[row]) {
     if (implRowDualLower[row] > options->dual_feasibility_tolerance) {
       model->row_upper_[row] = model->row_lower_[row];
-      if (mipsolver == nullptr) checkRedundantBounds(rowDualLowerSource[row]);
+      if (mipsolver == nullptr)
+        checkRedundantBounds(rowDualLowerSource[row], row);
     } else if (implRowDualUpper[row] < -options->dual_feasibility_tolerance) {
       model->row_lower_[row] = model->row_upper_[row];
-      if (mipsolver == nullptr) checkRedundantBounds(rowDualUpperSource[row]);
+      if (mipsolver == nullptr)
+        checkRedundantBounds(rowDualUpperSource[row], row);
     }
   }
 
