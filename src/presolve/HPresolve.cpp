@@ -5547,12 +5547,7 @@ HPresolve::Result HPresolve::detectParallelRowsAndCols(
         } else {
           // for MIP we do not need dual postsolve so the reduction is valid if
           // the bound is weakly redundant
-          return colScale > 0 ? model->col_upper_[col] == kHighsInf ||
-                                    implColUpper[col] <=
-                                        model->col_upper_[col] + primal_feastol
-                              : model->col_lower_[col] == -kHighsInf ||
-                                    implColLower[col] >=
-                                        model->col_lower_[col] - primal_feastol;
+          return colScale > 0 ? isUpperImplied(col) : isLowerImplied(col);
         }
       };
 
@@ -5566,12 +5561,7 @@ HPresolve::Result HPresolve::detectParallelRowsAndCols(
                                     implColUpper[col] <
                                         model->col_upper_[col] - primal_feastol;
         } else {
-          return colScale > 0 ? model->col_lower_[col] == -kHighsInf ||
-                                    implColLower[col] >=
-                                        model->col_lower_[col] - primal_feastol
-                              : model->col_upper_[col] == kHighsInf ||
-                                    implColUpper[col] <=
-                                        model->col_upper_[col] + primal_feastol;
+          return colScale > 0 ? isLowerImplied(col) : isUpperImplied(col);
         }
       };
 
@@ -5582,9 +5572,7 @@ HPresolve::Result HPresolve::detectParallelRowsAndCols(
                  implColUpper[duplicateCol] <
                      model->col_upper_[duplicateCol] - primal_feastol;
         } else {
-          return model->col_upper_[duplicateCol] == kHighsInf ||
-                 implColUpper[duplicateCol] <=
-                     model->col_upper_[duplicateCol] + primal_feastol;
+          return isUpperImplied(duplicateCol);
         }
       };
 
@@ -5595,9 +5583,7 @@ HPresolve::Result HPresolve::detectParallelRowsAndCols(
                  implColLower[duplicateCol] >
                      model->col_lower_[duplicateCol] + primal_feastol;
         } else {
-          return model->col_lower_[duplicateCol] == -kHighsInf ||
-                 implColLower[duplicateCol] >=
-                     model->col_lower_[duplicateCol] - primal_feastol;
+          return isLowerImplied(duplicateCol);
         }
       };
 
