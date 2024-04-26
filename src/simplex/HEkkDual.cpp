@@ -2276,7 +2276,7 @@ void HEkkDual::initialiseDevexFramework() {
   ekk_instance_.info_.devex_index_.resize(solver_num_tot);
   const vector<int8_t>& nonbasicFlag = ekk_instance_.basis_.nonbasicFlag_;
   // Initialise the devex framework. The devex reference set is
-  // initialise to be the current set of basic variables - and never
+  // initialised to be the current set of basic variables - and never
   // changes until a new framework is set up. In a simplex iteration,
   // to compute the exact Devex weight for the pivotal row requires
   // summing the squares of the its entries over the indices in the

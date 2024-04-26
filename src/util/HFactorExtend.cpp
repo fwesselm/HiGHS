@@ -54,7 +54,7 @@ void HFactor::addRows(const HighsSparseMatrix* ar_matrix) {
 
   // Create a row-wise sparse matrix containing the new rows of the L
   // matrix - so that a column-wise version can be created (after
-  // inserting the rows into the LR matrix) allowing the cew column
+  // inserting the rows into the LR matrix) allowing the new column
   // entries to be inserted efficiently into the L matrix
   HighsSparseMatrix new_lr_rows;
   new_lr_rows.format_ = MatrixFormat::kRowwise;

@@ -16,7 +16,7 @@ namespace ipx {
 //               have previously been unmarked; they are marked now and newtop
 //               is returned.
 // @marked, @marker Node i is "marked" iff @marked[i] == @marker.
-// @work worksapce of size # rows of A.
+// @work workspace of size # rows of A.
 //
 // The code has been copied and adapted from cs_dfs.c, included in the CSPARSE
 // package [1].
@@ -55,4 +55,4 @@ bool AugmentingPath(Int jstart, const Int* Ap, const Int* Ai, Int* jmatch,
 
 }  // namespace ipx
 
-#endif // IPX_SPARSE_UTILS_H_
+#endif  // IPX_SPARSE_UTILS_H_

@@ -18,7 +18,7 @@
 // Highs_mipCall or Highs_qpCall, and these methods return the
 // appropriate solution information
 //
-// For sophisticated applications, where esoteric solutiuon
+// For sophisticated applications, where esoteric solution
 // information is needed, or if a sequence of modified models need to
 // be solved, use the Highs_create method to generate a pointer to an
 // instance of the C++ Highs class, and then use any of a large number
@@ -279,7 +279,7 @@ const char* Highs_githash(void);
 /**
  * Return the HiGHS compilation date.
  *
- * @returns Thse HiGHS compilation date.
+ * @returns The HiGHS compilation date.
  */
 const char* Highs_compilationDate(void);
 
@@ -1663,7 +1663,7 @@ HighsInt Highs_getColsByMask(const void* highs, const HighsInt* mask,
  * @param from_row      The first row for which to query data for.
  * @param to_row        The last row (inclusive) for which to query data for.
  * @param num_row       An integer to be populated with the number of rows got
- *                      from the smodel.
+ *                      from the model.
  * @param lower         An array of size [to_row - from_row + 1] for the row
  *                      lower bounds.
  * @param upper         An array of size [to_row - from_row + 1] for the row

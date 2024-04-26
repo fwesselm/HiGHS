@@ -59,7 +59,7 @@ enum iClockSimplex {
   ComputeDuIfsClock,   //!< Computation of num/max/sum of dual infeasibilities
   ComputePrimalClock,  //!< Computation of primal values in dual rebuild()
   ComputeDuObjClock,  //!< Computation of dual objective value in dual rebuild()
-  ComputePrObjClock,  //!< Computation of primalal objective value in primal
+  ComputePrObjClock,  //!< Computation of primal objective value in primal
                       //!< rebuild()
   ReportRebuildClock,          //!< Reporting of log line in dual rebuild()
   ChuzrDualClock,              //!< CHUZR - Dual
