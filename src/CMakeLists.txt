@@ -113,7 +113,7 @@ if(NOT FAST_BUILD)
     "${HIGHS_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/highs.pc" @ONLY)
 
   # Install the targets of the highs export group, the config file so that other
-  # cmake-projects can link easily against highs, and the pkg-config flie so that
+  # cmake-projects can link easily against highs, and the pkg-config file so that
   # other projects can easily build against highs
   install(EXPORT highs-targets FILE highs-targets.cmake DESTINATION
     ${CMAKE_INSTALL_LIBDIR}/cmake/highs)
@@ -286,7 +286,7 @@ else()
     "${HIGHS_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/highs.pc" @ONLY)
 
   # Install the targets of the highs export group, the config file so that other
-  # cmake-projects can link easily against highs, and the pkg-config flie so that
+  # cmake-projects can link easily against highs, and the pkg-config file so that
   # other projects can easily build against highs
   install(FILES "${HIGHS_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/highs-config.cmake"
     DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/highs)

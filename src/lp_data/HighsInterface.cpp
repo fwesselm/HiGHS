@@ -2192,7 +2192,7 @@ void Highs::formIllConditioningLp0(HighsLp& ill_conditioning_lp,
     ill_conditioning_matrix.value_.push_back(1.0);
     ill_conditioning_matrix.start_.push_back(
         HighsInt(ill_conditioning_matrix.index_.size()));
-    // Subracting x_- with cost 1
+    // Subtracting x_- with cost 1
     ill_conditioning_lp.col_cost_.push_back(1);
     ill_conditioning_lp.col_lower_.push_back(0);
     ill_conditioning_lp.col_upper_.push_back(kHighsInf);
