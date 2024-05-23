@@ -1362,7 +1362,8 @@ double HighsDomain::adjustedUb(HighsInt col, HighsCDouble boundVal,
   double bound;
 
   if (mipsolver->variableType(col) != HighsVarType::kContinuous) {
-    bound = highsFloor(double(boundVal), mipsolver->mipdata_->feastol);
+    bound =
+        static_cast<double>(highsFloor(boundVal, mipsolver->mipdata_->feastol));
     if (bound < col_upper_[col] &&
         col_upper_[col] - bound >
             1000.0 * mipsolver->mipdata_->feastol * std::fabs(bound))
@@ -1397,7 +1398,8 @@ double HighsDomain::adjustedLb(HighsInt col, HighsCDouble boundVal,
   double bound;
 
   if (mipsolver->variableType(col) != HighsVarType::kContinuous) {
-    bound = highsCeil(double(boundVal), mipsolver->mipdata_->feastol);
+    bound =
+        static_cast<double>(highsCeil(boundVal, mipsolver->mipdata_->feastol));
     if (bound > col_lower_[col] &&
         bound - col_lower_[col] >
             1000.0 * mipsolver->mipdata_->feastol * std::fabs(bound))

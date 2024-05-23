@@ -871,8 +871,7 @@ void HighsCliqueTable::extractCliques(
             HighsCDouble(globaldom.col_upper_[col]) - globaldom.col_lower_[col];
         HighsCDouble implcolub = impliedub / vals[perm[j]];
         if (mipsolver.variableType(col) != HighsVarType::kContinuous)
-          implcolub =
-              highsFloor(double(implcolub), mipsolver.mipdata_->feastol);
+          implcolub = highsFloor(implcolub, mipsolver.mipdata_->feastol);
 
         if (implcolub < colub - feastol) {
           HighsCDouble coef;

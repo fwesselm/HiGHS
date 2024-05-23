@@ -713,7 +713,7 @@ bool HighsCutGeneration::cmirCutGenerationHeuristic(double minEfficacy,
 
   HighsCDouble scale = 1.0 / HighsCDouble(bestdelta);
   HighsCDouble scalrhs = rhs * scale;
-  double downrhs = highsFloor(double(scalrhs));
+  double downrhs = static_cast<double>(highsFloor(scalrhs));
 
   HighsCDouble f0 = scalrhs - downrhs;
   HighsCDouble oneoveroneminusf0 = 1.0 / (1.0 - f0);
@@ -732,7 +732,7 @@ bool HighsCutGeneration::cmirCutGenerationHeuristic(double minEfficacy,
       }
     } else {
       HighsCDouble scalaj = scale * vals[j];
-      double downaj = highsFloor(double(scalaj), kHighsTiny);
+      double downaj = static_cast<double>(highsFloor(scalaj, kHighsTiny));
       HighsCDouble fj = scalaj - downaj;
       HighsCDouble aj = downaj;
       if (fj > f0) aj += fj - f0;

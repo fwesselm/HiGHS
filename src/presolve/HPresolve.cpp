@@ -5329,8 +5329,8 @@ HighsInt HPresolve::strengthenInequalities() {
 
       double al = reducedcost[alpos];
       coefs.resize(coverend);
-      double coverrhs =
-          std::max(highsCeil(double(lambda / al), primal_feastol), 1.0);
+      double coverrhs = std::max(
+          static_cast<double>(highsCeil(lambda / al, primal_feastol)), 1.0);
       HighsCDouble slackupper = -coverrhs;
 
       double step = kHighsInf;
