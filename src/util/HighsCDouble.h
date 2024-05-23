@@ -303,6 +303,8 @@ class HighsCDouble {
     two_sum(res.hi, res.lo, ceil_x, std::ceil(double(x - ceil_x)));
     return res;
   }
+
+  friend HighsCDouble round(const HighsCDouble& x) { return floor(x + 0.5); }
 };
 
 #endif

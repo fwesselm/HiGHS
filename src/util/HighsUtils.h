@@ -218,13 +218,15 @@ inline T highsFloor(T input, double tolerance = 0.0) {
 // Utility to compute ceiling
 template <typename T>
 inline T highsCeil(T input, double tolerance = 0.0) {
-  return -highsFloor(-input, tolerance);
+  using std::ceil;
+  return ceil(input - tolerance);
 }
 
 // Utility for rounding
 template <typename T>
 inline T highsRound(T input) {
-  return highsFloor(input, 0.5);
+  using std::round;
+  return round(input);
 }
 
 // Utility for computing fractional part
