@@ -181,8 +181,8 @@ void HighsCutGeneration::separateLiftedKnapsackCover() {
     double hfrac = z / abar;
     double coef = 0.0;
 
-    HighsInt h = highsRound(hfrac);
-    if (h != 0 && highsFrac(hfrac) * std::max(1.0, abar) <= epsilon &&
+    HighsInt h = round(hfrac);
+    if (h != 0 && frac(hfrac) * std::max(1.0, abar) <= epsilon &&
         h <= cplussize - 1) {
       halfintegral = true;
       coef = 0.5;
@@ -338,7 +338,7 @@ bool HighsCutGeneration::separateLiftedMixedIntegerCover() {
 
     double mudival = double(mu / vals[j]);
     if (HighsIntegers::isIntegral(mudival, feastol)) continue;
-    double eta = highsCeil(mudival);
+    double eta = ceil(mudival);
 
     HighsCDouble ulminusetaplusone = HighsCDouble(ub) - eta + 1.0;
     HighsCDouble cplusthreshold = ulminusetaplusone * vals[j];
@@ -392,8 +392,8 @@ bool HighsCutGeneration::separateLiftedMixedIntegerCover() {
   assert(mu > 10 * feastol);
 
   double mudival = double(mu / al);
-  double eta = highsCeil(mudival);
-  HighsCDouble r = mu - highsFloor(mudival) * HighsCDouble(al);
+  double eta = ceil(mudival);
+  HighsCDouble r = mu - floor(mudival) * HighsCDouble(al);
   // we multiply with r and it is important that it does not flip the sign
   // so we safe guard against tiny numerical errors here
   if (r < 0) r = 0;
@@ -713,7 +713,7 @@ bool HighsCutGeneration::cmirCutGenerationHeuristic(double minEfficacy,
 
   HighsCDouble scale = 1.0 / HighsCDouble(bestdelta);
   HighsCDouble scalrhs = rhs * scale;
-  double downrhs = static_cast<double>(highsFloor(scalrhs));
+  double downrhs = static_cast<double>(floor(scalrhs));
 
   HighsCDouble f0 = scalrhs - downrhs;
   HighsCDouble oneoveroneminusf0 = 1.0 / (1.0 - f0);
@@ -732,7 +732,7 @@ bool HighsCutGeneration::cmirCutGenerationHeuristic(double minEfficacy,
       }
     } else {
       HighsCDouble scalaj = scale * vals[j];
-      double downaj = static_cast<double>(highsFloor(scalaj, kHighsTiny));
+      double downaj = static_cast<double>(floor(scalaj, kHighsTiny));
       HighsCDouble fj = scalaj - downaj;
       HighsCDouble aj = downaj;
       if (fj > f0) aj += fj - f0;
@@ -856,7 +856,7 @@ bool HighsCutGeneration::postprocessCut() {
       // finally we can round down the right hand side. Therefore in most cases
       // small errors for which the upper bound constraints where used and the
       // right hand side was weakened, do not weaken the final cut.
-      rhs = highsFloor(rhs, feastol);
+      rhs = floor(rhs, feastol);
 
       if (intscale * maxAbsValue * feastol < 0.5) {
         // integral scale leads to small enough values, accept scale

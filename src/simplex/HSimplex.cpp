@@ -295,7 +295,7 @@ void scaleSimplexCost(const HighsOptions& options, HighsLp& lp,
   if ((max_nonzero_cost > 0) &&
       ((max_nonzero_cost < (1.0 / 16)) || (max_nonzero_cost > 16))) {
     cost_scale = max_nonzero_cost;
-    cost_scale = pow(2.0, highsRound(log(cost_scale) / ln2));
+    cost_scale = pow(2.0, round(log(cost_scale) / ln2));
     cost_scale = min(cost_scale, max_allowed_cost_scale);
   }
   if (cost_scale == 1) {

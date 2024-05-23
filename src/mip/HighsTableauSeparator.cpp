@@ -71,12 +71,12 @@ void HighsTableauSeparator::separateLpSolution(HighsLpRelaxation& lpRelaxation,
 
       if (!lpRelaxation.isRowIntegral(row)) continue;
 
-      fractionality = highsFrac(lpSolution.row_value[row]);
+      fractionality = frac(lpSolution.row_value[row]);
     } else {
       HighsInt col = basisinds[i];
       if (mip.variableType(col) == HighsVarType::kContinuous) continue;
 
-      fractionality = highsFrac(lpSolution.col_value[col]);
+      fractionality = frac(lpSolution.col_value[col]);
     }
 
     if (fractionality < 1000 * mip.mipdata_->feastol) continue;

@@ -3785,7 +3785,7 @@ HighsStatus Highs::callRunPostsolve(const HighsSolution& solution,
         if (lp.integrality_[iCol] == HighsVarType::kInteger) {
           const double value = this->solution_.col_value[iCol];
           max_integrality_violation =
-              std::max(highsFrac(value), max_integrality_violation);
+              std::max(frac(value), max_integrality_violation);
         }
       }
       highsLogUser(
