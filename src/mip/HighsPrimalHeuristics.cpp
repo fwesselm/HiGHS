@@ -374,8 +374,7 @@ retry:
     for (HighsInt i : intcols) {
       if (localdom.col_lower_[i] == localdom.col_upper_[i]) continue;
 
-      double downval =
-          floor(relaxationsol[i], mipsolver.mipdata_->feastol);
+      double downval = floor(relaxationsol[i], mipsolver.mipdata_->feastol);
       double upval = ceil(relaxationsol[i], mipsolver.mipdata_->feastol);
 
       downval = std::min(downval, localdom.col_upper_[i]);
@@ -909,13 +908,13 @@ bool HighsPrimalHeuristics::linesearchRounding(
       assert(col < mipsolver.numCol());
       if (mipsolver.mipdata_->uplocks[col] == 0) {
         roundedpoint[col] = ceil(std::max(point1[col], point2[col]),
-                                      mipsolver.mipdata_->feastol);
+                                 mipsolver.mipdata_->feastol);
         continue;
       }
 
       if (mipsolver.mipdata_->downlocks[col] == 0) {
         roundedpoint[col] = floor(std::min(point1[col], point2[col]),
-                                       mipsolver.mipdata_->feastol);
+                                  mipsolver.mipdata_->feastol);
         continue;
       }
 

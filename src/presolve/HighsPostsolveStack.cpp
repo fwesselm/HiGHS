@@ -307,7 +307,7 @@ void HighsPostsolveStack::ForcingColumn::undo(
     if (nonbasicRow != -1 && colIntegral)
       colValFromNonbasicRow =
           direction * ceil(direction * colValFromNonbasicRow,
-                                options.mip_feasibility_tolerance);
+                           options.mip_feasibility_tolerance);
   };
 
   if (atInfiniteUpper) {
@@ -1032,12 +1032,11 @@ void HighsPostsolveStack::DuplicateColumn::undoFix(
       x_int ? ceil(colLower, mip_feasibility_tolerance) : colLower;
   const double x_up =
       x_int ? floor(colUpper, mip_feasibility_tolerance) : colUpper;
-  const double y_lo =
-      y_int ? ceil(duplicateColLower, mip_feasibility_tolerance)
-            : duplicateColLower;
-  const double y_up =
-      y_int ? floor(duplicateColUpper, mip_feasibility_tolerance)
-            : duplicateColUpper;
+  const double y_lo = y_int ? ceil(duplicateColLower, mip_feasibility_tolerance)
+                            : duplicateColLower;
+  const double y_up = y_int
+                          ? floor(duplicateColUpper, mip_feasibility_tolerance)
+                          : duplicateColUpper;
   if (kAllowDeveloperAssert) assert(scale);
   double x_v = merge_value;
   double y_v;

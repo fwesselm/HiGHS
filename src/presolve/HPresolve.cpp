@@ -267,10 +267,9 @@ bool HPresolve::isImpliedIntegral(HighsInt col) {
     double scale = 1.0 / nz.value();
     if (!rowCoefficientsIntegral(nz.index(), scale)) return false;
     if (model->row_upper_[nz.index()] != kHighsInf) {
-      double rUpper =
-          std::abs(nz.value()) *
-          floor(model->row_upper_[nz.index()] * std::abs(scale),
-                     primal_feastol);
+      double rUpper = std::abs(nz.value()) *
+                      floor(model->row_upper_[nz.index()] * std::abs(scale),
+                            primal_feastol);
       if (std::abs(model->row_upper_[nz.index()] - rUpper) >
           options->small_matrix_value) {
         model->row_upper_[nz.index()] = rUpper;
@@ -278,9 +277,9 @@ bool HPresolve::isImpliedIntegral(HighsInt col) {
       }
     } else {
       assert(model->row_lower_[nz.index()] != -kHighsInf);
-      double rLower = std::abs(nz.value()) *
-                      ceil(model->row_upper_[nz.index()] * std::abs(scale),
-                                primal_feastol);
+      double rLower =
+          std::abs(nz.value()) *
+          ceil(model->row_upper_[nz.index()] * std::abs(scale), primal_feastol);
       if (std::abs(model->row_lower_[nz.index()] - rLower) >
           options->small_matrix_value) {
         model->row_upper_[nz.index()] = rLower;
@@ -344,13 +343,11 @@ bool HPresolve::isImpliedInteger(HighsInt col) {
   for (const HighsSliceNonzero& nz : getColumnVector(col)) {
     double scale = 1.0 / nz.value();
     if (model->row_upper_[nz.index()] != kHighsInf) {
-      if (frac(model->row_upper_[nz.index()]) > primal_feastol)
-        return false;
+      if (frac(model->row_upper_[nz.index()]) > primal_feastol) return false;
     }
 
     if (model->row_lower_[nz.index()] != -kHighsInf) {
-      if (frac(model->row_lower_[nz.index()]) > primal_feastol)
-        return false;
+      if (frac(model->row_lower_[nz.index()]) > primal_feastol) return false;
     }
 
     if (!rowCoefficientsIntegral(nz.index(), scale)) return false;
@@ -3254,8 +3251,7 @@ HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
 
           if (intScale != 0.0 && intScale <= 1e3) {
             double rhs = rowUpper * intScale;
-            if (frac(rhs) > primal_feastol)
-              return Result::kPrimalInfeasible;
+            if (frac(rhs) > primal_feastol) return Result::kPrimalInfeasible;
 
             rhs = round(rhs);
 
@@ -3265,12 +3261,12 @@ HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
 
             for (HighsInt i = 0; i < rowlen; ++i) {
               int64_t newgcd =
-                  d == 0 ? int64_t(std::abs(
-                               round(intScale * Avalue[rowpositions[i]])))
-                         : HighsIntegers::gcd(
-                               std::abs(round(intScale *
-                                                   Avalue[rowpositions[i]])),
-                               d);
+                  d == 0
+                      ? int64_t(
+                            std::abs(round(intScale * Avalue[rowpositions[i]])))
+                      : HighsIntegers::gcd(
+                            std::abs(round(intScale * Avalue[rowpositions[i]])),
+                            d);
               if (newgcd == 1) {
                 // adding this variable would set the gcd to 1, therefore it
                 // must be our candidate x1 for substitution. If another
@@ -3318,12 +3314,12 @@ HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
                 // z is fixed after rounding its new bounds. If that is the case
                 // we directly fix x1 instead of first substituting with d * z +
                 // b.
-                double zLower = ceil(
-                    (model->col_lower_[x1] - b) / static_cast<double>(d),
-                    primal_feastol);
-                double zUpper = floor(
-                    (model->col_upper_[x1] - b) / static_cast<double>(d),
-                    primal_feastol);
+                double zLower =
+                    ceil((model->col_lower_[x1] - b) / static_cast<double>(d),
+                         primal_feastol);
+                double zUpper =
+                    floor((model->col_upper_[x1] - b) / static_cast<double>(d),
+                          primal_feastol);
 
                 if (zLower == zUpper) {
                   // Rounded bounds are equal
@@ -3764,9 +3760,8 @@ HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
               const double upper = model->col_upper_[nonzero.index()];
               const double fraction =
                   upper -
-                  floor(
-                      upper,
-                      mipsolver->options_mip_->mip_feasibility_tolerance);
+                  floor(upper,
+                        mipsolver->options_mip_->mip_feasibility_tolerance);
               assert(fraction >= 0);
               const bool non_fractional =
                   fraction <=
@@ -3791,9 +3786,8 @@ HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
               // value then the problem is infeasible
               const double lower = model->col_lower_[nonzero.index()];
               const double fraction =
-                  ceil(
-                      lower,
-                      mipsolver->options_mip_->mip_feasibility_tolerance) -
+                  ceil(lower,
+                       mipsolver->options_mip_->mip_feasibility_tolerance) -
                   lower;
               assert(fraction >= 0);
               const bool non_fractional =
@@ -5325,15 +5319,14 @@ HighsInt HPresolve::strengthenInequalities() {
 
       double al = reducedcost[alpos];
       coefs.resize(coverend);
-      double coverrhs = std::max(
-          static_cast<double>(ceil(lambda / al, primal_feastol)), 1.0);
+      double coverrhs =
+          std::max(static_cast<double>(ceil(lambda / al, primal_feastol)), 1.0);
       HighsCDouble slackupper = -coverrhs;
 
       double step = kHighsInf;
       for (HighsInt i = 0; i != coverend; ++i) {
-        coefs[i] =
-            ceil(std::min(reducedcost[cover[i]], double(lambda)) / al,
-                      options->small_matrix_value);
+        coefs[i] = ceil(std::min(reducedcost[cover[i]], double(lambda)) / al,
+                        options->small_matrix_value);
         slackupper += upper[cover[i]] * coefs[i];
         step = std::min(step, reducedcost[cover[i]] / coefs[i]);
       }

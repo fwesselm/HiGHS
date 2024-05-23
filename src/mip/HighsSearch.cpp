@@ -1229,15 +1229,13 @@ HighsSearch::NodeResult HighsSearch::branch() {
       switch (childselrule) {
         case ChildSelectionRule::kUp:
           currnode.branchingdecision.boundtype = HighsBoundType::kLower;
-          currnode.branchingdecision.boundval =
-              ceil(currnode.branching_point);
+          currnode.branchingdecision.boundval = ceil(currnode.branching_point);
           currnode.other_child_lb = downNodeLb;
           childLb = upNodeLb;
           break;
         case ChildSelectionRule::kDown:
           currnode.branchingdecision.boundtype = HighsBoundType::kUpper;
-          currnode.branchingdecision.boundval =
-              floor(currnode.branching_point);
+          currnode.branchingdecision.boundval = floor(currnode.branching_point);
           currnode.other_child_lb = upNodeLb;
           childLb = downNodeLb;
           break;
@@ -1440,8 +1438,8 @@ HighsSearch::NodeResult HighsSearch::branch() {
       double fracval;
       if (localdom.col_lower_[i] != -kHighsInf &&
           localdom.col_upper_[i] != kHighsInf)
-        fracval = floor(0.5 * (localdom.col_lower_[i] +
-                                    localdom.col_upper_[i] + 0.5)) +
+        fracval = floor(0.5 * (localdom.col_lower_[i] + localdom.col_upper_[i] +
+                               0.5)) +
                   0.5;
       if (localdom.col_lower_[i] != -kHighsInf)
         fracval = localdom.col_lower_[i] + 0.5;

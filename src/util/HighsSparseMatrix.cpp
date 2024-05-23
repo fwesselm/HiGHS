@@ -779,8 +779,7 @@ void HighsSparseMatrix::considerColScaling(
         double col_scale_value = 1 / col_max_value;
         // Convert the col scale factor to the nearest power of two, and
         // ensure that it is not excessively large or small
-        col_scale_value =
-            pow(2.0, floor(log(col_scale_value) / log2, 0.5));
+        col_scale_value = pow(2.0, floor(log(col_scale_value) / log2, 0.5));
         col_scale_value =
             min(max(min_allow_col_scale, col_scale_value), max_allow_col_scale);
         col_scale[iCol] = col_scale_value;
@@ -817,8 +816,7 @@ void HighsSparseMatrix::considerRowScaling(
         double row_scale_value = 1 / row_max_value;
         // Convert the row scale factor to the nearest power of two, and
         // ensure that it is not excessively large or small
-        row_scale_value =
-            pow(2.0, floor(log(row_scale_value) / log2, 0.5));
+        row_scale_value = pow(2.0, floor(log(row_scale_value) / log2, 0.5));
         row_scale_value =
             min(max(min_allow_row_scale, row_scale_value), max_allow_row_scale);
         row_scale[iRow] = row_scale_value;

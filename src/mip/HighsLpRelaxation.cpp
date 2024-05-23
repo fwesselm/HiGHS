@@ -1323,20 +1323,20 @@ HighsLpRelaxation::Status HighsLpRelaxation::resolveLp(HighsDomain* domain) {
                 (mipsolver.colCost(col) < 0 ||
                  mipsolver.mipdata_->downlocks[col] != 0)) {
               // round up
-              roundsol[col] = std::min(
-                  ceil(fracint.second, mipsolver.mipdata_->feastol),
-                  lpsolver.getLp().col_upper_[col] == kHighsInf
-                      ? kHighsInf
-                      : floor(lpsolver.getLp().col_upper_[col],
-                                   mipsolver.mipdata_->feastol));
+              roundsol[col] =
+                  std::min(ceil(fracint.second, mipsolver.mipdata_->feastol),
+                           lpsolver.getLp().col_upper_[col] == kHighsInf
+                               ? kHighsInf
+                               : floor(lpsolver.getLp().col_upper_[col],
+                                       mipsolver.mipdata_->feastol));
             } else {
               // round down
-              roundsol[col] = std::max(
-                  floor(fracint.second, mipsolver.mipdata_->feastol),
-                  lpsolver.getLp().col_lower_[col] == -kHighsInf
-                      ? -kHighsInf
-                      : ceil(lpsolver.getLp().col_lower_[col],
-                                  mipsolver.mipdata_->feastol));
+              roundsol[col] =
+                  std::max(floor(fracint.second, mipsolver.mipdata_->feastol),
+                           lpsolver.getLp().col_lower_[col] == -kHighsInf
+                               ? -kHighsInf
+                               : ceil(lpsolver.getLp().col_lower_[col],
+                                      mipsolver.mipdata_->feastol));
             }
           }
 
