@@ -208,11 +208,13 @@ void highsAssert(const bool assert_condition, const std::string message = "");
 // breakpoints in VScode where optimization might prevent them.
 bool highsPause(const bool pause_condition, const std::string message = "");
 
+// Utility to compute floor
 template <typename T>
 inline T highsFloor(T input, double tolerance = 0.0) {
   return floor(input + tolerance);
 }
 
+// Utility to compute ceiling
 template <typename T>
 inline T highsCeil(T input, double tolerance = 0.0) {
   return -highsFloor(-input, tolerance);
