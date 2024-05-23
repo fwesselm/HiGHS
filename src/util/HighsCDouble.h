@@ -303,7 +303,6 @@ class HighsCDouble {
     two_sum(res.hi, res.lo, ceil_x, std::ceil(double(x - ceil_x)));
     return res;
   }
-
 };
 
 #endif
