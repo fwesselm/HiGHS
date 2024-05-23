@@ -25,6 +25,7 @@
 #include <vector>
 
 #include "util/HighsInt.h"
+#include "util/HighsUtils.h"
 
 #ifdef HIGHS_HAVE_BITSCAN_REVERSE
 #include <intrin.h>
