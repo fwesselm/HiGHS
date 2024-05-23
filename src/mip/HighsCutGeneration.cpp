@@ -500,7 +500,6 @@ static double fast_floor(double x) { return (int64_t)x - (x < (int64_t)x); }
 bool HighsCutGeneration::cmirCutGenerationHeuristic(double minEfficacy,
                                                     bool onlyInitialCMIRScale) {
   using std::abs;
-  using std::floor;
   using std::max;
   using std::sqrt;
 
