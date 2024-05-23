@@ -460,8 +460,8 @@ void assessExcessiveBoundCost(const HighsLogOptions log_options,
     // Warn that costs are excessively large, and suggest scaling
     double ratio = kExcessivelyLargeCostValue /
                    (max_finite_col_cost / user_cost_scale_value);
-    HighsInt suggested_user_cost_scale_setting = std::floor(std::log2(ratio));
-    HighsInt suggested_cost_scale_exponent = std::floor(std::log10(ratio));
+    HighsInt suggested_user_cost_scale_setting = highsFloor(std::log2(ratio));
+    HighsInt suggested_cost_scale_exponent = highsFloor(std::log10(ratio));
     highsLogUser(
         log_options, HighsLogType::kWarning,
         "%s has excessively large costs: consider scaling the costs "
@@ -478,8 +478,8 @@ void assessExcessiveBoundCost(const HighsLogOptions log_options,
     // Warn that bounds are excessively large, and suggest scaling
     double ratio = kExcessivelyLargeBoundValue /
                    (max_finite_col_bound / user_bound_scale_value);
-    HighsInt suggested_user_bound_scale = std::floor(std::log2(ratio));
-    HighsInt suggested_bound_scale_exponent = std::floor(std::log10(ratio));
+    HighsInt suggested_user_bound_scale = highsFloor(std::log2(ratio));
+    HighsInt suggested_bound_scale_exponent = highsFloor(std::log10(ratio));
     if (lp.isMip()) {
       highsLogUser(
           log_options, HighsLogType::kWarning,
@@ -506,8 +506,8 @@ void assessExcessiveBoundCost(const HighsLogOptions log_options,
     // Warn that bounds are excessively large, and suggest scaling
     double ratio = kExcessivelyLargeBoundValue /
                    (max_finite_row_bound / user_bound_scale_value);
-    HighsInt suggested_user_bound_scale = std::floor(std::log2(ratio));
-    HighsInt suggested_bound_scale_exponent = std::floor(std::log10(ratio));
+    HighsInt suggested_user_bound_scale = highsFloor(std::log2(ratio));
+    HighsInt suggested_bound_scale_exponent = highsFloor(std::log10(ratio));
     if (lp.isMip()) {
       highsLogUser(
           log_options, HighsLogType::kWarning,
@@ -533,8 +533,8 @@ void assessExcessiveBoundCost(const HighsLogOptions log_options,
     // Warn that costs are excessively small, and suggest scaling
     double ratio = kExcessivelySmallCostValue /
                    (max_finite_col_cost / user_cost_scale_value);
-    HighsInt suggested_user_cost_scale_setting = std::ceil(std::log2(ratio));
-    HighsInt suggested_cost_scale_exponent = std::ceil(std::log10(ratio));
+    HighsInt suggested_user_cost_scale_setting = highsCeil(std::log2(ratio));
+    HighsInt suggested_cost_scale_exponent = highsCeil(std::log10(ratio));
     highsLogUser(
         log_options, HighsLogType::kWarning,
         "%s has excessively small costs: consider scaling the costs up "
@@ -550,8 +550,8 @@ void assessExcessiveBoundCost(const HighsLogOptions log_options,
     // Warn that bounds are excessively small, and suggest scaling
     double ratio = kExcessivelySmallBoundValue /
                    (max_finite_col_bound / user_bound_scale_value);
-    HighsInt suggested_user_bound_scale = std::ceil(std::log2(ratio));
-    HighsInt suggested_bound_scale_exponent = std::ceil(std::log10(ratio));
+    HighsInt suggested_user_bound_scale = highsCeil(std::log2(ratio));
+    HighsInt suggested_bound_scale_exponent = highsCeil(std::log10(ratio));
     if (lp.isMip()) {
       highsLogUser(
           log_options, HighsLogType::kWarning,
@@ -575,8 +575,8 @@ void assessExcessiveBoundCost(const HighsLogOptions log_options,
     // Warn that bounds are excessively small, and suggest scaling
     double ratio = kExcessivelySmallBoundValue /
                    (max_finite_row_bound / user_bound_scale_value);
-    HighsInt suggested_user_bound_scale = std::ceil(std::log2(ratio));
-    HighsInt suggested_bound_scale_exponent = std::ceil(std::log10(ratio));
+    HighsInt suggested_user_bound_scale = highsCeil(std::log2(ratio));
+    HighsInt suggested_bound_scale_exponent = highsCeil(std::log10(ratio));
     if (lp.isMip()) {
       highsLogUser(
           log_options, HighsLogType::kWarning,

@@ -1224,7 +1224,7 @@ HighsLpRelaxation::Status HighsLpRelaxation::resolveLp(HighsDomain* domain) {
           double val = std::max(
               std::min(sol.col_value[i], lpsolver.getLp().col_upper_[i]),
               lpsolver.getLp().col_lower_[i]);
-          double intval = std::floor(val + 0.5);
+          double intval = highsFloor(val, 0.5);
 
           if (std::abs(val - intval) > mipsolver.mipdata_->feastol) {
             HighsInt col = i;
@@ -1325,18 +1325,18 @@ HighsLpRelaxation::Status HighsLpRelaxation::resolveLp(HighsDomain* domain) {
                  mipsolver.mipdata_->downlocks[col] != 0)) {
               // round up
               roundsol[col] = std::min(
-                  std::ceil(fracint.second - mipsolver.mipdata_->feastol),
+                  highsCeil(fracint.second, mipsolver.mipdata_->feastol),
                   lpsolver.getLp().col_upper_[col] == kHighsInf
                       ? kHighsInf
-                      : std::floor(lpsolver.getLp().col_upper_[col] +
+                      : highsFloor(lpsolver.getLp().col_upper_[col],
                                    mipsolver.mipdata_->feastol));
             } else {
               // round down
               roundsol[col] = std::max(
-                  std::floor(fracint.second + mipsolver.mipdata_->feastol),
+                  highsFloor(fracint.second, mipsolver.mipdata_->feastol),
                   lpsolver.getLp().col_lower_[col] == -kHighsInf
                       ? -kHighsInf
-                      : std::ceil(lpsolver.getLp().col_lower_[col] -
+                      : highsCeil(lpsolver.getLp().col_lower_[col],
                                   mipsolver.mipdata_->feastol));
             }
           }

@@ -872,7 +872,7 @@ void HighsCliqueTable::extractCliques(
         HighsCDouble implcolub = impliedub / vals[perm[j]];
         if (mipsolver.variableType(col) != HighsVarType::kContinuous)
           implcolub =
-              std::floor(double(implcolub) + mipsolver.mipdata_->feastol);
+              highsFloor(double(implcolub), mipsolver.mipdata_->feastol);
 
         if (implcolub < colub - feastol) {
           HighsCDouble coef;
@@ -1113,13 +1113,13 @@ void HighsCliqueTable::extractCliquesFromCut(const HighsMipSolver& mipsolver,
 
     double boundVal = double((rhs - minact) / vals[i]);
     if (vals[i] > 0) {
-      boundVal = std::floor(boundVal + globaldom.col_lower_[inds[i]] +
+      boundVal = highsFloor(boundVal + globaldom.col_lower_[inds[i]],
                             globaldom.feastol());
       globaldom.changeBound(HighsBoundType::kUpper, inds[i], boundVal,
                             HighsDomain::Reason::unspecified());
       if (globaldom.infeasible()) return;
     } else {
-      boundVal = std::ceil(boundVal + globaldom.col_upper_[inds[i]] -
+      boundVal = highsCeil(boundVal + globaldom.col_upper_[inds[i]],
                            globaldom.feastol());
       globaldom.changeBound(HighsBoundType::kLower, inds[i], boundVal,
                             HighsDomain::Reason::unspecified());
@@ -1155,7 +1155,7 @@ void HighsCliqueTable::extractCliquesFromCut(const HighsMipSolver& mipsolver,
                                     vals[perm[j]] * globaldom.col_lower_[col]) /
                              vals[perm[j]];
           if (mipsolver.variableType(col) != HighsVarType::kContinuous)
-            implcolub = std::floor(implcolub + mipsolver.mipdata_->feastol);
+            implcolub = highsFloor(implcolub, mipsolver.mipdata_->feastol);
 
           if (implcolub < globaldom.col_upper_[col] - feastol) {
             double coef;
@@ -1180,7 +1180,7 @@ void HighsCliqueTable::extractCliquesFromCut(const HighsMipSolver& mipsolver,
                                     vals[perm[j]] * globaldom.col_upper_[col]) /
                              vals[perm[j]];
           if (mipsolver.variableType(col) != HighsVarType::kContinuous)
-            implcollb = std::ceil(implcollb - mipsolver.mipdata_->feastol);
+            implcollb = highsCeil(implcollb, mipsolver.mipdata_->feastol);
 
           if (implcollb > globaldom.col_lower_[col] + feastol) {
             double coef;
@@ -1771,7 +1771,7 @@ void HighsCliqueTable::separateCliques(const HighsMipSolver& mipsolver,
         vals.push_back(1);
     }
 
-    rhs = std::floor(rhs + 0.5);
+    rhs = highsFloor(rhs, 0.5);
 
     cutpool.addCut(mipsolver, inds.data(), vals.data(), inds.size(), rhs, true,
                    false, false);

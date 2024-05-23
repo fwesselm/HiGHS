@@ -181,7 +181,7 @@ void HighsCutGeneration::separateLiftedKnapsackCover() {
     double hfrac = z / abar;
     double coef = 0.0;
 
-    HighsInt h = std::floor(hfrac + 0.5);
+    HighsInt h = highsFloor(hfrac, 0.5);
     if (h != 0 && std::abs(hfrac - h) * std::max(1.0, abar) <= epsilon &&
         h <= cplussize - 1) {
       halfintegral = true;
@@ -338,7 +338,7 @@ bool HighsCutGeneration::separateLiftedMixedIntegerCover() {
 
     double mudival = double(mu / vals[j]);
     if (HighsIntegers::isIntegral(mudival, feastol)) continue;
-    double eta = ceil(mudival);
+    double eta = highsCeil(mudival);
 
     HighsCDouble ulminusetaplusone = HighsCDouble(ub) - eta + 1.0;
     HighsCDouble cplusthreshold = ulminusetaplusone * vals[j];
@@ -392,8 +392,8 @@ bool HighsCutGeneration::separateLiftedMixedIntegerCover() {
   assert(mu > 10 * feastol);
 
   double mudival = double(mu / al);
-  double eta = ceil(mudival);
-  HighsCDouble r = mu - floor(mudival) * HighsCDouble(al);
+  double eta = highsCeil(mudival);
+  HighsCDouble r = mu - highsFloor(mudival) * HighsCDouble(al);
   // we multiply with r and it is important that it does not flip the sign
   // so we safe guard against tiny numerical errors here
   if (r < 0) r = 0;
@@ -713,7 +713,7 @@ bool HighsCutGeneration::cmirCutGenerationHeuristic(double minEfficacy,
 
   HighsCDouble scale = 1.0 / HighsCDouble(bestdelta);
   HighsCDouble scalrhs = rhs * scale;
-  double downrhs = floor(double(scalrhs));
+  double downrhs = highsFloor(double(scalrhs));
 
   HighsCDouble f0 = scalrhs - downrhs;
   HighsCDouble oneoveroneminusf0 = 1.0 / (1.0 - f0);
@@ -732,7 +732,7 @@ bool HighsCutGeneration::cmirCutGenerationHeuristic(double minEfficacy,
       }
     } else {
       HighsCDouble scalaj = scale * vals[j];
-      double downaj = floor(double(scalaj + kHighsTiny));
+      double downaj = highsFloor(double(scalaj), kHighsTiny);
       HighsCDouble fj = scalaj - downaj;
       HighsCDouble aj = downaj;
       if (fj > f0) aj += fj - f0;
@@ -856,7 +856,7 @@ bool HighsCutGeneration::postprocessCut() {
       // finally we can round down the right hand side. Therefore in most cases
       // small errors for which the upper bound constraints where used and the
       // right hand side was weakened, do not weaken the final cut.
-      rhs = floor(rhs + feastol);
+      rhs = highsFloor(rhs, feastol);
 
       if (intscale * maxAbsValue * feastol < 0.5) {
         // integral scale leads to small enough values, accept scale

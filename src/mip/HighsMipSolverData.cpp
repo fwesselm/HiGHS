@@ -27,7 +27,7 @@ bool HighsMipSolverData::checkSolution(
     if (solution[i] < mipsolver.model_->col_lower_[i] - feastol) return false;
     if (solution[i] > mipsolver.model_->col_upper_[i] + feastol) return false;
     if (mipsolver.variableType(i) == HighsVarType::kInteger &&
-        std::abs(solution[i] - std::floor(solution[i] + 0.5)) > feastol)
+        std::abs(solution[i] - highsFloor(solution[i], 0.5)) > feastol)
       return false;
   }
 
@@ -57,7 +57,7 @@ bool HighsMipSolverData::trySolution(const std::vector<double>& solution,
     if (solution[i] < mipsolver.model_->col_lower_[i] - feastol) return false;
     if (solution[i] > mipsolver.model_->col_upper_[i] + feastol) return false;
     if (mipsolver.variableType(i) == HighsVarType::kInteger &&
-        std::abs(solution[i] - std::floor(solution[i] + 0.5)) > feastol)
+        std::abs(solution[i] - highsFloor(solution[i], 0.5)) > feastol)
       return false;
 
     obj += mipsolver.colCost(i) * solution[i];
@@ -217,21 +217,21 @@ double HighsMipSolverData::computeNewUpperLimit(double ub, double mip_abs_gap,
   double new_upper_limit;
   if (objectiveFunction.isIntegral()) {
     new_upper_limit =
-        (std::floor(objectiveFunction.integralScale() * ub - 0.5) /
+        (highsFloor(objectiveFunction.integralScale() * ub - 0.5) /
          objectiveFunction.integralScale());
 
     if (mip_rel_gap != 0.0)
       new_upper_limit = std::min(
           new_upper_limit,
-          ub - std::ceil(mip_rel_gap * fabs(ub + mipsolver.model_->offset_) *
-                             objectiveFunction.integralScale() -
+          ub - highsCeil(mip_rel_gap * fabs(ub + mipsolver.model_->offset_) *
+                             objectiveFunction.integralScale(),
                          mipsolver.mipdata_->epsilon) /
                    objectiveFunction.integralScale());
 
     if (mip_abs_gap != 0.0)
       new_upper_limit = std::min(
           new_upper_limit,
-          ub - std::ceil(mip_abs_gap * objectiveFunction.integralScale() -
+          ub - highsCeil(mip_abs_gap * objectiveFunction.integralScale(),
                          mipsolver.mipdata_->epsilon) /
                    objectiveFunction.integralScale());
 
@@ -527,7 +527,7 @@ void HighsMipSolverData::runSetup() {
         if (mipsolver.variableType(ARindex_[j]) == HighsVarType::kContinuous)
           integral = false;
         else {
-          double intval = std::floor(ARvalue_[j] + 0.5);
+          double intval = highsFloor(ARvalue_[j], 0.5);
           if (std::abs(ARvalue_[j] - intval) > epsilon) integral = false;
         }
       }
@@ -538,11 +538,11 @@ void HighsMipSolverData::runSetup() {
     if (integral) {
       if (presolvedModel.row_lower_[i] != -kHighsInf)
         presolvedModel.row_lower_[i] =
-            std::ceil(presolvedModel.row_lower_[i] - feastol);
+            highsCeil(presolvedModel.row_lower_[i], feastol);
 
       if (presolvedModel.row_upper_[i] != kHighsInf)
         presolvedModel.row_upper_[i] =
-            std::floor(presolvedModel.row_upper_[i] + feastol);
+            highsFloor(presolvedModel.row_upper_[i], feastol);
     }
 
     rowintegral[i] = integral;
@@ -598,7 +598,7 @@ void HighsMipSolverData::runSetup() {
       case HighsVarType::kInteger:
         if (domain.isFixed(i)) {
           if (std::abs(domain.col_lower_[i] -
-                       std::floor(domain.col_lower_[i] + 0.5)) > feastol) {
+                       highsFloor(domain.col_lower_[i], 0.5)) > feastol) {
             // integer variable is fixed to a fractional value -> infeasible
             mipsolver.modelstatus_ = HighsModelStatus::kInfeasible;
             lower_bound = kHighsInf;
@@ -609,7 +609,7 @@ void HighsMipSolverData::runSetup() {
         }
         integer_cols.push_back(i);
         integral_cols.push_back(i);
-        maxTreeSizeLog2 += (HighsInt)std::ceil(
+        maxTreeSizeLog2 += (HighsInt)highsCeil(
             std::log2(std::min(1024.0, 1.0 + mipsolver.model_->col_upper_[i] -
                                            mipsolver.model_->col_lower_[i])));
         // NB Since this is for counting the number of times the
@@ -729,7 +729,7 @@ try_again:
         mipsolver.orig_model_->col_cost_[i] * value;
 
     if (mipsolver.orig_model_->integrality_[i] == HighsVarType::kInteger) {
-      double intval = std::floor(value + 0.5);
+      double intval = highsFloor(value, 0.5);
       double integrality_infeasibility = std::fabs(intval - value);
       if (integrality_infeasibility >
           mipsolver.options_mip_->mip_feasibility_tolerance) {

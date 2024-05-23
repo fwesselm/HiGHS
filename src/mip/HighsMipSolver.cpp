@@ -61,7 +61,7 @@ HighsMipSolver::HighsMipSolver(HighsCallback& callback,
       obj += orig_model_->col_cost_[i] * value;
 
       if (orig_model_->integrality_[i] == HighsVarType::kInteger) {
-        double intval = std::floor(value + 0.5);
+        double intval = highsFloor(value, 0.5);
         integrality_violation_ =
             std::max(fabs(intval - value), integrality_violation_);
       }
@@ -511,9 +511,9 @@ void HighsMipSolver::cleanupSolve() {
   dual_bound_ = mipdata_->lower_bound;
   if (mipdata_->objectiveFunction.isIntegral()) {
     double rounded_lower_bound =
-        std::ceil(mipdata_->lower_bound *
-                      mipdata_->objectiveFunction.integralScale() -
-                  mipdata_->feastol) /
+        highsCeil(
+            mipdata_->lower_bound * mipdata_->objectiveFunction.integralScale(),
+            mipdata_->feastol) /
         mipdata_->objectiveFunction.integralScale();
     dual_bound_ = std::max(dual_bound_, rounded_lower_bound);
   }

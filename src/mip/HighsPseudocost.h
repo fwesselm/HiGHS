@@ -19,6 +19,7 @@
 #include <vector>
 
 #include "util/HighsInt.h"
+#include "util/HighsUtils.h"
 
 class HighsMipSolver;
 namespace presolve {
@@ -198,7 +199,7 @@ class HighsPseudocost {
   double getAvgPseudocost() const { return cost_total; }
 
   double getPseudocostUp(HighsInt col, double frac, double offset) const {
-    double up = std::ceil(frac) - frac;
+    double up = highsCeil(frac) - frac;
     double cost;
 
     if (nsamplesup[col] == 0 || nsamplesup[col] < minreliable) {
@@ -214,7 +215,7 @@ class HighsPseudocost {
   }
 
   double getPseudocostDown(HighsInt col, double frac, double offset) const {
-    double down = frac - std::floor(frac);
+    double down = frac - highsFloor(frac);
     double cost;
 
     if (nsamplesdown[col] == 0 || nsamplesdown[col] < minreliable) {
@@ -231,13 +232,13 @@ class HighsPseudocost {
   }
 
   double getPseudocostUp(HighsInt col, double frac) const {
-    double up = std::ceil(frac) - frac;
+    double up = highsCeil(frac) - frac;
     if (nsamplesup[col] == 0) return up * cost_total;
     return up * pseudocostup[col];
   }
 
   double getPseudocostDown(HighsInt col, double frac) const {
-    double down = frac - std::floor(frac);
+    double down = frac - highsFloor(frac);
     if (nsamplesdown[col] == 0) return down * cost_total;
     return down * pseudocostdown[col];
   }
