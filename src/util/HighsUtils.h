@@ -219,4 +219,16 @@ template <typename T>
 inline T highsCeil(T input, double tolerance = 0.0) {
   return -highsFloor(-input, tolerance);
 }
+
+// Utility for rounding
+template <typename T>
+inline T highsRound(T input) {
+  return highsFloor(input, 0.5);
+}
+
+// Utility for computing fractional part
+template <typename T>
+inline T highsFrac(T input) {
+  return abs(input - highsRound(input));
+}
 #endif  // UTIL_HIGHSUTILS_H_

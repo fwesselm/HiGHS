@@ -1224,9 +1224,8 @@ HighsLpRelaxation::Status HighsLpRelaxation::resolveLp(HighsDomain* domain) {
           double val = std::max(
               std::min(sol.col_value[i], lpsolver.getLp().col_upper_[i]),
               lpsolver.getLp().col_lower_[i]);
-          double intval = highsFloor(val, 0.5);
 
-          if (std::abs(val - intval) > mipsolver.mipdata_->feastol) {
+          if (highsFrac(val) > mipsolver.mipdata_->feastol) {
             HighsInt col = i;
             if (roundable && mipsolver.mipdata_->uplocks[col] != 0 &&
                 mipsolver.mipdata_->downlocks[col] != 0)
@@ -1370,7 +1369,7 @@ HighsLpRelaxation::Status HighsLpRelaxation::resolveLp(HighsDomain* domain) {
             else if (fixSol[i] > lpsolver.getLp().col_upper_[i])
               fixSol[i] = lpsolver.getLp().col_upper_[i];
             else if (mipsolver.variableType(i) != HighsVarType::kContinuous)
-              fixSol[i] = std::round(fixSol[i]);
+              fixSol[i] = highsRound(fixSol[i]);
           }
 
           if (mipsolver.mipdata_->checkSolution(fixSol)) {

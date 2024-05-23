@@ -2458,8 +2458,8 @@ bool Highs::infeasibleBoundsOk() {
     if (range > -this->options_.primal_feasibility_tolerance) {
       num_ok_infeasible_bound++;
       bool report = num_ok_infeasible_bound <= 10;
-      bool integer_lower = lower == highsFloor(lower, 0.5);
-      bool integer_upper = upper == highsFloor(upper, 0.5);
+      bool integer_lower = lower == highsRound(lower);
+      bool integer_upper = upper == highsRound(upper);
       assert(!integer_lower || !integer_upper);
       if (integer_lower) {
         if (report)

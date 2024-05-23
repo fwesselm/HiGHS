@@ -729,8 +729,8 @@ void HighsPostsolveStack::DuplicateColumn::undo(const HighsOptions& options,
   } else if (duplicateColIntegral) {
     // Doesn't set basis.col_status[duplicateCol], so assume no basis
     assert(!basis.valid);
-    double roundVal = std::round(solution.col_value[duplicateCol]);
-    if (std::abs(roundVal - solution.col_value[duplicateCol]) >
+    double roundVal = highsRound(solution.col_value[duplicateCol]);
+    if (highsFrac(solution.col_value[duplicateCol]) >
         options.mip_feasibility_tolerance) {
       solution.col_value[duplicateCol] =
           highsFloor(solution.col_value[duplicateCol]);
@@ -928,8 +928,7 @@ bool HighsPostsolveStack::DuplicateColumn::okMerge(
   if (x_int) {
     if (y_int) {
       // Scale must be integer and not exceed (x_u-x_l)+1 in magnitude
-      double int_scale = highsFloor(scale, 0.5);
-      bool scale_is_int = std::fabs(int_scale - scale) <= tolerance;
+      bool scale_is_int = highsFrac(scale) <= tolerance;
       if (!scale_is_int) {
         if (debug_report)
           printf(
@@ -1013,8 +1012,7 @@ void HighsPostsolveStack::DuplicateColumn::undoFix(
   //=============================================================================================
 
   auto isInteger = [&](const double v) {
-    double int_v = highsFloor(v, 0.5);
-    return std::fabs(int_v - v) <= mip_feasibility_tolerance;
+    return highsFrac(v) <= mip_feasibility_tolerance;
   };
 
   auto isFeasible = [&](const double l, const double v, const double u) {

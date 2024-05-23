@@ -468,7 +468,7 @@ bool HighsTransformedLp::untransform(std::vector<double>& vals,
     };
 
     vectorsum.cleanup(IsZero);
-    rhs = std::round(double(tmpRhs));
+    rhs = static_cast<double>(highsRound(tmpRhs));
   } else {
     bool abort = false;
     auto IsZero = [&](HighsInt col, double val) {
@@ -507,7 +507,7 @@ bool HighsTransformedLp::untransform(std::vector<double>& vals,
 
   if (integral)
     for (HighsInt i = 0; i != numNz; ++i)
-      vals[i] = std::round(vectorsum.getValue(inds[i]));
+      vals[i] = highsRound(vectorsum.getValue(inds[i]));
   else
     for (HighsInt i = 0; i != numNz; ++i) vals[i] = vectorsum.getValue(inds[i]);
   vectorsum.clear();

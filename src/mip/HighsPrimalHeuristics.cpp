@@ -422,7 +422,7 @@ retry:
         else if (mipsolver.model_->col_cost_[col] < 0.0)
           fixval = highsFloor(fracval);
         else
-          fixval = highsFloor(fracval, 0.5);
+          fixval = highsRound(fracval);
         // make sure we do not set an infeasible domain
         fixval = std::min(localdom.col_upper_[col], fixval);
         fixval = std::max(localdom.col_lower_[col], fixval);
@@ -630,7 +630,7 @@ retry:
       double fixval;
       if (fixtolpsol) {
         // RINS neighbourhood (with extension)
-        fixval = highsFloor(relaxationsol[col], 0.5);
+        fixval = highsRound(relaxationsol[col]);
       } else {
         // reinforce direction of this solution away from root
         // solution if the change is at least 0.4
@@ -646,7 +646,7 @@ retry:
         else if (mipsolver.model_->col_cost_[col] < 0.0)
           fixval = highsFloor(fracval);
         else
-          fixval = highsFloor(fracval, 0.5);
+          fixval = highsRound(fracval);
       }
       // make sure we do not set an infeasible domain
       fixval = std::min(localdom.col_upper_[col], fixval);
@@ -920,8 +920,8 @@ bool HighsPrimalHeuristics::linesearchRounding(
       }
 
       double convexcomb = (1.0 - alpha) * point1[col] + alpha * point2[col];
-      double intpoint2 = highsFloor(point2[col], 0.5);
-      roundedpoint[col] = highsFloor(convexcomb, 0.5);
+      double intpoint2 = highsRound(point2[col]);
+      roundedpoint[col] = highsRound(convexcomb);
 
       if (roundedpoint[col] == intpoint2) continue;
 

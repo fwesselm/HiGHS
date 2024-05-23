@@ -1770,7 +1770,7 @@ void HighsCliqueTable::separateCliques(const HighsMipSolver& mipsolver,
         vals.push_back(1);
     }
 
-    rhs = highsFloor(rhs, 0.5);
+    rhs = highsRound(rhs);
 
     cutpool.addCut(mipsolver, inds.data(), vals.data(), inds.size(), rhs, true,
                    false, false);

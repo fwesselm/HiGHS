@@ -71,14 +71,12 @@ void HighsTableauSeparator::separateLpSolution(HighsLpRelaxation& lpRelaxation,
 
       if (!lpRelaxation.isRowIntegral(row)) continue;
 
-      double solval = lpSolution.row_value[row];
-      fractionality = std::fabs(std::round(solval) - solval);
+      fractionality = highsFrac(lpSolution.row_value[row]);
     } else {
       HighsInt col = basisinds[i];
       if (mip.variableType(col) == HighsVarType::kContinuous) continue;
 
-      double solval = lpSolution.col_value[col];
-      fractionality = std::fabs(std::round(solval) - solval);
+      fractionality = highsFrac(lpSolution.col_value[col]);
     }
 
     if (fractionality < 1000 * mip.mipdata_->feastol) continue;

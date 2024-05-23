@@ -27,7 +27,7 @@ bool HighsMipSolverData::checkSolution(
     if (solution[i] < mipsolver.model_->col_lower_[i] - feastol) return false;
     if (solution[i] > mipsolver.model_->col_upper_[i] + feastol) return false;
     if (mipsolver.variableType(i) == HighsVarType::kInteger &&
-        std::abs(solution[i] - highsFloor(solution[i], 0.5)) > feastol)
+        highsFrac(solution[i]) > feastol)
       return false;
   }
 
@@ -57,7 +57,7 @@ bool HighsMipSolverData::trySolution(const std::vector<double>& solution,
     if (solution[i] < mipsolver.model_->col_lower_[i] - feastol) return false;
     if (solution[i] > mipsolver.model_->col_upper_[i] + feastol) return false;
     if (mipsolver.variableType(i) == HighsVarType::kInteger &&
-        std::abs(solution[i] - highsFloor(solution[i], 0.5)) > feastol)
+        highsFrac(solution[i]) > feastol)
       return false;
 
     obj += mipsolver.colCost(i) * solution[i];
@@ -527,8 +527,7 @@ void HighsMipSolverData::runSetup() {
         if (mipsolver.variableType(ARindex_[j]) == HighsVarType::kContinuous)
           integral = false;
         else {
-          double intval = highsFloor(ARvalue_[j], 0.5);
-          if (std::abs(ARvalue_[j] - intval) > epsilon) integral = false;
+          if (highsFrac(ARvalue_[j]) > epsilon) integral = false;
         }
       }
 
@@ -597,8 +596,7 @@ void HighsMipSolverData::runSetup() {
         break;
       case HighsVarType::kInteger:
         if (domain.isFixed(i)) {
-          if (std::abs(domain.col_lower_[i] -
-                       highsFloor(domain.col_lower_[i], 0.5)) > feastol) {
+          if (highsFrac(domain.col_lower_[i]) > feastol) {
             // integer variable is fixed to a fractional value -> infeasible
             mipsolver.modelstatus_ = HighsModelStatus::kInfeasible;
             lower_bound = kHighsInf;
@@ -729,8 +727,7 @@ try_again:
         mipsolver.orig_model_->col_cost_[i] * value;
 
     if (mipsolver.orig_model_->integrality_[i] == HighsVarType::kInteger) {
-      double intval = highsFloor(value, 0.5);
-      double integrality_infeasibility = std::fabs(intval - value);
+      double integrality_infeasibility = highsFrac(value);
       if (integrality_infeasibility >
           mipsolver.options_mip_->mip_feasibility_tolerance) {
         if (debug_report)
@@ -802,7 +799,7 @@ try_again:
     fixedModel.integrality_.clear();
     for (HighsInt i = 0; i != mipsolver.orig_model_->num_col_; ++i) {
       if (mipsolver.orig_model_->integrality_[i] == HighsVarType::kInteger) {
-        double solval = std::round(solution.col_value[i]);
+        double solval = highsRound(solution.col_value[i]);
         fixedModel.col_lower_[i] = std::max(fixedModel.col_lower_[i], solval);
         fixedModel.col_upper_[i] = std::min(fixedModel.col_upper_[i], solval);
       }

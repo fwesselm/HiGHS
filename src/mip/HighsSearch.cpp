@@ -48,8 +48,7 @@ double HighsSearch::checkSol(const std::vector<double>& sol,
     if (!integerfeasible || mipsolver.variableType(i) != HighsVarType::kInteger)
       continue;
 
-    double intval = highsFloor(sol[i], 0.5);
-    if (std::abs(sol[i] - intval) > mipsolver.mipdata_->feastol) {
+    if (highsFrac(sol[i]) > mipsolver.mipdata_->feastol) {
       integerfeasible = false;
     }
   }
@@ -86,8 +85,8 @@ void HighsSearch::setRINSNeighbourhood(const std::vector<double>& basesol,
     if (mipsolver.variableType(i) != HighsVarType::kInteger) continue;
     if (localdom.col_lower_[i] == localdom.col_upper_[i]) continue;
 
-    double intval = highsFloor(basesol[i], 0.5);
-    if (std::abs(relaxsol[i] - intval) < mipsolver.mipdata_->feastol) {
+    if (highsFrac(basesol[i]) < mipsolver.mipdata_->feastol) {
+      double intval = highsRound(basesol[i]);
       if (localdom.col_lower_[i] < intval)
         localdom.changeBound(HighsBoundType::kLower, i,
                              std::min(intval, localdom.col_upper_[i]),

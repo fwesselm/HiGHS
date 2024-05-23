@@ -181,8 +181,8 @@ void HighsCutGeneration::separateLiftedKnapsackCover() {
     double hfrac = z / abar;
     double coef = 0.0;
 
-    HighsInt h = highsFloor(hfrac, 0.5);
-    if (h != 0 && std::abs(hfrac - h) * std::max(1.0, abar) <= epsilon &&
+    HighsInt h = highsRound(hfrac);
+    if (h != 0 && highsFrac(hfrac) * std::max(1.0, abar) <= epsilon &&
         h <= cplussize - 1) {
       halfintegral = true;
       coef = 0.5;
