@@ -424,7 +424,7 @@ bool HighsCutGeneration::separateLiftedMixedIntegerCover() {
     return double(kmin * (al - r));
   };
 
-  int64_t kmax = std::round(upperl - eta);
+  int64_t kmax = floor(upperl - eta + 0.5);
 
   auto gamma_l = [&](double z) {
     assert(z > 0);
