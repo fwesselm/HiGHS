@@ -1112,14 +1112,14 @@ void HighsCliqueTable::extractCliquesFromCut(const HighsMipSolver& mipsolver,
 
     double boundVal = double((rhs - minact) / vals[i]);
     if (vals[i] > 0) {
-      boundVal =
-          calcFloor(boundVal + globaldom.col_lower_[inds[i]], globaldom.feastol());
+      boundVal = calcFloor(boundVal + globaldom.col_lower_[inds[i]],
+                           globaldom.feastol());
       globaldom.changeBound(HighsBoundType::kUpper, inds[i], boundVal,
                             HighsDomain::Reason::unspecified());
       if (globaldom.infeasible()) return;
     } else {
-      boundVal =
-          calcCeil(boundVal + globaldom.col_upper_[inds[i]], globaldom.feastol());
+      boundVal = calcCeil(boundVal + globaldom.col_upper_[inds[i]],
+                          globaldom.feastol());
       globaldom.changeBound(HighsBoundType::kLower, inds[i], boundVal,
                             HighsDomain::Reason::unspecified());
       if (globaldom.infeasible()) return;

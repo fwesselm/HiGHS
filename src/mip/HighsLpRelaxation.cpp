@@ -1323,20 +1323,20 @@ HighsLpRelaxation::Status HighsLpRelaxation::resolveLp(HighsDomain* domain) {
                 (mipsolver.colCost(col) < 0 ||
                  mipsolver.mipdata_->downlocks[col] != 0)) {
               // round up
-              roundsol[col] =
-                  std::min(calcCeil(fracint.second, mipsolver.mipdata_->feastol),
-                           lpsolver.getLp().col_upper_[col] == kHighsInf
-                               ? kHighsInf
-                               : calcFloor(lpsolver.getLp().col_upper_[col],
-                                       mipsolver.mipdata_->feastol));
+              roundsol[col] = std::min(
+                  calcCeil(fracint.second, mipsolver.mipdata_->feastol),
+                  lpsolver.getLp().col_upper_[col] == kHighsInf
+                      ? kHighsInf
+                      : calcFloor(lpsolver.getLp().col_upper_[col],
+                                  mipsolver.mipdata_->feastol));
             } else {
               // round down
-              roundsol[col] =
-                  std::max(calcFloor(fracint.second, mipsolver.mipdata_->feastol),
-                           lpsolver.getLp().col_lower_[col] == -kHighsInf
-                               ? -kHighsInf
-                               : calcCeil(lpsolver.getLp().col_lower_[col],
-                                      mipsolver.mipdata_->feastol));
+              roundsol[col] = std::max(
+                  calcFloor(fracint.second, mipsolver.mipdata_->feastol),
+                  lpsolver.getLp().col_lower_[col] == -kHighsInf
+                      ? -kHighsInf
+                      : calcCeil(lpsolver.getLp().col_lower_[col],
+                                 mipsolver.mipdata_->feastol));
             }
           }
 

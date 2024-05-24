@@ -223,16 +223,16 @@ double HighsMipSolverData::computeNewUpperLimit(double ub, double mip_abs_gap,
       new_upper_limit = std::min(
           new_upper_limit,
           ub - calcCeil(mip_rel_gap * fabs(ub + mipsolver.model_->offset_) *
-                        objectiveFunction.integralScale(),
-                    mipsolver.mipdata_->epsilon) /
+                            objectiveFunction.integralScale(),
+                        mipsolver.mipdata_->epsilon) /
                    objectiveFunction.integralScale());
 
     if (mip_abs_gap != 0.0)
-      new_upper_limit =
-          std::min(new_upper_limit,
-                   ub - calcCeil(mip_abs_gap * objectiveFunction.integralScale(),
-                             mipsolver.mipdata_->epsilon) /
-                            objectiveFunction.integralScale());
+      new_upper_limit = std::min(
+          new_upper_limit,
+          ub - calcCeil(mip_abs_gap * objectiveFunction.integralScale(),
+                        mipsolver.mipdata_->epsilon) /
+                   objectiveFunction.integralScale());
 
     // add feasibility tolerance so that the next best integer feasible solution
     // is definitely included in the remaining search

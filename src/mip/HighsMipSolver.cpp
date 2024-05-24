@@ -61,7 +61,8 @@ HighsMipSolver::HighsMipSolver(HighsCallback& callback,
       obj += orig_model_->col_cost_[i] * value;
 
       if (orig_model_->integrality_[i] == HighsVarType::kInteger) {
-        integrality_violation_ = std::max(calcFrac(value), integrality_violation_);
+        integrality_violation_ =
+            std::max(calcFrac(value), integrality_violation_);
       }
 
       const double lower = orig_model_->col_lower_[i];

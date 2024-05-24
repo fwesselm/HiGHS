@@ -908,13 +908,13 @@ bool HighsPrimalHeuristics::linesearchRounding(
       assert(col < mipsolver.numCol());
       if (mipsolver.mipdata_->uplocks[col] == 0) {
         roundedpoint[col] = calcCeil(std::max(point1[col], point2[col]),
-                                 mipsolver.mipdata_->feastol);
+                                     mipsolver.mipdata_->feastol);
         continue;
       }
 
       if (mipsolver.mipdata_->downlocks[col] == 0) {
         roundedpoint[col] = calcFloor(std::min(point1[col], point2[col]),
-                                  mipsolver.mipdata_->feastol);
+                                      mipsolver.mipdata_->feastol);
         continue;
       }
 
