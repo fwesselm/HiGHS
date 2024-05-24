@@ -1362,7 +1362,7 @@ double HighsDomain::adjustedUb(HighsInt col, HighsCDouble boundVal,
   double bound;
 
   if (mipsolver->variableType(col) != HighsVarType::kContinuous) {
-    bound = static_cast<double>(floor(boundVal, mipsolver->mipdata_->feastol));
+    bound = static_cast<double>(calcFloor(boundVal, mipsolver->mipdata_->feastol));
     if (bound < col_upper_[col] &&
         col_upper_[col] - bound >
             1000.0 * mipsolver->mipdata_->feastol * std::fabs(bound))
@@ -1397,7 +1397,7 @@ double HighsDomain::adjustedLb(HighsInt col, HighsCDouble boundVal,
   double bound;
 
   if (mipsolver->variableType(col) != HighsVarType::kContinuous) {
-    bound = static_cast<double>(ceil(boundVal, mipsolver->mipdata_->feastol));
+    bound = static_cast<double>(calcCeil(boundVal, mipsolver->mipdata_->feastol));
     if (bound > col_lower_[col] &&
         bound - col_lower_[col] >
             1000.0 * mipsolver->mipdata_->feastol * std::fabs(bound))
@@ -2724,13 +2724,13 @@ HighsDomainChange HighsDomain::flip(const HighsDomainChange& domchg) const {
     HighsDomainChange flipped{domchg.boundval - mipsolver->mipdata_->feastol,
                               domchg.column, HighsBoundType::kUpper};
     if (mipsolver->variableType(domchg.column) != HighsVarType::kContinuous)
-      flipped.boundval = floor(flipped.boundval);
+      flipped.boundval = calcFloor(flipped.boundval);
     return flipped;
   } else {
     HighsDomainChange flipped{domchg.boundval + mipsolver->mipdata_->feastol,
                               domchg.column, HighsBoundType::kLower};
     if (mipsolver->variableType(domchg.column) != HighsVarType::kContinuous)
-      flipped.boundval = ceil(flipped.boundval);
+      flipped.boundval = calcCeil(flipped.boundval);
     return flipped;
   }
 }
@@ -3002,7 +3002,7 @@ bool HighsDomain::ConflictSet::resolveLinearGeq(HighsCDouble M, double Mupper,
               double(((Mupper - (M - reasonDomchg.delta)) / vals[i]) + glb);
           if (localdom.mipsolver->variableType(col) !=
               HighsVarType::kContinuous)
-            relaxLb = ceil(relaxLb);
+            relaxLb = calcCeil(relaxLb);
 
           if (relaxLb - lb >= -localdom.feastol()) continue;
 
@@ -3034,7 +3034,7 @@ bool HighsDomain::ConflictSet::resolveLinearGeq(HighsCDouble M, double Mupper,
               double(((Mupper - (M - reasonDomchg.delta)) / vals[i]) + gub);
           if (localdom.mipsolver->variableType(col) !=
               HighsVarType::kContinuous)
-            relaxUb = floor(relaxUb);
+            relaxUb = calcFloor(relaxUb);
 
           if (relaxUb - ub <= localdom.feastol()) continue;
           locdomchg.domchg.boundval = relaxUb;
@@ -3116,7 +3116,7 @@ bool HighsDomain::ConflictSet::resolveLinearLeq(HighsCDouble M, double Mlower,
               double(((Mlower - (M - reasonDomchg.delta)) / vals[i]) + glb);
           if (localdom.mipsolver->variableType(col) !=
               HighsVarType::kContinuous)
-            relaxLb = ceil(relaxLb);
+            relaxLb = calcCeil(relaxLb);
 
           if (relaxLb - lb >= -localdom.feastol()) continue;
 
@@ -3148,7 +3148,7 @@ bool HighsDomain::ConflictSet::resolveLinearLeq(HighsCDouble M, double Mlower,
               double(((Mlower - (M - reasonDomchg.delta)) / vals[i]) + gub);
           if (localdom.mipsolver->variableType(col) !=
               HighsVarType::kContinuous)
-            relaxUb = floor(relaxUb);
+            relaxUb = calcFloor(relaxUb);
 
           if (relaxUb - ub <= localdom.feastol()) continue;
 

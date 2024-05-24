@@ -507,7 +507,7 @@ bool HighsTransformedLp::untransform(std::vector<double>& vals,
 
   if (integral)
     for (HighsInt i = 0; i != numNz; ++i)
-      vals[i] = round(vectorsum.getValue(inds[i]));
+      vals[i] = std::round(vectorsum.getValue(inds[i]));
   else
     for (HighsInt i = 0; i != numNz; ++i) vals[i] = vectorsum.getValue(inds[i]);
   vectorsum.clear();

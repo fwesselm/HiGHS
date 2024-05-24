@@ -199,7 +199,7 @@ class HighsPseudocost {
   double getAvgPseudocost() const { return cost_total; }
 
   double getPseudocostUp(HighsInt col, double frac, double offset) const {
-    double up = ceil(frac) - frac;
+    double up = calcCeil(frac) - frac;
     double cost;
 
     if (nsamplesup[col] == 0 || nsamplesup[col] < minreliable) {
@@ -215,7 +215,7 @@ class HighsPseudocost {
   }
 
   double getPseudocostDown(HighsInt col, double frac, double offset) const {
-    double down = frac - floor(frac);
+    double down = frac - calcFloor(frac);
     double cost;
 
     if (nsamplesdown[col] == 0 || nsamplesdown[col] < minreliable) {
@@ -232,13 +232,13 @@ class HighsPseudocost {
   }
 
   double getPseudocostUp(HighsInt col, double frac) const {
-    double up = ceil(frac) - frac;
+    double up = calcCeil(frac) - frac;
     if (nsamplesup[col] == 0) return up * cost_total;
     return up * pseudocostup[col];
   }
 
   double getPseudocostDown(HighsInt col, double frac) const {
-    double down = frac - floor(frac);
+    double down = frac - calcFloor(frac);
     if (nsamplesdown[col] == 0) return down * cost_total;
     return down * pseudocostdown[col];
   }

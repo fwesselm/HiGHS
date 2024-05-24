@@ -1225,7 +1225,7 @@ HighsLpRelaxation::Status HighsLpRelaxation::resolveLp(HighsDomain* domain) {
               std::min(sol.col_value[i], lpsolver.getLp().col_upper_[i]),
               lpsolver.getLp().col_lower_[i]);
 
-          if (frac(val) > mipsolver.mipdata_->feastol) {
+          if (calcFrac(val) > mipsolver.mipdata_->feastol) {
             HighsInt col = i;
             if (roundable && mipsolver.mipdata_->uplocks[col] != 0 &&
                 mipsolver.mipdata_->downlocks[col] != 0)
@@ -1324,18 +1324,18 @@ HighsLpRelaxation::Status HighsLpRelaxation::resolveLp(HighsDomain* domain) {
                  mipsolver.mipdata_->downlocks[col] != 0)) {
               // round up
               roundsol[col] =
-                  std::min(ceil(fracint.second, mipsolver.mipdata_->feastol),
+                  std::min(calcCeil(fracint.second, mipsolver.mipdata_->feastol),
                            lpsolver.getLp().col_upper_[col] == kHighsInf
                                ? kHighsInf
-                               : floor(lpsolver.getLp().col_upper_[col],
+                               : calcFloor(lpsolver.getLp().col_upper_[col],
                                        mipsolver.mipdata_->feastol));
             } else {
               // round down
               roundsol[col] =
-                  std::max(floor(fracint.second, mipsolver.mipdata_->feastol),
+                  std::max(calcFloor(fracint.second, mipsolver.mipdata_->feastol),
                            lpsolver.getLp().col_lower_[col] == -kHighsInf
                                ? -kHighsInf
-                               : ceil(lpsolver.getLp().col_lower_[col],
+                               : calcCeil(lpsolver.getLp().col_lower_[col],
                                       mipsolver.mipdata_->feastol));
             }
           }
@@ -1369,7 +1369,7 @@ HighsLpRelaxation::Status HighsLpRelaxation::resolveLp(HighsDomain* domain) {
             else if (fixSol[i] > lpsolver.getLp().col_upper_[i])
               fixSol[i] = lpsolver.getLp().col_upper_[i];
             else if (mipsolver.variableType(i) != HighsVarType::kContinuous)
-              fixSol[i] = round(fixSol[i]);
+              fixSol[i] = std::round(fixSol[i]);
           }
 
           if (mipsolver.mipdata_->checkSolution(fixSol)) {

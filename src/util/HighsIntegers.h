@@ -157,7 +157,7 @@ class HighsIntegers {
     // now check if the values are integral and if not compute a common
     // denominator for their remaining fraction
     HighsCDouble val = startdenom * HighsCDouble(vals[0]);
-    HighsCDouble downval = floor(val + deltaup);
+    HighsCDouble downval = calcFloor(val + deltaup);
     HighsCDouble fraction = val - downval;
 
     if (fraction > deltadown) {
@@ -165,7 +165,7 @@ class HighsIntegers {
       // denominators for the remaining fraction
       denom *= denominator(double(fraction), deltaup, 1000);
       val = denom * HighsCDouble(vals[0]);
-      downval = floor(val + deltaup);
+      downval = calcFloor(val + deltaup);
       fraction = val - downval;
 
       // if this is not sufficient for reaching integrality, we stop here
@@ -176,15 +176,15 @@ class HighsIntegers {
 
     for (HighsInt i = 1; i != numVals; ++i) {
       val = denom * HighsCDouble(vals[i]);
-      downval = floor(val + deltaup);
+      downval = calcFloor(val + deltaup);
       fraction = val - downval;
 
       if (fraction > deltadown) {
         val = startdenom * HighsCDouble(vals[i]);
-        fraction = val - floor(val);
+        fraction = val - calcFloor(val);
         denom *= denominator(double(fraction), deltaup, 1000);
         val = denom * HighsCDouble(vals[i]);
-        downval = floor(val + deltaup);
+        downval = calcFloor(val + deltaup);
         fraction = val - downval;
 
         if (fraction > deltadown) return 0.0;

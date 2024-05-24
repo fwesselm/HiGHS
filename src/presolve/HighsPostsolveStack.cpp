@@ -306,7 +306,7 @@ void HighsPostsolveStack::ForcingColumn::undo(
     // round solution value if column is integer-constrained
     if (nonbasicRow != -1 && colIntegral)
       colValFromNonbasicRow =
-          direction * ceil(direction * colValFromNonbasicRow,
+          direction * calcCeil(direction * colValFromNonbasicRow,
                            options.mip_feasibility_tolerance);
   };
 
@@ -729,11 +729,11 @@ void HighsPostsolveStack::DuplicateColumn::undo(const HighsOptions& options,
   } else if (duplicateColIntegral) {
     // Doesn't set basis.col_status[duplicateCol], so assume no basis
     assert(!basis.valid);
-    double roundVal = round(solution.col_value[duplicateCol]);
-    if (frac(solution.col_value[duplicateCol]) >
+    double roundVal = std::round(solution.col_value[duplicateCol]);
+    if (calcFrac(solution.col_value[duplicateCol]) >
         options.mip_feasibility_tolerance) {
       solution.col_value[duplicateCol] =
-          floor(solution.col_value[duplicateCol]);
+          calcFloor(solution.col_value[duplicateCol]);
       recomputeCol = true;
     }
   }
@@ -748,7 +748,7 @@ void HighsPostsolveStack::DuplicateColumn::undo(const HighsOptions& options,
       // Doesn't set basis.col_status[duplicateCol], so assume no basis
       assert(!basis.valid);
       solution.col_value[col] =
-          ceil(solution.col_value[col], options.mip_feasibility_tolerance);
+          calcCeil(solution.col_value[col], options.mip_feasibility_tolerance);
       solution.col_value[duplicateCol] =
           double((HighsCDouble(mergeVal) - solution.col_value[col]) / colScale);
     }
@@ -906,12 +906,12 @@ bool HighsPostsolveStack::DuplicateColumn::okMerge(
   const double scale = colScale;
   const bool x_int = colIntegral;
   const bool y_int = duplicateColIntegral;
-  const double x_lo = x_int ? ceil(colLower, tolerance) : colLower;
-  const double x_up = x_int ? floor(colUpper, tolerance) : colUpper;
+  const double x_lo = x_int ? calcCeil(colLower, tolerance) : colLower;
+  const double x_up = x_int ? calcFloor(colUpper, tolerance) : colUpper;
   const double y_lo =
-      y_int ? ceil(duplicateColLower, tolerance) : duplicateColLower;
+      y_int ? calcCeil(duplicateColLower, tolerance) : duplicateColLower;
   const double y_up =
-      y_int ? floor(duplicateColUpper, tolerance) : duplicateColUpper;
+      y_int ? calcFloor(duplicateColUpper, tolerance) : duplicateColUpper;
   const double x_len = x_up - x_lo;
   const double y_len = y_up - y_lo;
   std::string newline = "\n";
@@ -928,7 +928,7 @@ bool HighsPostsolveStack::DuplicateColumn::okMerge(
   if (x_int) {
     if (y_int) {
       // Scale must be integer and not exceed (x_u-x_l)+1 in magnitude
-      bool scale_is_int = frac(scale) <= tolerance;
+      bool scale_is_int = calcFrac(scale) <= tolerance;
       if (!scale_is_int) {
         if (debug_report)
           printf(
@@ -1012,7 +1012,7 @@ void HighsPostsolveStack::DuplicateColumn::undoFix(
   //=============================================================================================
 
   auto isInteger = [&](const double v) {
-    return frac(v) <= mip_feasibility_tolerance;
+    return calcFrac(v) <= mip_feasibility_tolerance;
   };
 
   auto isFeasible = [&](const double l, const double v, const double u) {
@@ -1029,13 +1029,13 @@ void HighsPostsolveStack::DuplicateColumn::undoFix(
   const int x_ix = col;
   const int y_ix = duplicateCol;
   const double x_lo =
-      x_int ? ceil(colLower, mip_feasibility_tolerance) : colLower;
+      x_int ? calcCeil(colLower, mip_feasibility_tolerance) : colLower;
   const double x_up =
-      x_int ? floor(colUpper, mip_feasibility_tolerance) : colUpper;
-  const double y_lo = y_int ? ceil(duplicateColLower, mip_feasibility_tolerance)
+      x_int ? calcFloor(colUpper, mip_feasibility_tolerance) : colUpper;
+  const double y_lo = y_int ? calcCeil(duplicateColLower, mip_feasibility_tolerance)
                             : duplicateColLower;
   const double y_up = y_int
-                          ? floor(duplicateColUpper, mip_feasibility_tolerance)
+                          ? calcFloor(duplicateColUpper, mip_feasibility_tolerance)
                           : duplicateColUpper;
   if (kAllowDeveloperAssert) assert(scale);
   double x_v = merge_value;

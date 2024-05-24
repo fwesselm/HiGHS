@@ -210,29 +210,23 @@ bool highsPause(const bool pause_condition, const std::string message = "");
 
 // Utility to compute floor
 template <typename T>
-inline T floor(T input, double tolerance = 0.0) {
+inline T calcFloor(T input, double tolerance = 0.0) {
   using std::floor;
   return floor(input + tolerance);
 }
 
 // Utility to compute ceiling
 template <typename T>
-inline T ceil(T input, double tolerance = 0.0) {
+inline T calcCeil(T input, double tolerance = 0.0) {
   using std::ceil;
   return ceil(input - tolerance);
 }
 
-// Utility for rounding
-template <typename T>
-inline T round(T input) {
-  using std::round;
-  return round(input);
-}
-
 // Utility for computing fractional part
 template <typename T>
-inline T frac(T input) {
+inline T calcFrac(T input) {
   using std::abs;
+  using std::round;
   return abs(input - round(input));
 }
 #endif  // UTIL_HIGHSUTILS_H_

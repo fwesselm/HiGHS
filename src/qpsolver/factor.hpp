@@ -47,7 +47,7 @@ class CholeskyFactor {
   CholeskyFactor(Runtime& rt, Basis& bas) : runtime(rt), basis(bas) {
     uptodate = false;
     current_k_max =
-        max(min((HighsInt)ceil(rt.instance.num_var / 16.0), (HighsInt)1000),
+        max(min((HighsInt)calcCeil(rt.instance.num_var / 16.0), (HighsInt)1000),
             basis.getnuminactive());
     L.resize(current_k_max * current_k_max);
   }

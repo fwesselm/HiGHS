@@ -374,8 +374,8 @@ retry:
     for (HighsInt i : intcols) {
       if (localdom.col_lower_[i] == localdom.col_upper_[i]) continue;
 
-      double downval = floor(relaxationsol[i], mipsolver.mipdata_->feastol);
-      double upval = ceil(relaxationsol[i], mipsolver.mipdata_->feastol);
+      double downval = calcFloor(relaxationsol[i], mipsolver.mipdata_->feastol);
+      double upval = calcCeil(relaxationsol[i], mipsolver.mipdata_->feastol);
 
       downval = std::min(downval, localdom.col_upper_[i]);
       upval = std::max(upval, localdom.col_lower_[i]);
@@ -413,15 +413,15 @@ retry:
                                 ? 0.0
                                 : fracval - mipsolver.mipdata_->rootlpsol[col];
         if (rootchange >= 0.4)
-          fixval = ceil(fracval);
+          fixval = calcCeil(fracval);
         else if (rootchange <= -0.4)
-          fixval = floor(fracval);
+          fixval = calcFloor(fracval);
         if (mipsolver.model_->col_cost_[col] > 0.0)
-          fixval = ceil(fracval);
+          fixval = calcCeil(fracval);
         else if (mipsolver.model_->col_cost_[col] < 0.0)
-          fixval = floor(fracval);
+          fixval = calcFloor(fracval);
         else
-          fixval = round(fracval);
+          fixval = std::round(fracval);
         // make sure we do not set an infeasible domain
         fixval = std::min(localdom.col_upper_[col], fixval);
         fixval = std::max(localdom.col_lower_[col], fixval);
@@ -629,7 +629,7 @@ retry:
       double fixval;
       if (fixtolpsol) {
         // RINS neighbourhood (with extension)
-        fixval = round(relaxationsol[col]);
+        fixval = std::round(relaxationsol[col]);
       } else {
         // reinforce direction of this solution away from root
         // solution if the change is at least 0.4
@@ -637,15 +637,15 @@ retry:
         // if objective is zero round to nearest integer
         double rootchange = fracval - mipsolver.mipdata_->rootlpsol[col];
         if (rootchange >= 0.4)
-          fixval = ceil(fracval);
+          fixval = calcCeil(fracval);
         else if (rootchange <= -0.4)
-          fixval = floor(fracval);
+          fixval = calcFloor(fracval);
         if (mipsolver.model_->col_cost_[col] > 0.0)
-          fixval = ceil(fracval);
+          fixval = calcCeil(fracval);
         else if (mipsolver.model_->col_cost_[col] < 0.0)
-          fixval = floor(fracval);
+          fixval = calcFloor(fracval);
         else
-          fixval = round(fracval);
+          fixval = std::round(fracval);
       }
       // make sure we do not set an infeasible domain
       fixval = std::min(localdom.col_upper_[col], fixval);
@@ -907,20 +907,20 @@ bool HighsPrimalHeuristics::linesearchRounding(
       assert(col >= 0);
       assert(col < mipsolver.numCol());
       if (mipsolver.mipdata_->uplocks[col] == 0) {
-        roundedpoint[col] = ceil(std::max(point1[col], point2[col]),
+        roundedpoint[col] = calcCeil(std::max(point1[col], point2[col]),
                                  mipsolver.mipdata_->feastol);
         continue;
       }
 
       if (mipsolver.mipdata_->downlocks[col] == 0) {
-        roundedpoint[col] = floor(std::min(point1[col], point2[col]),
+        roundedpoint[col] = calcFloor(std::min(point1[col], point2[col]),
                                   mipsolver.mipdata_->feastol);
         continue;
       }
 
       double convexcomb = (1.0 - alpha) * point1[col] + alpha * point2[col];
-      double intpoint2 = round(point2[col]);
-      roundedpoint[col] = round(convexcomb);
+      double intpoint2 = std::round(point2[col]);
+      roundedpoint[col] = std::round(convexcomb);
 
       if (roundedpoint[col] == intpoint2) continue;
 
@@ -950,11 +950,11 @@ void HighsPrimalHeuristics::randomizedRounding(
   for (HighsInt i : intcols) {
     double intval;
     if (mipsolver.mipdata_->uplocks[i] == 0)
-      intval = ceil(relaxationsol[i], mipsolver.mipdata_->feastol);
+      intval = calcCeil(relaxationsol[i], mipsolver.mipdata_->feastol);
     else if (mipsolver.mipdata_->downlocks[i] == 0)
-      intval = floor(relaxationsol[i], mipsolver.mipdata_->feastol);
+      intval = calcFloor(relaxationsol[i], mipsolver.mipdata_->feastol);
     else
-      intval = floor(relaxationsol[i], randgen.real(0.1, 0.9));
+      intval = calcFloor(relaxationsol[i], randgen.real(0.1, 0.9));
 
     intval = std::min(localdom.col_upper_[i], intval);
     intval = std::max(localdom.col_lower_[i], intval);
@@ -1038,7 +1038,7 @@ void HighsPrimalHeuristics::feasibilityPump() {
     auto localdom = mipsolver.mipdata_->domain;
     for (HighsInt i : mipsolver.mipdata_->integer_cols) {
       assert(mipsolver.variableType(i) == HighsVarType::kInteger);
-      double intval = floor(roundedsol[i], randgen.real(0.4, 0.6));
+      double intval = calcFloor(roundedsol[i], randgen.real(0.4, 0.6));
       intval = std::max(intval, localdom.col_lower_[i]);
       intval = std::min(intval, localdom.col_upper_[i]);
       roundedsol[i] = intval;
@@ -1064,9 +1064,9 @@ void HighsPrimalHeuristics::feasibilityPump() {
             randgen.integer(mipsolver.mipdata_->integer_cols.size());
         HighsInt col = mipsolver.mipdata_->integer_cols[flippos];
         if (roundedsol[col] > lpsol[col])
-          roundedsol[col] = floor(lpsol[col]);
+          roundedsol[col] = calcFloor(lpsol[col]);
         else if (roundedsol[col] < lpsol[col])
-          roundedsol[col] = ceil(lpsol[col]);
+          roundedsol[col] = calcCeil(lpsol[col]);
         else if (roundedsol[col] < mipsolver.mipdata_->domain.col_upper_[col])
           roundedsol[col] = mipsolver.mipdata_->domain.col_upper_[col];
         else

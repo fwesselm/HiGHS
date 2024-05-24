@@ -174,7 +174,7 @@ bool HPresolve::okSetInput(HighsMipSolver& mipsolver,
 bool HPresolve::rowCoefficientsIntegral(HighsInt row, double scale) const {
   for (const HighsSliceNonzero& nz : getRowVector(row)) {
     double val = nz.value() * scale;
-    if (frac(val) > options->small_matrix_value) return false;
+    if (calcFrac(val) > options->small_matrix_value) return false;
   }
 
   return true;
@@ -253,7 +253,7 @@ bool HPresolve::isImpliedIntegral(HighsInt col) {
 
       double rhs = model->row_lower_[nz.index()] * scale;
 
-      if (frac(rhs) > primal_feastol) {
+      if (calcFrac(rhs) > primal_feastol) {
         // todo infeasible
       }
 
@@ -268,7 +268,7 @@ bool HPresolve::isImpliedIntegral(HighsInt col) {
     if (!rowCoefficientsIntegral(nz.index(), scale)) return false;
     if (model->row_upper_[nz.index()] != kHighsInf) {
       double rUpper = std::abs(nz.value()) *
-                      floor(model->row_upper_[nz.index()] * std::abs(scale),
+                      calcFloor(model->row_upper_[nz.index()] * std::abs(scale),
                             primal_feastol);
       if (std::abs(model->row_upper_[nz.index()] - rUpper) >
           options->small_matrix_value) {
@@ -279,7 +279,7 @@ bool HPresolve::isImpliedIntegral(HighsInt col) {
       assert(model->row_lower_[nz.index()] != -kHighsInf);
       double rLower =
           std::abs(nz.value()) *
-          ceil(model->row_upper_[nz.index()] * std::abs(scale), primal_feastol);
+          calcCeil(model->row_upper_[nz.index()] * std::abs(scale), primal_feastol);
       if (std::abs(model->row_lower_[nz.index()] - rLower) >
           options->small_matrix_value) {
         model->row_upper_[nz.index()] = rLower;
@@ -322,7 +322,7 @@ bool HPresolve::isImpliedInteger(HighsInt col) {
       double scale = 1.0 / nz.value();
       double rhs = model->row_lower_[nz.index()] * scale;
 
-      if (frac(rhs) > primal_feastol) {
+      if (calcFrac(rhs) > primal_feastol) {
         continue;
       }
 
@@ -335,19 +335,19 @@ bool HPresolve::isImpliedInteger(HighsInt col) {
   if (!runDualDetection) return false;
 
   if ((model->col_lower_[col] != -kHighsInf &&
-       frac(model->col_lower_[col]) > options->small_matrix_value) ||
+       calcFrac(model->col_lower_[col]) > options->small_matrix_value) ||
       (model->col_upper_[col] != -kHighsInf &&
-       frac(model->col_upper_[col]) > options->small_matrix_value))
+       calcFrac(model->col_upper_[col]) > options->small_matrix_value))
     return false;
 
   for (const HighsSliceNonzero& nz : getColumnVector(col)) {
     double scale = 1.0 / nz.value();
     if (model->row_upper_[nz.index()] != kHighsInf) {
-      if (frac(model->row_upper_[nz.index()]) > primal_feastol) return false;
+      if (calcFrac(model->row_upper_[nz.index()]) > primal_feastol) return false;
     }
 
     if (model->row_lower_[nz.index()] != -kHighsInf) {
-      if (frac(model->row_lower_[nz.index()]) > primal_feastol) return false;
+      if (calcFrac(model->row_lower_[nz.index()]) > primal_feastol) return false;
     }
 
     if (!rowCoefficientsIntegral(nz.index(), scale)) return false;
@@ -563,7 +563,7 @@ void HPresolve::updateColImpliedBounds(HighsInt row, HighsInt col, double val) {
           // check if we may round the bound due to integrality restrictions
           if (mipsolver != nullptr) {
             if (model->integrality_[col] != HighsVarType::kContinuous) {
-              double roundedBound = floor(impliedBound, primal_feastol);
+              double roundedBound = calcFloor(impliedBound, primal_feastol);
 
               if (roundedBound < model->col_upper_[col])
                 changeColUpper(col, roundedBound);
@@ -586,7 +586,7 @@ void HPresolve::updateColImpliedBounds(HighsInt row, HighsInt col, double val) {
           // check if we may round the bound due to integrality restrictions
           if (mipsolver != nullptr) {
             if (model->integrality_[col] != HighsVarType::kContinuous) {
-              double roundedBound = ceil(impliedBound, primal_feastol);
+              double roundedBound = calcCeil(impliedBound, primal_feastol);
 
               if (roundedBound > model->col_lower_[col])
                 changeColLower(col, roundedBound);
@@ -626,7 +626,7 @@ void HPresolve::updateColImpliedBounds(HighsInt row, HighsInt col, double val) {
           // check if we may round the bound due to integrality restrictions
           if (mipsolver != nullptr) {
             if (model->integrality_[col] != HighsVarType::kContinuous) {
-              double roundedBound = ceil(impliedBound, primal_feastol);
+              double roundedBound = calcCeil(impliedBound, primal_feastol);
 
               // change bounds of integers immediately
               if (roundedBound > model->col_lower_[col])
@@ -650,7 +650,7 @@ void HPresolve::updateColImpliedBounds(HighsInt row, HighsInt col, double val) {
           // check if we may round the bound due to integrality restrictions
           if (mipsolver != nullptr) {
             if (model->integrality_[col] != HighsVarType::kContinuous) {
-              double roundedBound = floor(impliedBound, primal_feastol);
+              double roundedBound = calcFloor(impliedBound, primal_feastol);
 
               // change bounds of integers immediately
               if (roundedBound < model->col_upper_[col])
@@ -1694,7 +1694,7 @@ void HPresolve::markColDeleted(HighsInt col) {
 
 void HPresolve::changeColUpper(HighsInt col, double newUpper) {
   if (model->integrality_[col] != HighsVarType::kContinuous) {
-    newUpper = floor(newUpper, primal_feastol);
+    newUpper = calcFloor(newUpper, primal_feastol);
     if (newUpper == model->col_upper_[col]) return;
   }
 
@@ -1710,7 +1710,7 @@ void HPresolve::changeColUpper(HighsInt col, double newUpper) {
 
 void HPresolve::changeColLower(HighsInt col, double newLower) {
   if (model->integrality_[col] != HighsVarType::kContinuous) {
-    newLower = ceil(newLower, primal_feastol);
+    newLower = calcCeil(newLower, primal_feastol);
     if (newLower == model->col_lower_[col]) return;
   }
 
@@ -2281,8 +2281,8 @@ void HPresolve::transformColumn(HighsPostsolveStack& postsolve_stack,
   if (model->integrality_[col] != HighsVarType::kContinuous) {
     // we rely on the integrality status being already updated to the newly
     // scaled column by the caller, if necessary
-    model->col_upper_[col] = floor(model->col_upper_[col], primal_feastol);
-    model->col_lower_[col] = ceil(model->col_lower_[col], primal_feastol);
+    model->col_upper_[col] = calcFloor(model->col_upper_[col], primal_feastol);
+    model->col_lower_[col] = calcCeil(model->col_lower_[col], primal_feastol);
   }
 
   if (scale < 0) {
@@ -2323,9 +2323,9 @@ void HPresolve::scaleStoredRow(HighsInt row, double scale, bool integral) {
 
   if (integral) {
     if (model->row_upper_[row] != kHighsInf)
-      model->row_upper_[row] = round(model->row_upper_[row]);
+      model->row_upper_[row] = std::round(model->row_upper_[row]);
     if (model->row_lower_[row] != kHighsInf)
-      model->row_lower_[row] = round(model->row_lower_[row]);
+      model->row_lower_[row] = std::round(model->row_lower_[row]);
   }
 
   for (size_t j = 0; j < rowpositions.size(); ++j) {
@@ -2587,11 +2587,11 @@ HPresolve::Result HPresolve::doubletonEq(HighsPostsolveStack& postsolve_stack,
   if (model->integrality_[substcol] == HighsVarType::kInteger &&
       model->integrality_[staycol] == HighsVarType::kInteger) {
     // check integrality conditions
-    double roundCoef = round(staycoef / substcoef) * substcoef;
+    double roundCoef = std::round(staycoef / substcoef) * substcoef;
     if (std::fabs(roundCoef - staycoef) > options->small_matrix_value)
       return Result::kOk;
     staycoef = roundCoef;
-    double roundRhs = round(rhs / substcoef) * substcoef;
+    double roundRhs = std::round(rhs / substcoef) * substcoef;
     if (std::fabs(rhs - roundRhs) > primal_feastol)
       return Result::kPrimalInfeasible;
     rhs = roundRhs;
@@ -2736,13 +2736,13 @@ HPresolve::Result HPresolve::singletonRow(HighsPostsolveStack& postsolve_stack,
 
   double lb, ub;
   if (lowerTightened) {
-    if (isIntegral) newColLower = ceil(newColLower, boundTol);
+    if (isIntegral) newColLower = calcCeil(newColLower, boundTol);
     lb = newColLower;
   } else
     lb = model->col_lower_[col];
 
   if (upperTightened) {
-    if (isIntegral) newColUpper = floor(newColUpper, boundTol);
+    if (isIntegral) newColUpper = calcFloor(newColUpper, boundTol);
     ub = newColUpper;
   } else
     ub = model->col_upper_[col];
@@ -2926,8 +2926,8 @@ HPresolve::Result HPresolve::singletonCol(HighsPostsolveStack& postsolve_stack,
       isImpliedInteger(col)) {
     model->integrality_[col] = HighsVarType::kImplicitInteger;
     ++rowsizeImplInt[row];
-    double ceilLower = ceil(model->col_lower_[col], primal_feastol);
-    double floorUpper = floor(model->col_upper_[col], primal_feastol);
+    double ceilLower = calcCeil(model->col_lower_[col], primal_feastol);
+    double floorUpper = calcFloor(model->col_upper_[col], primal_feastol);
 
     if (ceilLower > model->col_lower_[col]) changeColLower(col, ceilLower);
     if (floorUpper < model->col_upper_[col]) changeColUpper(col, floorUpper);
@@ -3232,9 +3232,9 @@ HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
                    getColumnVector(continuousCol))
                 ++rowsizeImplInt[nonzero.index()];
               double ceilLower =
-                  ceil(model->col_lower_[continuousCol], primal_feastol);
+                  calcCeil(model->col_lower_[continuousCol], primal_feastol);
               double floorUpper =
-                  floor(model->col_upper_[continuousCol], primal_feastol);
+                  calcFloor(model->col_upper_[continuousCol], primal_feastol);
 
               if (ceilLower > model->col_lower_[continuousCol])
                 changeColLower(continuousCol, ceilLower);
@@ -3251,9 +3251,9 @@ HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
 
           if (intScale != 0.0 && intScale <= 1e3) {
             double rhs = rowUpper * intScale;
-            if (frac(rhs) > primal_feastol) return Result::kPrimalInfeasible;
+            if (calcFrac(rhs) > primal_feastol) return Result::kPrimalInfeasible;
 
-            rhs = round(rhs);
+            rhs = std::round(rhs);
 
             HighsInt rowlen = rowpositions.size();
             HighsInt x1Cand = -1;
@@ -3285,7 +3285,7 @@ HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
             if (x1Cand != -1) {
               HighsInt x1Pos = rowpositions[x1Cand];
               HighsInt x1 = Acol[x1Pos];
-              if (frac(rhs / static_cast<double>(d)) <=
+              if (calcFrac(rhs / static_cast<double>(d)) <=
                   mipsolver->mipdata_->epsilon) {
                 // the right hand side is integral, so we can substitute
                 // x1 = d * z
@@ -3299,7 +3299,7 @@ HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
 
                 // first compute the modular multiplicative inverse of a1^-1
                 // (mod d) of a1
-                int64_t a1 = round(intScale * Avalue[x1Pos]);
+                int64_t a1 = std::round(intScale * Avalue[x1Pos]);
                 a1 = HighsIntegers::mod(a1, d);
                 int64_t a1Inverse = HighsIntegers::modularInverse(a1, d);
 
@@ -3315,10 +3315,10 @@ HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
                 // we directly fix x1 instead of first substituting with d * z +
                 // b.
                 double zLower =
-                    ceil((model->col_lower_[x1] - b) / static_cast<double>(d),
+                    calcCeil((model->col_lower_[x1] - b) / static_cast<double>(d),
                          primal_feastol);
                 double zUpper =
-                    floor((model->col_upper_[x1] - b) / static_cast<double>(d),
+                    calcFloor((model->col_upper_[x1] - b) / static_cast<double>(d),
                           primal_feastol);
 
                 if (zLower == zUpper) {
@@ -3410,7 +3410,7 @@ HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
             }
 
             if (success) {
-              HighsCDouble roundRhs = floor(rhs, primal_feastol);
+              HighsCDouble roundRhs = calcFloor(rhs, primal_feastol);
               if (rhs - roundRhs >=
                   minRhsTightening - options->small_matrix_value) {
                 // scaled and rounded is not weaker than the original constraint
@@ -3473,7 +3473,7 @@ HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
             }
 
             if (success) {
-              HighsCDouble roundRhs = ceil(rhs, primal_feastol);
+              HighsCDouble roundRhs = calcCeil(rhs, primal_feastol);
               if (rhs - roundRhs <=
                   minRhsTightening + options->small_matrix_value) {
                 // scaled and rounded is not weaker than the original constraint
@@ -3553,8 +3553,8 @@ HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
             }
 
             if (success) {
-              HighsCDouble roundLhs = ceil(lhs, primal_feastol);
-              HighsCDouble roundRhs = floor(rhs, primal_feastol);
+              HighsCDouble roundLhs = calcCeil(lhs, primal_feastol);
+              HighsCDouble roundRhs = calcFloor(rhs, primal_feastol);
 
               // rounded row proves infeasibility regardless of coefficient
               // values
@@ -3760,7 +3760,7 @@ HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
               const double upper = model->col_upper_[nonzero.index()];
               const double fraction =
                   upper -
-                  floor(upper,
+                  calcFloor(upper,
                         mipsolver->options_mip_->mip_feasibility_tolerance);
               assert(fraction >= 0);
               const bool non_fractional =
@@ -3786,7 +3786,7 @@ HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
               // value then the problem is infeasible
               const double lower = model->col_lower_[nonzero.index()];
               const double fraction =
-                  ceil(lower,
+                  calcCeil(lower,
                        mipsolver->options_mip_->mip_feasibility_tolerance) -
                   lower;
               assert(fraction >= 0);
@@ -4033,8 +4033,8 @@ HPresolve::Result HPresolve::colPresolve(HighsPostsolveStack& postsolve_stack,
       model->integrality_[col] = HighsVarType::kImplicitInteger;
       for (const HighsSliceNonzero& nonzero : getColumnVector(col))
         ++rowsizeImplInt[nonzero.index()];
-      double ceilLower = ceil(model->col_lower_[col], primal_feastol);
-      double floorUpper = floor(model->col_upper_[col], primal_feastol);
+      double ceilLower = calcCeil(model->col_lower_[col], primal_feastol);
+      double floorUpper = calcFloor(model->col_upper_[col], primal_feastol);
 
       if (ceilLower > model->col_lower_[col]) changeColLower(col, ceilLower);
       if (floorUpper < model->col_upper_[col]) changeColUpper(col, floorUpper);
@@ -4086,8 +4086,8 @@ HPresolve::Result HPresolve::initialRowAndColPresolve(
   for (HighsInt col = 0; col != model->num_col_; ++col) {
     if (colDeleted[col]) continue;
     if (model->integrality_[col] != HighsVarType::kContinuous) {
-      double ceilLower = ceil(model->col_lower_[col], primal_feastol);
-      double floorUpper = floor(model->col_upper_[col], primal_feastol);
+      double ceilLower = calcCeil(model->col_lower_[col], primal_feastol);
+      double floorUpper = calcFloor(model->col_upper_[col], primal_feastol);
 
       if (ceilLower > model->col_lower_[col]) changeColLower(col, ceilLower);
       if (floorUpper < model->col_upper_[col]) changeColUpper(col, floorUpper);
@@ -5320,12 +5320,12 @@ HighsInt HPresolve::strengthenInequalities() {
       double al = reducedcost[alpos];
       coefs.resize(coverend);
       double coverrhs =
-          std::max(static_cast<double>(ceil(lambda / al, primal_feastol)), 1.0);
+          std::max(static_cast<double>(calcCeil(lambda / al, primal_feastol)), 1.0);
       HighsCDouble slackupper = -coverrhs;
 
       double step = kHighsInf;
       for (HighsInt i = 0; i != coverend; ++i) {
-        coefs[i] = ceil(std::min(reducedcost[cover[i]], double(lambda)) / al,
+        coefs[i] = calcCeil(std::min(reducedcost[cover[i]], double(lambda)) / al,
                         options->small_matrix_value);
         slackupper += upper[cover[i]] * coefs[i];
         step = std::min(step, reducedcost[cover[i]] / coefs[i]);
@@ -5411,8 +5411,8 @@ HighsInt HPresolve::detectImpliedIntegers() {
       for (const HighsSliceNonzero& nonzero : getColumnVector(col))
         ++rowsizeImplInt[nonzero.index()];
 
-      double ceilLower = ceil(model->col_lower_[col], primal_feastol);
-      double floorUpper = floor(model->col_upper_[col], primal_feastol);
+      double ceilLower = calcCeil(model->col_lower_[col], primal_feastol);
+      double floorUpper = calcFloor(model->col_upper_[col], primal_feastol);
 
       if (ceilLower > model->col_lower_[col]) changeColLower(col, ceilLower);
       if (floorUpper < model->col_upper_[col]) changeColUpper(col, floorUpper);
@@ -5626,9 +5626,9 @@ HPresolve::Result HPresolve::detectParallelRowsAndCols(
         }
 
         double scaleCand = colMax[duplicateCol].first / colMax[col].first;
-        colScale = round(scaleCand);
+        colScale = std::round(scaleCand);
         assert(std::abs(colScale) >= 1.0);
-        if (frac(scaleCand) > options->small_matrix_value) continue;
+        if (calcFrac(scaleCand) > options->small_matrix_value) continue;
 
         // if the scale is larger than 1, duplicate column cannot compensate for
         // all values of scaled col due to integrality as the scaled column

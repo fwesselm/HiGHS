@@ -1651,8 +1651,8 @@ HighsStatus Highs::handleInfCost() {
       double upper = lp.col_upper_[iCol];
       if (lp.isMip()) {
         if (lp.integrality_[iCol] == HighsVarType::kInteger) {
-          lower = ceil(lower, this->options_.mip_feasibility_tolerance);
-          upper = floor(upper, this->options_.mip_feasibility_tolerance);
+          lower = calcCeil(lower, this->options_.mip_feasibility_tolerance);
+          upper = calcFloor(upper, this->options_.mip_feasibility_tolerance);
         }
       }
       if (cost <= -inf_cost) {
@@ -2458,8 +2458,8 @@ bool Highs::infeasibleBoundsOk() {
     if (range > -this->options_.primal_feasibility_tolerance) {
       num_ok_infeasible_bound++;
       bool report = num_ok_infeasible_bound <= 10;
-      bool integer_lower = lower == round(lower);
-      bool integer_upper = upper == round(upper);
+      bool integer_lower = lower == std::round(lower);
+      bool integer_upper = upper == std::round(upper);
       assert(!integer_lower || !integer_upper);
       if (integer_lower) {
         if (report)
