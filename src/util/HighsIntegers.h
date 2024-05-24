@@ -20,7 +20,6 @@
 
 #include "util/HighsCDouble.h"
 #include "util/HighsInt.h"
-#include "util/HighsUtils.h"
 
 class HighsIntegers {
  public:
@@ -158,7 +157,7 @@ class HighsIntegers {
     // now check if the values are integral and if not compute a common
     // denominator for their remaining fraction
     HighsCDouble val = startdenom * HighsCDouble(vals[0]);
-    HighsCDouble downval = calcFloor(val + deltaup);
+    HighsCDouble downval = floor(val + deltaup);
     HighsCDouble fraction = val - downval;
 
     if (fraction > deltadown) {
@@ -166,7 +165,7 @@ class HighsIntegers {
       // denominators for the remaining fraction
       denom *= denominator(double(fraction), deltaup, 1000);
       val = denom * HighsCDouble(vals[0]);
-      downval = calcFloor(val + deltaup);
+      downval = floor(val + deltaup);
       fraction = val - downval;
 
       // if this is not sufficient for reaching integrality, we stop here
@@ -177,15 +176,15 @@ class HighsIntegers {
 
     for (HighsInt i = 1; i != numVals; ++i) {
       val = denom * HighsCDouble(vals[i]);
-      downval = calcFloor(val + deltaup);
+      downval = floor(val + deltaup);
       fraction = val - downval;
 
       if (fraction > deltadown) {
         val = startdenom * HighsCDouble(vals[i]);
-        fraction = val - calcFloor(val);
+        fraction = val - floor(val);
         denom *= denominator(double(fraction), deltaup, 1000);
         val = denom * HighsCDouble(vals[i]);
-        downval = calcFloor(val + deltaup);
+        downval = floor(val + deltaup);
         fraction = val - downval;
 
         if (fraction > deltadown) return 0.0;

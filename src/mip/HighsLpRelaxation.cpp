@@ -1324,19 +1324,19 @@ HighsLpRelaxation::Status HighsLpRelaxation::resolveLp(HighsDomain* domain) {
                  mipsolver.mipdata_->downlocks[col] != 0)) {
               // round up
               roundsol[col] = std::min(
-                  calcCeil(fracint.second, mipsolver.mipdata_->feastol),
+                  std::ceil(fracint.second - mipsolver.mipdata_->feastol),
                   lpsolver.getLp().col_upper_[col] == kHighsInf
                       ? kHighsInf
-                      : calcFloor(lpsolver.getLp().col_upper_[col],
-                                  mipsolver.mipdata_->feastol));
+                      : std::floor(lpsolver.getLp().col_upper_[col] +
+                                   mipsolver.mipdata_->feastol));
             } else {
               // round down
               roundsol[col] = std::max(
-                  calcFloor(fracint.second, mipsolver.mipdata_->feastol),
+                  std::floor(fracint.second + mipsolver.mipdata_->feastol),
                   lpsolver.getLp().col_lower_[col] == -kHighsInf
                       ? -kHighsInf
-                      : calcCeil(lpsolver.getLp().col_lower_[col],
-                                 mipsolver.mipdata_->feastol));
+                      : std::ceil(lpsolver.getLp().col_lower_[col] -
+                                  mipsolver.mipdata_->feastol));
             }
           }
 

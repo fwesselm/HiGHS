@@ -1651,8 +1651,8 @@ HighsStatus Highs::handleInfCost() {
       double upper = lp.col_upper_[iCol];
       if (lp.isMip()) {
         if (lp.integrality_[iCol] == HighsVarType::kInteger) {
-          lower = calcCeil(lower, this->options_.mip_feasibility_tolerance);
-          upper = calcFloor(upper, this->options_.mip_feasibility_tolerance);
+          lower = std::ceil(lower - this->options_.mip_feasibility_tolerance);
+          upper = std::floor(upper + this->options_.mip_feasibility_tolerance);
         }
       }
       if (cost <= -inf_cost) {

@@ -104,8 +104,8 @@ void HighsSearch::setRENSNeighbourhood(const std::vector<double>& lpsol) {
     if (mipsolver.variableType(i) != HighsVarType::kInteger) continue;
     if (localdom.col_lower_[i] == localdom.col_upper_[i]) continue;
 
-    double downval = calcFloor(lpsol[i], mipsolver.mipdata_->feastol);
-    double upval = calcCeil(lpsol[i], mipsolver.mipdata_->feastol);
+    double downval = std::floor(lpsol[i] + mipsolver.mipdata_->feastol);
+    double upval = std::ceil(lpsol[i] - mipsolver.mipdata_->feastol);
 
     if (localdom.col_lower_[i] < downval) {
       localdom.changeBound(HighsBoundType::kLower, i,
@@ -408,8 +408,8 @@ HighsInt HighsSearch::selectBranchingCandidate(int64_t maxSbIters,
 
     HighsInt col = fracints[candidate].first;
     double fracval = fracints[candidate].second;
-    double upval = calcCeil(fracval);
-    double downval = calcFloor(fracval);
+    double upval = std::ceil(fracval);
+    double downval = std::floor(fracval);
 
     auto analyzeSolution = [&](double objdelta,
                                const std::vector<double>& sol) {
@@ -420,8 +420,8 @@ HighsInt HighsSearch::selectBranchingCandidate(int64_t maxSbIters,
       for (HighsInt k = 0; k != numfrac; ++k) {
         if (fracints[k].first == col) continue;
         double otherfracval = fracints[k].second;
-        double otherdownval = calcFloor(fracints[k].second);
-        double otherupval = calcCeil(fracints[k].second);
+        double otherdownval = std::floor(fracints[k].second);
+        double otherupval = std::ceil(fracints[k].second);
         if (sol[fracints[k].first] <=
             otherdownval + mipsolver.mipdata_->feastol) {
           if (localdom.col_upper_[fracints[k].first] >
@@ -1230,14 +1230,14 @@ HighsSearch::NodeResult HighsSearch::branch() {
         case ChildSelectionRule::kUp:
           currnode.branchingdecision.boundtype = HighsBoundType::kLower;
           currnode.branchingdecision.boundval =
-              calcCeil(currnode.branching_point);
+              std::ceil(currnode.branching_point);
           currnode.other_child_lb = downNodeLb;
           childLb = upNodeLb;
           break;
         case ChildSelectionRule::kDown:
           currnode.branchingdecision.boundtype = HighsBoundType::kUpper;
           currnode.branchingdecision.boundval =
-              calcFloor(currnode.branching_point);
+              std::floor(currnode.branching_point);
           currnode.other_child_lb = upNodeLb;
           childLb = downNodeLb;
           break;
@@ -1246,8 +1246,8 @@ HighsSearch::NodeResult HighsSearch::branch() {
                             mipsolver.mipdata_->epsilon;
           double upPrio =
               pseudocost.getAvgInferencesUp(col) + mipsolver.mipdata_->epsilon;
-          double downVal = calcFloor(currnode.branching_point);
-          double upVal = calcCeil(currnode.branching_point);
+          double downVal = std::floor(currnode.branching_point);
+          double upVal = std::ceil(currnode.branching_point);
           if (!subrootsol.empty()) {
             double rootsol = subrootsol[col];
             if (rootsol < downVal)
@@ -1289,13 +1289,13 @@ HighsSearch::NodeResult HighsSearch::branch() {
           if (mipsolver.colCost(col) >= 0) {
             currnode.branchingdecision.boundtype = HighsBoundType::kLower;
             currnode.branchingdecision.boundval =
-                calcCeil(currnode.branching_point);
+                std::ceil(currnode.branching_point);
             currnode.other_child_lb = downNodeLb;
             childLb = upNodeLb;
           } else {
             currnode.branchingdecision.boundtype = HighsBoundType::kUpper;
             currnode.branchingdecision.boundval =
-                calcFloor(currnode.branching_point);
+                std::floor(currnode.branching_point);
             currnode.other_child_lb = upNodeLb;
             childLb = downNodeLb;
           }
@@ -1304,13 +1304,13 @@ HighsSearch::NodeResult HighsSearch::branch() {
           if (random.bit()) {
             currnode.branchingdecision.boundtype = HighsBoundType::kLower;
             currnode.branchingdecision.boundval =
-                calcCeil(currnode.branching_point);
+                std::ceil(currnode.branching_point);
             currnode.other_child_lb = downNodeLb;
             childLb = upNodeLb;
           } else {
             currnode.branchingdecision.boundtype = HighsBoundType::kUpper;
             currnode.branchingdecision.boundval =
-                calcFloor(currnode.branching_point);
+                std::floor(currnode.branching_point);
             currnode.other_child_lb = upNodeLb;
             childLb = downNodeLb;
           }
@@ -1322,13 +1322,13 @@ HighsSearch::NodeResult HighsSearch::branch() {
                                            mipsolver.mipdata_->feastol)) {
             currnode.branchingdecision.boundtype = HighsBoundType::kUpper;
             currnode.branchingdecision.boundval =
-                calcFloor(currnode.branching_point);
+                std::floor(currnode.branching_point);
             currnode.other_child_lb = upNodeLb;
             childLb = downNodeLb;
           } else {
             currnode.branchingdecision.boundtype = HighsBoundType::kLower;
             currnode.branchingdecision.boundval =
-                calcCeil(currnode.branching_point);
+                std::ceil(currnode.branching_point);
             currnode.other_child_lb = downNodeLb;
             childLb = upNodeLb;
           }
@@ -1339,13 +1339,13 @@ HighsSearch::NodeResult HighsSearch::branch() {
               pseudocost.getPseudocostDown(col, currnode.branching_point)) {
             currnode.branchingdecision.boundtype = HighsBoundType::kLower;
             currnode.branchingdecision.boundval =
-                calcCeil(currnode.branching_point);
+                std::ceil(currnode.branching_point);
             currnode.other_child_lb = downNodeLb;
             childLb = upNodeLb;
           } else {
             currnode.branchingdecision.boundtype = HighsBoundType::kUpper;
             currnode.branchingdecision.boundval =
-                calcFloor(currnode.branching_point);
+                std::floor(currnode.branching_point);
             currnode.other_child_lb = upNodeLb;
             childLb = downNodeLb;
           }
@@ -1358,26 +1358,26 @@ HighsSearch::NodeResult HighsSearch::branch() {
           if (numnodesup > numnodesdown) {
             currnode.branchingdecision.boundtype = HighsBoundType::kLower;
             currnode.branchingdecision.boundval =
-                calcCeil(currnode.branching_point);
+                std::ceil(currnode.branching_point);
             currnode.other_child_lb = downNodeLb;
             childLb = upNodeLb;
           } else if (numnodesdown > numnodesup) {
             currnode.branchingdecision.boundtype = HighsBoundType::kUpper;
             currnode.branchingdecision.boundval =
-                calcFloor(currnode.branching_point);
+                std::floor(currnode.branching_point);
             currnode.other_child_lb = upNodeLb;
             childLb = downNodeLb;
           } else {
             if (mipsolver.colCost(col) >= 0) {
               currnode.branchingdecision.boundtype = HighsBoundType::kLower;
               currnode.branchingdecision.boundval =
-                  calcCeil(currnode.branching_point);
+                  std::ceil(currnode.branching_point);
               currnode.other_child_lb = downNodeLb;
               childLb = upNodeLb;
             } else {
               currnode.branchingdecision.boundtype = HighsBoundType::kUpper;
               currnode.branchingdecision.boundval =
-                  calcFloor(currnode.branching_point);
+                  std::floor(currnode.branching_point);
               currnode.other_child_lb = upNodeLb;
               childLb = downNodeLb;
             }
@@ -1385,8 +1385,8 @@ HighsSearch::NodeResult HighsSearch::branch() {
           break;
         }
         case ChildSelectionRule::kHybridInferenceCost: {
-          double upVal = calcCeil(currnode.branching_point);
-          double downVal = calcFloor(currnode.branching_point);
+          double upVal = std::ceil(currnode.branching_point);
+          double downVal = std::floor(currnode.branching_point);
           double upScore =
               (1 + pseudocost.getAvgInferencesUp(col)) /
               pseudocost.getPseudocostUp(col, currnode.branching_point,
@@ -1440,8 +1440,8 @@ HighsSearch::NodeResult HighsSearch::branch() {
       double fracval;
       if (localdom.col_lower_[i] != -kHighsInf &&
           localdom.col_upper_[i] != kHighsInf)
-        fracval = calcFloor(0.5 * (localdom.col_lower_[i] +
-                                   localdom.col_upper_[i] + 0.5)) +
+        fracval = std::floor(0.5 * (localdom.col_lower_[i] +
+                                    localdom.col_upper_[i] + 0.5)) +
                   0.5;
       if (localdom.col_lower_[i] != -kHighsInf)
         fracval = localdom.col_lower_[i] + 0.5;
@@ -1487,13 +1487,13 @@ HighsSearch::NodeResult HighsSearch::branch() {
           branchUpwards = colLowerPos <= colUpperPos;
         }
         if (branchUpwards) {
-          double upval = calcCeil(fracval);
+          double upval = std::ceil(fracval);
           currnode.branching_point = upval;
           currnode.branchingdecision.boundtype = HighsBoundType::kLower;
           currnode.branchingdecision.column = i;
           currnode.branchingdecision.boundval = upval;
         } else {
-          double downval = calcFloor(fracval);
+          double downval = std::floor(fracval);
           currnode.branching_point = downval;
           currnode.branchingdecision.boundtype = HighsBoundType::kUpper;
           currnode.branchingdecision.column = i;
@@ -1648,11 +1648,11 @@ bool HighsSearch::backtrack(bool recoverBasis) {
     if (currnode.branchingdecision.boundtype == HighsBoundType::kLower) {
       currnode.branchingdecision.boundtype = HighsBoundType::kUpper;
       currnode.branchingdecision.boundval =
-          calcFloor(currnode.branchingdecision.boundval, -0.5);
+          std::floor(currnode.branchingdecision.boundval - 0.5);
     } else {
       currnode.branchingdecision.boundtype = HighsBoundType::kLower;
       currnode.branchingdecision.boundval =
-          calcCeil(currnode.branchingdecision.boundval, -0.5);
+          std::ceil(currnode.branchingdecision.boundval + 0.5);
     }
 
     if (fallbackbranch)
@@ -1771,14 +1771,14 @@ bool HighsSearch::backtrackPlunge(HighsNodeQueue& nodequeue) {
     if (currnode.branchingdecision.boundtype == HighsBoundType::kLower) {
       currnode.branchingdecision.boundtype = HighsBoundType::kUpper;
       currnode.branchingdecision.boundval =
-          calcFloor(currnode.branchingdecision.boundval, -0.5);
+          std::floor(currnode.branchingdecision.boundval - 0.5);
       nodeScore = pseudocost.getScoreDown(
           currnode.branchingdecision.column,
           fallbackbranch ? 0.5 : currnode.branching_point);
     } else {
       currnode.branchingdecision.boundtype = HighsBoundType::kLower;
       currnode.branchingdecision.boundval =
-          calcCeil(currnode.branchingdecision.boundval, -0.5);
+          std::ceil(currnode.branchingdecision.boundval + 0.5);
       nodeScore = pseudocost.getScoreUp(
           currnode.branchingdecision.column,
           fallbackbranch ? 0.5 : currnode.branching_point);
@@ -1916,11 +1916,11 @@ bool HighsSearch::backtrackUntilDepth(HighsInt targetDepth) {
   if (currnode.branchingdecision.boundtype == HighsBoundType::kLower) {
     currnode.branchingdecision.boundtype = HighsBoundType::kUpper;
     currnode.branchingdecision.boundval =
-        calcFloor(currnode.branchingdecision.boundval, -0.5);
+        std::floor(currnode.branchingdecision.boundval - 0.5);
   } else {
     currnode.branchingdecision.boundtype = HighsBoundType::kLower;
     currnode.branchingdecision.boundval =
-        calcCeil(currnode.branchingdecision.boundval, -0.5);
+        std::ceil(currnode.branchingdecision.boundval + 0.5);
   }
 
   if (fallbackbranch)

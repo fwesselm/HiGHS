@@ -510,9 +510,9 @@ void HighsMipSolver::cleanupSolve() {
   dual_bound_ = mipdata_->lower_bound;
   if (mipdata_->objectiveFunction.isIntegral()) {
     double rounded_lower_bound =
-        calcCeil(
-            mipdata_->lower_bound * mipdata_->objectiveFunction.integralScale(),
-            mipdata_->feastol) /
+        std::ceil(mipdata_->lower_bound *
+                      mipdata_->objectiveFunction.integralScale() -
+                  mipdata_->feastol) /
         mipdata_->objectiveFunction.integralScale();
     dual_bound_ = std::max(dual_bound_, rounded_lower_bound);
   }

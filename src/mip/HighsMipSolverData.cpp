@@ -216,22 +216,23 @@ double HighsMipSolverData::computeNewUpperLimit(double ub, double mip_abs_gap,
                                                 double mip_rel_gap) const {
   double new_upper_limit;
   if (objectiveFunction.isIntegral()) {
-    new_upper_limit = (calcFloor(objectiveFunction.integralScale() * ub - 0.5) /
-                       objectiveFunction.integralScale());
+    new_upper_limit =
+        (std::floor(objectiveFunction.integralScale() * ub - 0.5) /
+         objectiveFunction.integralScale());
 
     if (mip_rel_gap != 0.0)
       new_upper_limit = std::min(
           new_upper_limit,
-          ub - calcCeil(mip_rel_gap * fabs(ub + mipsolver.model_->offset_) *
-                            objectiveFunction.integralScale(),
-                        mipsolver.mipdata_->epsilon) /
+          ub - std::ceil(mip_rel_gap * fabs(ub + mipsolver.model_->offset_) *
+                             objectiveFunction.integralScale() -
+                         mipsolver.mipdata_->epsilon) /
                    objectiveFunction.integralScale());
 
     if (mip_abs_gap != 0.0)
       new_upper_limit = std::min(
           new_upper_limit,
-          ub - calcCeil(mip_abs_gap * objectiveFunction.integralScale(),
-                        mipsolver.mipdata_->epsilon) /
+          ub - std::ceil(mip_abs_gap * objectiveFunction.integralScale() -
+                         mipsolver.mipdata_->epsilon) /
                    objectiveFunction.integralScale());
 
     // add feasibility tolerance so that the next best integer feasible solution
@@ -536,11 +537,11 @@ void HighsMipSolverData::runSetup() {
     if (integral) {
       if (presolvedModel.row_lower_[i] != -kHighsInf)
         presolvedModel.row_lower_[i] =
-            calcCeil(presolvedModel.row_lower_[i], feastol);
+            std::ceil(presolvedModel.row_lower_[i] - feastol);
 
       if (presolvedModel.row_upper_[i] != kHighsInf)
         presolvedModel.row_upper_[i] =
-            calcFloor(presolvedModel.row_upper_[i], feastol);
+            std::floor(presolvedModel.row_upper_[i] + feastol);
     }
 
     rowintegral[i] = integral;
@@ -606,7 +607,7 @@ void HighsMipSolverData::runSetup() {
         }
         integer_cols.push_back(i);
         integral_cols.push_back(i);
-        maxTreeSizeLog2 += (HighsInt)calcCeil(
+        maxTreeSizeLog2 += (HighsInt)std::ceil(
             std::log2(std::min(1024.0, 1.0 + mipsolver.model_->col_upper_[i] -
                                            mipsolver.model_->col_lower_[i])));
         // NB Since this is for counting the number of times the

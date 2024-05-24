@@ -460,7 +460,7 @@ void HighsPathSeparator::separateLpSolution(HighsLpRelaxation& lpRelaxation,
         }
 
         if (pathLen > 1) {
-          delta = std::exp2(calcCeil(std::log2(delta + 1.0)));
+          delta = std::exp2(std::ceil(std::log2(delta + 1.0)));
 
           HighsInt numInds = inds.size();
 
@@ -489,7 +489,7 @@ void HighsPathSeparator::separateLpSolution(HighsLpRelaxation& lpRelaxation,
                   cutVals[i] = std::max(cutVals[i], gj);
                   break;
                 case 1: {
-                  double gjdown = calcFloor(gj);
+                  double gjdown = std::floor(gj);
                   double hj = gj - gjdown;
                   maxFrac[i] = std::max(maxFrac[i], hj);
                   downSum[i] += fDiff * gjdown;

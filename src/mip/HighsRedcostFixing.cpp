@@ -107,9 +107,9 @@ void HighsRedcostFixing::propagateRedCost(const HighsMipSolver& mipsolver,
     if (maxIncrease > gap) {
       assert(localdomain.col_lower_[col] != -kHighsInf);
       assert(lpredcost[col] > tolerance);
-      double newub =
-          double(calcFloor(gap / lpredcost[col] + localdomain.col_lower_[col],
-                           mipsolver.mipdata_->feastol));
+      double newub = static_cast<double>(floor(gap / lpredcost[col] +
+                                               localdomain.col_lower_[col] +
+                                               mipsolver.mipdata_->feastol));
       if (newub >= localdomain.col_upper_[col]) continue;
       assert(newub < localdomain.col_upper_[col]);
 
@@ -124,9 +124,9 @@ void HighsRedcostFixing::propagateRedCost(const HighsMipSolver& mipsolver,
     } else if (maxIncrease < -gap) {
       assert(localdomain.col_upper_[col] != kHighsInf);
       assert(lpredcost[col] < -tolerance);
-      double newlb =
-          double(calcCeil(gap / lpredcost[col] + localdomain.col_upper_[col],
-                          mipsolver.mipdata_->feastol));
+      double newlb = static_cast<double>(ceil(gap / lpredcost[col] +
+                                              localdomain.col_upper_[col] -
+                                              mipsolver.mipdata_->feastol));
 
       if (newlb <= localdomain.col_lower_[col]) continue;
       assert(newlb > localdomain.col_lower_[col]);
@@ -225,8 +225,8 @@ void HighsRedcostFixing::addRootRedcost(const HighsMipSolver& mipsolver,
       if (mipsolver.mipdata_->domain.col_upper_[col] == kHighsInf)
         maxub = lb + 1024;
       else
-        maxub = (HighsInt)calcFloor(mipsolver.mipdata_->domain.col_upper_[col],
-                                    -0.5);
+        maxub = (HighsInt)std::floor(
+            mipsolver.mipdata_->domain.col_upper_[col] - 0.5);
 
       HighsInt step = 1;
       if (maxub - lb > 1024) step = (maxub - lb + 1023) >> 10;
