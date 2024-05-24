@@ -3002,7 +3002,7 @@ bool HighsDomain::ConflictSet::resolveLinearGeq(HighsCDouble M, double Mupper,
               double(((Mupper - (M - reasonDomchg.delta)) / vals[i]) + glb);
           if (localdom.mipsolver->variableType(col) !=
               HighsVarType::kContinuous)
-            relaxLb = std::ceil(relaxLb);
+            relaxLb = std::ceil(relaxLb - localdom.feastol());
 
           if (relaxLb - lb >= -localdom.feastol()) continue;
 
@@ -3034,7 +3034,7 @@ bool HighsDomain::ConflictSet::resolveLinearGeq(HighsCDouble M, double Mupper,
               double(((Mupper - (M - reasonDomchg.delta)) / vals[i]) + gub);
           if (localdom.mipsolver->variableType(col) !=
               HighsVarType::kContinuous)
-            relaxUb = std::floor(relaxUb);
+            relaxUb = std::floor(relaxUb + localdom.feastol());
 
           if (relaxUb - ub <= localdom.feastol()) continue;
           locdomchg.domchg.boundval = relaxUb;
@@ -3116,7 +3116,7 @@ bool HighsDomain::ConflictSet::resolveLinearLeq(HighsCDouble M, double Mlower,
               double(((Mlower - (M - reasonDomchg.delta)) / vals[i]) + glb);
           if (localdom.mipsolver->variableType(col) !=
               HighsVarType::kContinuous)
-            relaxLb = std::ceil(relaxLb);
+            relaxLb = std::ceil(relaxLb - localdom.feastol());
 
           if (relaxLb - lb >= -localdom.feastol()) continue;
 
@@ -3148,7 +3148,7 @@ bool HighsDomain::ConflictSet::resolveLinearLeq(HighsCDouble M, double Mlower,
               double(((Mlower - (M - reasonDomchg.delta)) / vals[i]) + gub);
           if (localdom.mipsolver->variableType(col) !=
               HighsVarType::kContinuous)
-            relaxUb = std::floor(relaxUb);
+            relaxUb = std::floor(relaxUb + localdom.feastol());
 
           if (relaxUb - ub <= localdom.feastol()) continue;
 
