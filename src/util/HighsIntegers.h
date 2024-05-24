@@ -20,6 +20,7 @@
 
 #include "util/HighsCDouble.h"
 #include "util/HighsInt.h"
+#include "util/HighsUtils.h"
 
 class HighsIntegers {
  public:
