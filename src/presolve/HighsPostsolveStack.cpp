@@ -928,8 +928,7 @@ bool HighsPostsolveStack::DuplicateColumn::okMerge(
   if (x_int) {
     if (y_int) {
       // Scale must be integer and not exceed (x_u-x_l)+1 in magnitude
-      bool scale_is_int = calcFrac(scale) <= tolerance;
-      if (!scale_is_int) {
+      if (calcFrac(scale) > tolerance) {
         if (debug_report)
           printf(
               "%sDuplicateColumn::checkMerge: scale must be integer, but is "
