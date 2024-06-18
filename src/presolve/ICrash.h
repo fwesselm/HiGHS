@@ -60,7 +60,7 @@ struct ICrashInfo {
 };
 
 struct ICrashOptions {
-  bool dualize = 0.0;
+  bool dualize = false;
   ICrashStrategy strategy;
   double starting_weight = 0.0;
   HighsInt iterations = 0;
