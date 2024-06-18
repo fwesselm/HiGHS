@@ -41,10 +41,10 @@ enum LogDevLevel {
 };
 
 struct HighsLogOptions {
-  FILE* log_stream;
-  bool* output_flag;
-  bool* log_to_console;
-  HighsInt* log_dev_level;
+  FILE* log_stream = nullptr;
+  bool* output_flag = nullptr;
+  bool* log_to_console = nullptr;
+  HighsInt* log_dev_level = nullptr;
   void (*user_log_callback)(HighsLogType, const char*, void*) = nullptr;
   void* user_log_callback_data = nullptr;
   std::function<void(int, const std::string&, const HighsCallbackDataOut*,

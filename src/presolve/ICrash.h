@@ -32,15 +32,15 @@ enum class ICrashStrategy {
 };
 
 struct ICrashIterationDetails {
-  int num;
-  double weight;
-  double lambda_norm_2;
+  int num = 0;
+  double weight = 0.0;
+  double lambda_norm_2 = 0.0;
 
-  double lp_objective;
-  double quadratic_objective;
-  double residual_norm_2;
+  double lp_objective = 0.0;
+  double quadratic_objective = 0.0;
+  double residual_norm_2 = 0.0;
 
-  double time;
+  double time = 0.0;
 };
 
 struct ICrashInfo {
@@ -60,13 +60,13 @@ struct ICrashInfo {
 };
 
 struct ICrashOptions {
-  bool dualize;
+  bool dualize = 0.0;
   ICrashStrategy strategy;
-  double starting_weight;
-  HighsInt iterations;
-  HighsInt approximate_minimization_iterations;
-  bool exact;
-  bool breakpoints;  // gets ignored if exact is set to true
+  double starting_weight = 0.0;
+  HighsInt iterations = 0;
+  HighsInt approximate_minimization_iterations = 0;
+  bool exact = false;
+  bool breakpoints = false;  // gets ignored if exact is set to true
   HighsLogOptions log_options;
 };
 
@@ -85,7 +85,13 @@ struct Quadratic {
   double mu;
   std::vector<double> lambda;
 
-  Quadratic(HighsLp lp_, ICrashOptions options_) : lp(lp_), options(options_) {}
+  Quadratic(HighsLp lp_, ICrashOptions options_)
+      : lp(lp_),
+        options(options_),
+        lp_objective(0.0),
+        quadratic_objective(0.0),
+        residual_norm_2(0.0),
+        mu(0.0) {}
 };
 
 // Functions: Call.

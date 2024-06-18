@@ -48,40 +48,40 @@ struct HighsIndexCollection {
 };
 
 struct HighsValueDistribution {
-  std::string distribution_name_;
-  std::string value_name_;
-  HighsInt num_count_;
-  HighsInt num_zero_;
-  HighsInt num_one_;
-  double min_value_;
-  double max_value_;
+  std::string distribution_name_ = "";
+  std::string value_name_ = "";
+  HighsInt num_count_ = 0;
+  HighsInt num_zero_ = 0;
+  HighsInt num_one_ = 0;
+  double min_value_ = 0.0;
+  double max_value_ = 0.0;
   std::vector<double> limit_;
   std::vector<HighsInt> count_;
-  HighsInt sum_count_;
+  HighsInt sum_count_ = 0;
 };
 
 struct HighsScatterData {
-  HighsInt max_num_point_;
-  HighsInt num_point_;
-  HighsInt last_point_;
+  HighsInt max_num_point_ = 0;
+  HighsInt num_point_ = 0;
+  HighsInt last_point_ = 0;
   std::vector<double> value0_;
   std::vector<double> value1_;
   bool have_regression_coeff_;
-  double linear_coeff0_;
-  double linear_coeff1_;
-  double linear_regression_error_;
-  double log_coeff0_;
-  double log_coeff1_;
-  double log_regression_error_;
-  HighsInt num_error_comparison_;
-  HighsInt num_awful_linear_;
-  HighsInt num_awful_log_;
-  HighsInt num_bad_linear_;
-  HighsInt num_bad_log_;
-  HighsInt num_fair_linear_;
-  HighsInt num_fair_log_;
-  HighsInt num_better_linear_;
-  HighsInt num_better_log_;
+  double linear_coeff0_ = 0.0;
+  double linear_coeff1_ = 0.0;
+  double linear_regression_error_ = 0.0;
+  double log_coeff0_ = 0.0;
+  double log_coeff1_ = 0.0;
+  double log_regression_error_ = 0.0;
+  HighsInt num_error_comparison_ = 0;
+  HighsInt num_awful_linear_ = 0;
+  HighsInt num_awful_log_ = 0;
+  HighsInt num_bad_linear_ = 0;
+  HighsInt num_bad_log_ = 0;
+  HighsInt num_fair_linear_ = 0;
+  HighsInt num_fair_log_ = 0;
+  HighsInt num_better_linear_ = 0;
+  HighsInt num_better_log_ = 0;
 };
 
 const double awful_regression_error = 2.0;
