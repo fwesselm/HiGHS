@@ -25,13 +25,13 @@ struct SimplexBasis {
   // The basis for the simplex method consists of basicIndex,
   // nonbasicFlag and nonbasicMove. If HighsSimplexStatus has_basis
   // is true then it is assumed that basicIndex_ and nonbasicFlag_ are
-  // self-consistent and correpond to the dimensions of an associated
+  // self-consistent and correspond to the dimensions of an associated
   // HighsLp, but the basis matrix B is not necessarily nonsingular.
   std::vector<HighsInt> basicIndex_;
   std::vector<int8_t> nonbasicFlag_;
   std::vector<int8_t> nonbasicMove_;
   //  std::vector<double> debug_dual;
-  uint64_t hash;
+  uint64_t hash = 0;
   HighsInt debug_id = -1;
   HighsInt debug_update_count = -1;
   std::string debug_origin_name = "";

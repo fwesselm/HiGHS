@@ -469,13 +469,13 @@ class HEkkDual {
    * @brief Multiple CHUZR data
    */
   struct MChoice {
-    HighsInt row_out;
-    double baseValue;
-    double baseLower;
-    double baseUpper;
-    double infeasValue;
-    double infeasEdWt;
-    double infeasLimit;
+    HighsInt row_out = 0;
+    double baseValue = 0.0;
+    double baseLower = 0.0;
+    double baseUpper = 0.0;
+    double infeasValue = 0.0;
+    double infeasEdWt = 0.0;
+    double infeasLimit = 0.0;
     HVector row_ep;
     HVector col_aq;
     HVector col_BFRT;
@@ -485,18 +485,18 @@ class HEkkDual {
    * @brief Multiple minor iteration data
    */
   struct MFinish {
-    HighsInt move_in;
-    double shiftOut;
+    HighsInt move_in = 0;
+    double shiftOut = 0.0;
     std::vector<HighsInt> flipList;
 
-    HighsInt row_out;
-    HighsInt variable_out;
-    HighsInt variable_in;
-    double alpha_row;
-    double theta_primal;
-    double basicBound;
-    double basicValue;
-    double EdWt;
+    HighsInt row_out = 0;
+    HighsInt variable_out = 0;
+    HighsInt variable_in = 0;
+    double alpha_row = 0.0;
+    double theta_primal = 0.0;
+    double basicBound = 0.0;
+    double basicValue = 0.0;
+    double EdWt = 0.0;
     HVector_ptr row_ep;
     HVector_ptr col_aq;
     HVector_ptr col_BFRT;

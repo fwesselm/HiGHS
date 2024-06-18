@@ -438,7 +438,7 @@ void HighsCliqueTable::doAddClique(const CliqueVar* cliquevars,
         cliqueid);
 }
 struct ThreadNeighbourhoodQueryData {
-  int64_t numQueries;
+  int64_t numQueries = 0;
   std::vector<HighsInt> neighbourhoodInds;
 };
 
