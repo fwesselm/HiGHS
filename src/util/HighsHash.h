@@ -571,8 +571,8 @@ struct HighsHashHelpers {
                                     int>::type = 0>
   static u64 hash(const T& val) {
     std::array<u32, 2> bytes;
-    if constexpr(sizeof(T) < 4) bytes[0] = 0;
-    if constexpr(sizeof(T) < 8) bytes[1] = 0;
+    if constexpr (sizeof(T) < 4) bytes[0] = 0;
+    if constexpr (sizeof(T) < 8) bytes[1] = 0;
     std::memcpy(&bytes[0], &val, sizeof(T));
     return pair_hash<1>(bytes[0], bytes[1]) ^
            pair_hash<0>(bytes[0], bytes[1]) >> 32;
@@ -584,8 +584,8 @@ struct HighsHashHelpers {
                                     int>::type = 0>
   static u64 hash(const T& val) {
     std::array<u32, 4> bytes;
-    if constexpr(sizeof(T) < 12) bytes[2] = 0;
-    if constexpr(sizeof(T) < 16) bytes[3] = 0;
+    if constexpr (sizeof(T) < 12) bytes[2] = 0;
+    if constexpr (sizeof(T) < 16) bytes[3] = 0;
     std::memcpy(&bytes[0], &val, sizeof(T));
     return (pair_hash<0>(bytes[0], bytes[1]) ^
             (pair_hash<1>(bytes[2], bytes[3]) >> 32)) *
@@ -598,8 +598,8 @@ struct HighsHashHelpers {
                                     int>::type = 0>
   static u64 hash(const T& val) {
     std::array<u32, 6> bytes;
-    if constexpr(sizeof(T) < 20) bytes[4] = 0;
-    if constexpr(sizeof(T) < 24) bytes[5] = 0;
+    if constexpr (sizeof(T) < 20) bytes[4] = 0;
+    if constexpr (sizeof(T) < 24) bytes[5] = 0;
     std::memcpy(&bytes[0], &val, sizeof(T));
     return (pair_hash<0>(bytes[0], bytes[1]) ^
             ((pair_hash<1>(bytes[2], bytes[3]) +
@@ -614,8 +614,8 @@ struct HighsHashHelpers {
                                     int>::type = 0>
   static u64 hash(const T& val) {
     std::array<u32, 8> bytes;
-    if constexpr(sizeof(T) < 28) bytes[6] = 0;
-    if constexpr(sizeof(T) < 32) bytes[7] = 0;
+    if constexpr (sizeof(T) < 28) bytes[6] = 0;
+    if constexpr (sizeof(T) < 32) bytes[7] = 0;
     std::memcpy(&bytes[0], &val, sizeof(T));
     return ((pair_hash<0>(bytes[0], bytes[1]) +
              pair_hash<1>(bytes[2], bytes[3])) ^
@@ -631,8 +631,8 @@ struct HighsHashHelpers {
                                     int>::type = 0>
   static u64 hash(const T& val) {
     std::array<u32, 10> bytes;
-    if constexpr(sizeof(T) < 36) bytes[8] = 0;
-    if constexpr(sizeof(T) < 40) bytes[9] = 0;
+    if constexpr (sizeof(T) < 36) bytes[8] = 0;
+    if constexpr (sizeof(T) < 40) bytes[9] = 0;
     std::memcpy(&bytes[0], &val, sizeof(T));
     return ((pair_hash<0>(bytes[0], bytes[1]) +
              pair_hash<1>(bytes[2], bytes[3])) ^
@@ -649,8 +649,8 @@ struct HighsHashHelpers {
                                     int>::type = 0>
   static u64 hash(const T& val) {
     std::array<u32, 12> bytes;
-    if constexpr(sizeof(T) < 44) bytes[10] = 0;
-    if constexpr(sizeof(T) < 48) bytes[11] = 0;
+    if constexpr (sizeof(T) < 44) bytes[10] = 0;
+    if constexpr (sizeof(T) < 48) bytes[11] = 0;
     std::memcpy(&bytes[0], &val, sizeof(T));
     return ((pair_hash<0>(bytes[0], bytes[1]) +
              pair_hash<1>(bytes[2], bytes[3]) +
@@ -668,8 +668,8 @@ struct HighsHashHelpers {
                                     int>::type = 0>
   static u64 hash(const T& val) {
     std::array<u32, 14> bytes;
-    if constexpr(sizeof(T) < 52) bytes[12] = 0;
-    if constexpr(sizeof(T) < 56) bytes[13] = 0;
+    if constexpr (sizeof(T) < 52) bytes[12] = 0;
+    if constexpr (sizeof(T) < 56) bytes[13] = 0;
     std::memcpy(&bytes[0], &val, sizeof(T));
     return ((pair_hash<0>(bytes[0], bytes[1]) +
              pair_hash<1>(bytes[2], bytes[3]) +
@@ -688,8 +688,8 @@ struct HighsHashHelpers {
                                     int>::type = 0>
   static u64 hash(const T& val) {
     std::array<u32, 16> bytes;
-    if constexpr(sizeof(T) < 60) bytes[14] = 0;
-    if constexpr(sizeof(T) < 64) bytes[15] = 0;
+    if constexpr (sizeof(T) < 60) bytes[14] = 0;
+    if constexpr (sizeof(T) < 64) bytes[15] = 0;
     std::memcpy(&bytes[0], &val, sizeof(T));
     return ((pair_hash<0>(bytes[0], bytes[1]) +
              pair_hash<1>(bytes[2], bytes[3]) +
