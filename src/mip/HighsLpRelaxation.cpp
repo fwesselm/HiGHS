@@ -165,7 +165,19 @@ double HighsLpRelaxation::slackUpper(HighsInt row) const {
 }
 
 HighsLpRelaxation::HighsLpRelaxation(const HighsMipSolver& mipsolver)
-    : mipsolver(mipsolver) {
+    : mipsolver(mipsolver),
+      dualproofrhs(0.0),
+      hasdualproof(false),
+      objective(-kHighsInf),
+      currentbasisstored(false),
+      numlpiters(0),
+      lastAgeCall(0),
+      avgSolveIters(0.0),
+      numSolved(0),
+      epochs(0),
+      maxNumFractional(0),
+      status(Status::kNotSet),
+      adjustSymBranchingCol(true) {
   lpsolver.setOptionValue("output_flag", false);
   lpsolver.setOptionValue("random_seed", mipsolver.options_mip_->random_seed);
   lpsolver.setOptionValue("primal_feasibility_tolerance",
@@ -173,16 +185,6 @@ HighsLpRelaxation::HighsLpRelaxation(const HighsMipSolver& mipsolver)
   lpsolver.setOptionValue(
       "dual_feasibility_tolerance",
       mipsolver.options_mip_->mip_feasibility_tolerance * 0.1);
-  status = Status::kNotSet;
-  numlpiters = 0;
-  avgSolveIters = 0;
-  numSolved = 0;
-  epochs = 0;
-  maxNumFractional = 0;
-  lastAgeCall = 0;
-  objective = -kHighsInf;
-  currentbasisstored = false;
-  adjustSymBranchingCol = true;
   row_ep.size = 0;
 }
 
@@ -221,11 +223,11 @@ void HighsLpRelaxation::loadModel() {
   for (HighsInt i = 0; i != lpmodel.num_row_; ++i)
     lprows.push_back(LpRow::model(i));
   lpmodel.integrality_.clear();
+  colLbBuffer.resize(lpmodel.num_col_);
+  colUbBuffer.resize(lpmodel.num_col_);
   lpsolver.clearSolver();
   lpsolver.clearModel();
   lpsolver.passModel(std::move(lpmodel));
-  colLbBuffer.resize(lpmodel.num_col_);
-  colUbBuffer.resize(lpmodel.num_col_);
 }
 
 void HighsLpRelaxation::resetToGlobalDomain() {
