@@ -25,7 +25,7 @@
 #include "parallel/HighsSpinMutex.h"
 
 class HighsBinarySemaphore {
-public:
+ public:
   struct Data {
     std::atomic<int> count;
     alignas(64) std::mutex mutex;
@@ -34,7 +34,11 @@ public:
     Data(int init) : count(init) {}
   };
 
-private:
+  struct Data2 {
+    highs::cache_aligned::unique_ptr<Data> mydata = nullptr;
+  };
+
+ private:
   highs::cache_aligned::unique_ptr<Data> data_ = nullptr;
 
  public:
