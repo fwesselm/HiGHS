@@ -114,6 +114,12 @@ class HighsBinarySemaphore {
 
     data_->count.store(0, std::memory_order_relaxed);
   }
+
+  HighsBinarySemaphore(HighsBinarySemaphore const&) = delete;
+  HighsBinarySemaphore& operator=(HighsBinarySemaphore const&) = delete;
+  HighsBinarySemaphore& operator=(HighsBinarySemaphore&&) = delete;
+  HighsBinarySemaphore(HighsBinarySemaphore&&) = delete;
+
 };
 
 #endif
