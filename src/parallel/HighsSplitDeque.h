@@ -258,6 +258,8 @@ class HighsSplitDeque {
     splitRequest.store(false, std::memory_order_relaxed);
 
     assert((reinterpret_cast<uintptr_t>(this) & 63u) == 0);
+    static_assert(std::is_standard_layout_v<HighsSplitDeque>,
+                  "HighsSplitDeque is not standard-layout");
     static_assert(offsetof(HighsSplitDeque, splitRequest) == 64,
                   "alignas failed to guarantee 64 byte alignment");
     static_assert(offsetof(HighsSplitDeque, stealerData) == 128,
