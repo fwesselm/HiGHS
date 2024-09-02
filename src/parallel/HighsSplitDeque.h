@@ -279,6 +279,9 @@ class HighsSplitDeque {
     static_assert(std::is_standard_layout<HighsTask>::value,
                   "offsetof behavior may be undefined since "
                   "HighsTask is not standard-layout");
+    static_assert(std::is_standard_layout<HighsBinarySemaphore>::value,
+                  "offsetof behavior may be undefined since "
+                  "HighsBinarySemaphore is not standard-layout");
     static_assert(offsetof(HighsSplitDeque, splitRequest) == 64,
                   "alignas failed to guarantee 64 byte alignment");
     static_assert(offsetof(HighsSplitDeque, stealerData) == 128,
