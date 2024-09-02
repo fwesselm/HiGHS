@@ -32,6 +32,10 @@ class HighsBinarySemaphore {
     std::condition_variable condvar;
 
     Data(int init) : count(init) {}
+    Data(Data const&) = delete;
+    Data& operator=(Data const&) = delete;
+    Data& operator=(Data&&) = delete;
+    Data(Data&&) = delete;
   };
 
   struct Data2 {
@@ -114,12 +118,6 @@ class HighsBinarySemaphore {
 
     data_->count.store(0, std::memory_order_relaxed);
   }
-
-  HighsBinarySemaphore(HighsBinarySemaphore const&) = delete;
-  HighsBinarySemaphore& operator=(HighsBinarySemaphore const&) = delete;
-  HighsBinarySemaphore& operator=(HighsBinarySemaphore&&) = delete;
-  HighsBinarySemaphore(HighsBinarySemaphore&&) = delete;
-
 };
 
 #endif
