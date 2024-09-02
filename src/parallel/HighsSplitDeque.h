@@ -261,6 +261,24 @@ class HighsSplitDeque {
     static_assert(std::is_standard_layout<HighsSplitDeque>::value,
                   "offsetof behavior may be undefined since "
                   "HighsSplitDeque is not standard-layout");
+    static_assert(std::is_standard_layout<OwnerData>::value,
+                  "offsetof behavior may be undefined since "
+                  "OwnerData is not standard-layout");
+    static_assert(std::is_standard_layout<StealerData>::value,
+                  "offsetof behavior may be undefined since "
+                  "StealerData is not standard-layout");
+    static_assert(std::is_standard_layout<TaskMetadata>::value,
+                  "offsetof behavior may be undefined since "
+                  "TaskMetadata is not standard-layout");
+    static_assert(std::is_standard_layout<WorkerBunkData>::value,
+                  "offsetof behavior may be undefined since "
+                  "WorkerBunkData is not standard-layout");
+    static_assert(std::is_standard_layout<WorkerBunk>::value,
+                  "offsetof behavior may be undefined since "
+                  "WorkerBunk is not standard-layout");
+    static_assert(std::is_standard_layout<HighsTask>::value,
+                  "offsetof behavior may be undefined since "
+                  "HighsTask is not standard-layout");
     static_assert(offsetof(HighsSplitDeque, splitRequest) == 64,
                   "alignas failed to guarantee 64 byte alignment");
     static_assert(offsetof(HighsSplitDeque, stealerData) == 128,
