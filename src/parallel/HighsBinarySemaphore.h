@@ -35,7 +35,7 @@ public:
   };
 
 private:
-  highs::cache_aligned::unique_ptr<Data> data_;
+  highs::cache_aligned::unique_ptr<Data> data_ = nullptr;
 
  public:
   HighsBinarySemaphore(bool init = false)
