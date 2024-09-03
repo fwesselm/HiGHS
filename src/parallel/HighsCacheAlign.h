@@ -80,6 +80,10 @@ struct cache_aligned {
   static unique_ptr<T[]> make_unique_array(std::size_t N) {
     return unique_ptr<T[]>(static_cast<T*>(alloc(sizeof(T) * N)));
   }
+
+  cache_aligned() noexcept = default;
+  cache_aligned(const cache_aligned&) = delete;
+  cache_aligned& operator=(const cache_aligned& UPtr) = delete;
 };
 
 }  // namespace highs
