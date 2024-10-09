@@ -715,7 +715,7 @@ void HPresolve::recomputeColImpliedBounds(HighsInt row) {
   // (removed / added non-zeros, etc.)
   if (colImplSourceByRow[row].empty()) return;
   std::set<HighsInt> affectedCols(colImplSourceByRow[row]);
-  for (const auto& col : affectedCols) {
+  for (const HighsInt& col : affectedCols) {
     // set implied bounds to infinite values if they were deduced from the given
     // row
     if (colLowerSource[col] == row) changeImplColLower(col, -kHighsInf, -1);
@@ -733,7 +733,7 @@ void HPresolve::recomputeRowDualImpliedBounds(HighsInt col) {
   // (removed / added non-zeros, etc.)
   if (implRowDualSourceByCol[col].empty()) return;
   std::set<HighsInt> affectedRows(implRowDualSourceByCol[col]);
-  for (const auto& row : affectedRows) {
+  for (const HighsInt& row : affectedRows) {
     // set implied bounds to infinite values if they were deduced from the given
     // column
     if (rowDualLowerSource[row] == col)
