@@ -65,6 +65,7 @@ HighsStatus Highs::clearModel() {
 HighsStatus Highs::clearSolver() {
   HighsStatus return_status = HighsStatus::kOk;
   clearPresolve();
+  clearStandardFormLp();
   invalidateUserSolverData();
   return returnFromHighs(return_status);
 }
@@ -1575,14 +1576,18 @@ HighsStatus Highs::run() {
                 "Postsolve  : %" HIGHSINT_FORMAT "\n",
                 postsolve_iteration_count);
   }
-  highsLogDev(log_options, HighsLogType::kInfo, "Time       : %8.2f\n",
-              this_solve_time);
-  highsLogDev(log_options, HighsLogType::kInfo, "Time Pre   : %8.2f\n",
-              this_presolve_time);
-  highsLogDev(log_options, HighsLogType::kInfo, "Time PreLP : %8.2f\n",
-              this_solve_presolved_lp_time);
-  highsLogDev(log_options, HighsLogType::kInfo, "Time PostLP: %8.2f\n",
-              this_solve_original_lp_time);
+  if (this_solve_time > 0)
+    highsLogDev(log_options, HighsLogType::kInfo, "Time       : %8.2f\n",
+                this_solve_time);
+  if (this_presolve_time > 0)
+    highsLogDev(log_options, HighsLogType::kInfo, "Time Pre   : %8.2f\n",
+                this_presolve_time);
+  if (this_solve_presolved_lp_time > 0)
+    highsLogDev(log_options, HighsLogType::kInfo, "Time PreLP : %8.2f\n",
+                this_solve_presolved_lp_time);
+  if (this_solve_original_lp_time > 0)
+    highsLogDev(log_options, HighsLogType::kInfo, "Time PostLP: %8.2f\n",
+                this_solve_original_lp_time);
   if (this_solve_time > 0) {
     highsLogDev(log_options, HighsLogType::kInfo, "For LP %16s",
                 incumbent_lp.model_name_.c_str());
@@ -1631,6 +1636,37 @@ HighsStatus Highs::run() {
       interpretCallStatus(options_.log_options, call_status, return_status,
                           "highsStatusFromHighsModelStatus");
   return returnFromRun(return_status, undo_mods);
+}
+
+HighsStatus Highs::getStandardFormLp(HighsInt& num_col, HighsInt& num_row,
+                                     HighsInt& num_nz, double& offset,
+                                     double* cost, double* rhs, HighsInt* start,
+                                     HighsInt* index, double* value) {
+  if (!this->standard_form_valid_) {
+    HighsStatus status = formStandardFormLp();
+    assert(status == HighsStatus::kOk);
+  }
+  num_col = this->standard_form_cost_.size();
+  num_row = this->standard_form_rhs_.size();
+  num_nz = this->standard_form_matrix_.start_[num_col];
+  offset = this->standard_form_offset_;
+  for (HighsInt iCol = 0; iCol < num_col; iCol++) {
+    if (cost) cost[iCol] = this->standard_form_cost_[iCol];
+    if (start) start[iCol] = this->standard_form_matrix_.start_[iCol];
+    if (index || value) {
+      for (HighsInt iEl = this->standard_form_matrix_.start_[iCol];
+           iEl < this->standard_form_matrix_.start_[iCol + 1]; iEl++) {
+        if (index) index[iEl] = this->standard_form_matrix_.index_[iEl];
+        if (value) value[iEl] = this->standard_form_matrix_.value_[iEl];
+      }
+    }
+  }
+  if (start) start[num_col] = this->standard_form_matrix_.start_[num_col];
+  if (rhs) {
+    for (HighsInt iRow = 0; iRow < num_row; iRow++)
+      rhs[iRow] = this->standard_form_rhs_[iRow];
+  }
+  return HighsStatus::kOk;
 }
 
 HighsStatus Highs::getDualRay(bool& has_dual_ray, double* dual_ray_value) {
@@ -2334,6 +2370,7 @@ HighsStatus Highs::addCols(const HighsInt num_new_col, const double* costs,
   this->logHeader();
   HighsStatus return_status = HighsStatus::kOk;
   clearPresolve();
+  clearStandardFormLp();
   return_status = interpretCallStatus(
       options_.log_options,
       addColsInterface(num_new_col, costs, lower_bounds, upper_bounds,
@@ -2372,6 +2409,7 @@ HighsStatus Highs::addRows(const HighsInt num_new_row,
   this->logHeader();
   HighsStatus return_status = HighsStatus::kOk;
   clearPresolve();
+  clearStandardFormLp();
   return_status = interpretCallStatus(
       options_.log_options,
       addRowsInterface(num_new_row, lower_bounds, upper_bounds, num_new_nz,
@@ -2387,6 +2425,7 @@ HighsStatus Highs::changeObjectiveSense(const ObjSense sense) {
     model_.lp_.sense_ = sense;
     // Nontrivial change
     clearPresolve();
+    clearStandardFormLp();
     invalidateModelStatusSolutionAndInfo();
   }
   return returnFromHighs(HighsStatus::kOk);
@@ -2516,6 +2555,7 @@ HighsStatus Highs::changeColCost(const HighsInt col, const double cost) {
 HighsStatus Highs::changeColsCost(const HighsInt from_col,
                                   const HighsInt to_col, const double* cost) {
   clearPresolve();
+  clearStandardFormLp();
   HighsIndexCollection index_collection;
   const HighsInt create_error =
       create(index_collection, from_col, to_col, model_.lp_.num_col_);
@@ -2542,6 +2582,7 @@ HighsStatus Highs::changeColsCost(const HighsInt num_set_entries,
   if (doubleUserDataNotNull(options_.log_options, cost, "column costs"))
     return HighsStatus::kError;
   clearPresolve();
+  clearStandardFormLp();
   // Ensure that the set and data are in ascending order
   std::vector<double> local_cost{cost, cost + num_set_entries};
   std::vector<HighsInt> local_set{set, set + num_set_entries};
@@ -2565,6 +2606,7 @@ HighsStatus Highs::changeColsCost(const HighsInt num_set_entries,
 
 HighsStatus Highs::changeColsCost(const HighsInt* mask, const double* cost) {
   clearPresolve();
+  clearStandardFormLp();
   HighsIndexCollection index_collection;
   const bool create_error = create(index_collection, mask, model_.lp_.num_col_);
   assert(!create_error);
@@ -2586,6 +2628,7 @@ HighsStatus Highs::changeColsBounds(const HighsInt from_col,
                                     const HighsInt to_col, const double* lower,
                                     const double* upper) {
   clearPresolve();
+  clearStandardFormLp();
   HighsIndexCollection index_collection;
   const HighsInt create_error =
       create(index_collection, from_col, to_col, model_.lp_.num_col_);
@@ -2620,6 +2663,7 @@ HighsStatus Highs::changeColsBounds(const HighsInt num_set_entries,
               null_data;
   if (null_data) return HighsStatus::kError;
   clearPresolve();
+  clearStandardFormLp();
   // Ensure that the set and data are in ascending order
   std::vector<double> local_lower{lower, lower + num_set_entries};
   std::vector<double> local_upper{upper, upper + num_set_entries};
@@ -2645,6 +2689,7 @@ HighsStatus Highs::changeColsBounds(const HighsInt num_set_entries,
 HighsStatus Highs::changeColsBounds(const HighsInt* mask, const double* lower,
                                     const double* upper) {
   clearPresolve();
+  clearStandardFormLp();
   HighsIndexCollection index_collection;
   const bool create_error = create(index_collection, mask, model_.lp_.num_col_);
   assert(!create_error);
@@ -2667,6 +2712,7 @@ HighsStatus Highs::changeRowsBounds(const HighsInt from_row,
                                     const HighsInt to_row, const double* lower,
                                     const double* upper) {
   clearPresolve();
+  clearStandardFormLp();
   HighsIndexCollection index_collection;
   const HighsInt create_error =
       create(index_collection, from_row, to_row, model_.lp_.num_row_);
@@ -2701,6 +2747,7 @@ HighsStatus Highs::changeRowsBounds(const HighsInt num_set_entries,
       null_data;
   if (null_data) return HighsStatus::kError;
   clearPresolve();
+  clearStandardFormLp();
   // Ensure that the set and data are in ascending order
   std::vector<double> local_lower{lower, lower + num_set_entries};
   std::vector<double> local_upper{upper, upper + num_set_entries};
@@ -2726,6 +2773,7 @@ HighsStatus Highs::changeRowsBounds(const HighsInt num_set_entries,
 HighsStatus Highs::changeRowsBounds(const HighsInt* mask, const double* lower,
                                     const double* upper) {
   clearPresolve();
+  clearStandardFormLp();
   HighsIndexCollection index_collection;
   const bool create_error = create(index_collection, mask, model_.lp_.num_row_);
   assert(!create_error);
@@ -3024,6 +3072,7 @@ HighsStatus Highs::getCoeff(const HighsInt row, const HighsInt col,
 
 HighsStatus Highs::deleteCols(const HighsInt from_col, const HighsInt to_col) {
   clearPresolve();
+  clearStandardFormLp();
   HighsIndexCollection index_collection;
   const HighsInt create_error =
       create(index_collection, from_col, to_col, model_.lp_.num_col_);
@@ -3042,6 +3091,7 @@ HighsStatus Highs::deleteCols(const HighsInt num_set_entries,
                               const HighsInt* set) {
   if (num_set_entries == 0) return HighsStatus::kOk;
   clearPresolve();
+  clearStandardFormLp();
   HighsIndexCollection index_collection;
   const HighsInt create_error =
       create(index_collection, num_set_entries, set, model_.lp_.num_col_);
@@ -3055,6 +3105,7 @@ HighsStatus Highs::deleteCols(const HighsInt num_set_entries,
 
 HighsStatus Highs::deleteCols(HighsInt* mask) {
   clearPresolve();
+  clearStandardFormLp();
   const HighsInt original_num_col = model_.lp_.num_col_;
   HighsIndexCollection index_collection;
   const bool create_error = create(index_collection, mask, original_num_col);
@@ -3068,6 +3119,7 @@ HighsStatus Highs::deleteCols(HighsInt* mask) {
 
 HighsStatus Highs::deleteRows(const HighsInt from_row, const HighsInt to_row) {
   clearPresolve();
+  clearStandardFormLp();
   HighsIndexCollection index_collection;
   const HighsInt create_error =
       create(index_collection, from_row, to_row, model_.lp_.num_row_);
@@ -3086,6 +3138,7 @@ HighsStatus Highs::deleteRows(const HighsInt num_set_entries,
                               const HighsInt* set) {
   if (num_set_entries == 0) return HighsStatus::kOk;
   clearPresolve();
+  clearStandardFormLp();
   HighsIndexCollection index_collection;
   const HighsInt create_error =
       create(index_collection, num_set_entries, set, model_.lp_.num_row_);
@@ -3099,6 +3152,7 @@ HighsStatus Highs::deleteRows(const HighsInt num_set_entries,
 
 HighsStatus Highs::deleteRows(HighsInt* mask) {
   clearPresolve();
+  clearStandardFormLp();
   const HighsInt original_num_row = model_.lp_.num_row_;
   HighsIndexCollection index_collection;
   const bool create_error = create(index_collection, mask, original_num_row);
@@ -3113,6 +3167,7 @@ HighsStatus Highs::deleteRows(HighsInt* mask) {
 HighsStatus Highs::scaleCol(const HighsInt col, const double scale_value) {
   HighsStatus return_status = HighsStatus::kOk;
   clearPresolve();
+  clearStandardFormLp();
   HighsStatus call_status = scaleColInterface(col, scale_value);
   return_status = interpretCallStatus(options_.log_options, call_status,
                                       return_status, "scaleCol");
@@ -3123,6 +3178,7 @@ HighsStatus Highs::scaleCol(const HighsInt col, const double scale_value) {
 HighsStatus Highs::scaleRow(const HighsInt row, const double scale_value) {
   HighsStatus return_status = HighsStatus::kOk;
   clearPresolve();
+  clearStandardFormLp();
   HighsStatus call_status = scaleRowInterface(row, scale_value);
   return_status = interpretCallStatus(options_.log_options, call_status,
                                       return_status, "scaleRow");
@@ -3416,6 +3472,14 @@ void Highs::clearPresolve() {
   model_presolve_status_ = HighsPresolveStatus::kNotPresolved;
   presolved_model_.clear();
   presolve_.clear();
+}
+
+void Highs::clearStandardFormLp() {
+  standard_form_valid_ = false;
+  standard_form_offset_ = 0;
+  standard_form_cost_.clear();
+  standard_form_rhs_.clear();
+  standard_form_matrix_.clear();
 }
 
 void Highs::invalidateUserSolverData() {
