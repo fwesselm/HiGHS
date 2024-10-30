@@ -1652,35 +1652,35 @@ HPresolve::Result HPresolve::runProbing(HighsPostsolveStack& postsolve_stack) {
 
 void HPresolve::addToMatrix(const HighsInt row, const HighsInt col,
                             const double val) {
-  // return if modification is too small
-  if (std::abs(val) <= options->small_matrix_value) return;
-
   HighsInt pos = findNonzero(row, col);
 
   markChangedRow(row);
   markChangedCol(col);
 
   if (pos == -1) {
-    if (freeslots.empty()) {
-      pos = Avalue.size();
-      Avalue.push_back(val);
-      Arow.push_back(row);
-      Acol.push_back(col);
-      Anext.push_back(-1);
-      Aprev.push_back(-1);
-      ARleft.push_back(-1);
-      ARright.push_back(-1);
-    } else {
-      pos = freeslots.back();
-      freeslots.pop_back();
-      Avalue[pos] = val;
-      Arow[pos] = row;
-      Acol[pos] = col;
-      Aprev[pos] = -1;
-    }
+    // check if new non-zero element is not too small
+    if (std::abs(val) > options->small_matrix_value) {
+      if (freeslots.empty()) {
+        pos = Avalue.size();
+        Avalue.push_back(val);
+        Arow.push_back(row);
+        Acol.push_back(col);
+        Anext.push_back(-1);
+        Aprev.push_back(-1);
+        ARleft.push_back(-1);
+        ARright.push_back(-1);
+      } else {
+        pos = freeslots.back();
+        freeslots.pop_back();
+        Avalue[pos] = val;
+        Arow[pos] = row;
+        Acol[pos] = col;
+        Aprev[pos] = -1;
+      }
 
-    link(pos);
-  } else {
+      link(pos);
+    }
+  } else if (val != 0.0) {
     double sum = Avalue[pos] + val;
     if (std::abs(sum) <= options->small_matrix_value) {
       unlink(pos);
