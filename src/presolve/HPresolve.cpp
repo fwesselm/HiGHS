@@ -1652,6 +1652,9 @@ HPresolve::Result HPresolve::runProbing(HighsPostsolveStack& postsolve_stack) {
 
 void HPresolve::addToMatrix(const HighsInt row, const HighsInt col,
                             const double val) {
+  // return if modification is too small
+  if (std::abs(val) <= options->small_matrix_value) return;
+
   HighsInt pos = findNonzero(row, col);
 
   markChangedRow(row);
@@ -3511,8 +3514,7 @@ HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
                   for (HighsInt i = 0; i < numRowCoefs; ++i) {
                     double delta = double(HighsCDouble(rowCoefs[i]) / intScale -
                                           Avalue[rowpositions[i]]);
-                    if (std::abs(delta) > options->small_matrix_value)
-                      addToMatrix(row, rowIndex[i], delta);
+                    addToMatrix(row, rowIndex[i], delta);
                   }
                 }
               }
@@ -3573,8 +3575,7 @@ HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
                   for (HighsInt i = 0; i < numRowCoefs; ++i) {
                     double delta = double(HighsCDouble(rowCoefs[i]) / intScale -
                                           Avalue[rowpositions[i]]);
-                    if (std::abs(delta) > options->small_matrix_value)
-                      addToMatrix(row, rowIndex[i], delta);
+                    addToMatrix(row, rowIndex[i], delta);
                   }
                 }
               }
