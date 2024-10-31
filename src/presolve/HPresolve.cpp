@@ -1634,9 +1634,6 @@ HPresolve::Result HPresolve::runProbing(HighsPostsolveStack& postsolve_stack) {
 
 void HPresolve::addToMatrix(const HighsInt row, const HighsInt col,
                             const double val) {
-  // return if coefficient is zero
-  if (val == 0.0) return;
-
   HighsInt pos = findNonzero(row, col);
 
   markChangedRow(row);
