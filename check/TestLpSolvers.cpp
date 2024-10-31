@@ -315,7 +315,7 @@ TEST_CASE("LP-solver", "[highs_lp_solver]") {
   return_status = highs.run();
   REQUIRE(return_status == HighsStatus::kOk);
 
-  REQUIRE(info.simplex_iteration_count == 592);
+  REQUIRE(info.simplex_iteration_count == 589);
 }
 
 TEST_CASE("mip-with-lp-solver", "[highs_lp_solver]") {
