@@ -1245,8 +1245,9 @@ HighsLpRelaxation::Status HighsLpRelaxation::resolveLp(HighsDomain* domain) {
 
           if (fractionality(val) > mipsolver.mipdata_->feastol) {
             HighsInt col = i;
-            roundable = roundable && (mipsolver.mipdata_->uplocks[col] == 0 ||
-                                      mipsolver.mipdata_->downlocks[col] == 0);
+            if (roundable && mipsolver.mipdata_->uplocks[col] != 0 &&
+                mipsolver.mipdata_->downlocks[col] != 0)
+              roundable = false;
 
             const HighsCliqueTable::Substitution* subst =
                 mipsolver.mipdata_->cliquetable.getSubstitution(col);

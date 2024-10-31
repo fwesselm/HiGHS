@@ -94,9 +94,6 @@ struct HighsMipSolverData {
   int64_t num_leaves;
   int64_t num_leaves_before_run;
   int64_t num_nodes_before_run;
-  int64_t total_repair_lp;
-  int64_t total_repair_lp_feasible;
-  int64_t total_repair_lp_iterations;
   int64_t total_lp_iterations;
   int64_t heuristic_lp_iterations;
   int64_t sepa_lp_iterations;
@@ -157,9 +154,6 @@ struct HighsMipSolverData {
         num_leaves(0),
         num_leaves_before_run(0),
         num_nodes_before_run(0),
-        total_repair_lp(0),
-        total_repair_lp_feasible(0),
-        total_repair_lp_iterations(0),
         total_lp_iterations(0),
         heuristic_lp_iterations(0),
         sepa_lp_iterations(0),
