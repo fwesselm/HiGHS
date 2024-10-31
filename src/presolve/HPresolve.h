@@ -158,9 +158,9 @@ class HPresolve {
 
   void updateColImpliedBounds(HighsInt row, HighsInt col, double val);
 
-  void recomputeColImpliedBounds(HighsInt row);
+  void resetColImpliedBounds(HighsInt row);
 
-  void recomputeRowDualImpliedBounds(HighsInt col);
+  void resetRowDualImpliedBounds(HighsInt col);
 
   void updateRowDualImpliedBounds(HighsInt row, HighsInt col, double val);
 
