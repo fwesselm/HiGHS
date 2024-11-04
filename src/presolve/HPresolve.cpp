@@ -414,6 +414,10 @@ void HPresolve::link(HighsInt pos) {
     ++rowsizeInteger[Arow[pos]];
   else if (model->integrality_[Acol[pos]] == HighsVarType::kImplicitInteger)
     ++rowsizeImplInt[Arow[pos]];
+
+  // reset implied bounds affected by linking new non-zero
+  resetColImpliedBounds(row);
+  resetRowDualImpliedBounds(col);
 }
 
 void HPresolve::unlink(HighsInt pos) {
@@ -435,11 +439,6 @@ void HPresolve::unlink(HighsInt pos) {
       markChangedCol(Acol[pos]);
 
     impliedDualRowBounds.remove(Acol[pos], Arow[pos], Avalue[pos]);
-    if (colUpperSource[Acol[pos]] == Arow[pos])
-      changeImplColUpper(Acol[pos], kHighsInf, -1);
-
-    if (colLowerSource[Acol[pos]] == Arow[pos])
-      changeImplColLower(Acol[pos], -kHighsInf, -1);
   }
 
   auto get_row_left = [&](HighsInt pos) -> HighsInt& { return ARleft[pos]; };
@@ -458,14 +457,13 @@ void HPresolve::unlink(HighsInt pos) {
       singletonRows.push_back(Arow[pos]);
     else
       markChangedRow(Arow[pos]);
+
     impliedRowBounds.remove(Arow[pos], Acol[pos], Avalue[pos]);
-
-    if (rowDualUpperSource[Arow[pos]] == Acol[pos])
-      changeImplRowDualUpper(Arow[pos], kHighsInf, -1);
-
-    if (rowDualLowerSource[Arow[pos]] == Acol[pos])
-      changeImplRowDualLower(Arow[pos], -kHighsInf, -1);
   }
+
+  // reset implied bounds affected by unlinking non-zero
+  resetColImpliedBounds(Arow[pos]);
+  resetRowDualImpliedBounds(Acol[pos]);
 
   Avalue[pos] = 0;
 
@@ -645,8 +643,8 @@ void HPresolve::updateColImpliedBounds(HighsInt row, HighsInt col, double val) {
                       HighsInt{-1});
 }
 
-void HPresolve::recomputeColImpliedBounds(HighsInt row) {
-  // recompute implied column bounds affected by a modification in a row
+void HPresolve::resetColImpliedBounds(HighsInt row) {
+  // reset implied column bounds affected by a modification in a row
   // (removed / added non-zeros, etc.)
   if (colImplSourceByRow[row].empty()) return;
   std::set<HighsInt> affectedCols(colImplSourceByRow[row]);
@@ -655,16 +653,11 @@ void HPresolve::recomputeColImpliedBounds(HighsInt row) {
     // row
     if (colLowerSource[col] == row) changeImplColLower(col, -kHighsInf, -1);
     if (colUpperSource[col] == row) changeImplColUpper(col, kHighsInf, -1);
-
-    // iterate over column and recompute the implied bounds
-    for (const HighsSliceNonzero& nonz : getColumnVector(col)) {
-      updateColImpliedBounds(nonz.index(), col, nonz.value());
-    }
   }
 }
 
-void HPresolve::recomputeRowDualImpliedBounds(HighsInt col) {
-  // recompute implied row dual bounds affected by a modification in a column
+void HPresolve::resetRowDualImpliedBounds(HighsInt col) {
+  // reset implied row dual bounds affected by a modification in a column
   // (removed / added non-zeros, etc.)
   if (implRowDualSourceByCol[col].empty()) return;
   std::set<HighsInt> affectedRows(implRowDualSourceByCol[col]);
@@ -675,13 +668,6 @@ void HPresolve::recomputeRowDualImpliedBounds(HighsInt col) {
       changeImplRowDualLower(row, -kHighsInf, -1);
     if (rowDualUpperSource[row] == col)
       changeImplRowDualUpper(row, kHighsInf, -1);
-
-    // iterate over row and recompute the implied bounds
-    for (const HighsSliceNonzero& nonz : getRowVector(row)) {
-      // integer columns cannot be used to tighten bounds on dual multipliers
-      if (model->integrality_[nonz.index()] != HighsVarType::kInteger)
-        updateRowDualImpliedBounds(row, nonz.index(), nonz.value());
-    }
   }
 }
 
@@ -1617,18 +1603,9 @@ void HPresolve::addToMatrix(const HighsInt row, const HighsInt col,
     if (std::abs(sum) <= options->small_matrix_value) {
       unlink(pos);
     } else {
-      // remove implied bounds on the row dual that where implied by this
-      // columns dual constraint
-      if (rowDualUpperSource[row] == col)
-        changeImplRowDualUpper(row, kHighsInf, -1);
-
-      if (rowDualLowerSource[row] == col)
-        changeImplRowDualLower(row, -kHighsInf, -1);
-
-      // remove implied bounds on the column that where implied by this row
-      if (colUpperSource[col] == row) changeImplColUpper(col, kHighsInf, -1);
-
-      if (colLowerSource[col] == row) changeImplColLower(col, -kHighsInf, -1);
+      // reset implied bounds affected by modifying non-zero
+      resetColImpliedBounds(row);
+      resetRowDualImpliedBounds(col);
 
       // remove the locks and contribution to implied (dual) row bounds, then
       // add then again
@@ -2395,9 +2372,6 @@ void HPresolve::substitute(HighsInt row, HighsInt col, double rhs) {
         addToMatrix(colrow, Acol[rowiter], scale * Avalue[rowiter]);
     }
 
-    // recompute implied column bounds affected by the substitution
-    recomputeColImpliedBounds(colrow);
-
     // check if this is an equation row and it now has a different size
     reinsertEquation(colrow);
     // printf("after substitution: ");
@@ -2425,12 +2399,6 @@ void HPresolve::substitute(HighsInt row, HighsInt col, double rhs) {
            std::max(options->dual_feasibility_tolerance,
                     kHighsTiny * std::abs(double(objscale))));
     model->col_cost_[col] = 0.0;
-  }
-
-  // recompute implied row dual bounds affected by substitution
-  for (HighsInt rowiter : rowpositions) {
-    if (Acol[rowiter] == col) continue;
-    recomputeRowDualImpliedBounds(Acol[rowiter]);
   }
 
   // finally remove the entries of the row that was used for substitution
@@ -3028,15 +2996,13 @@ HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
     assert(model->col_cost_[col] != 0.0);
     if (colsize[col] != 1) return;
     if (model->col_cost_[col] > 0) {
-      assert(model->col_lower_[col] == -kHighsInf ||
-             (model->col_lower_[col] <= implColLower[col] + primal_feastol &&
-              colLowerSource[col] == row));
+      assert(model->col_lower_[col] == -kHighsInf || !isLowerImplied(col) ||
+             colLowerSource[col] == row);
       if (model->col_lower_[col] > implColLower[col] - primal_feastol)
         changeColLower(col, -kHighsInf);
     } else {
-      assert(model->col_upper_[col] == kHighsInf ||
-             (model->col_upper_[col] >= implColUpper[col] - primal_feastol &&
-              colUpperSource[col] == row));
+      assert(model->col_upper_[col] == kHighsInf || !isUpperImplied(col) ||
+             colUpperSource[col] == row);
       if (model->col_upper_[col] < implColUpper[col] + primal_feastol)
         changeColUpper(col, kHighsInf);
     }
