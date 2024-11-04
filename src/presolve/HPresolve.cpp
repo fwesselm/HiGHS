@@ -1596,8 +1596,8 @@ void HPresolve::addToMatrix(const HighsInt row, const HighsInt col,
     link(pos);
 
     // reset implied bounds affected by linking non-zero
-    resetColImpliedBounds(Arow[pos]);
-    resetRowDualImpliedBounds(Acol[pos]);
+    resetColImpliedBounds(row);
+    resetRowDualImpliedBounds(col);
 
   } else {
     double sum = Avalue[pos] + val;
