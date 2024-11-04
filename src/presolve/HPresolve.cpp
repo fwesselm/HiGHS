@@ -416,8 +416,8 @@ void HPresolve::link(HighsInt pos) {
     ++rowsizeImplInt[Arow[pos]];
 
   // reset implied bounds affected by linking new non-zero
-  resetColImpliedBounds(row);
-  resetRowDualImpliedBounds(col);
+  resetColImpliedBounds(Arow[pos]);
+  resetRowDualImpliedBounds(Acol[pos]);
 }
 
 void HPresolve::unlink(HighsInt pos) {
