@@ -26,6 +26,7 @@
 #include "mip/HighsImplications.h"
 #include "mip/HighsMipSolverData.h"
 #include "mip/HighsObjectiveFunction.h"
+#include "mip/MipTimer.h"
 #include "presolve/HighsPostsolveStack.h"
 #include "test/DevKkt.h"
 #include "util/HFactor.h"
@@ -1321,6 +1322,7 @@ HPresolve::Result HPresolve::dominatedColumns(
 }
 
 HPresolve::Result HPresolve::runProbing(HighsPostsolveStack& postsolve_stack) {
+  mipsolver->analysis_.mipTimerStart(kMipClockProbingPresolve);
   probingEarlyAbort = false;
   if (numDeletedCols + numDeletedRows != 0) shrinkProblem(postsolve_stack);
 
@@ -1357,7 +1359,10 @@ HPresolve::Result HPresolve::runProbing(HighsPostsolveStack& postsolve_stack) {
   HighsDomain& domain = mipsolver->mipdata_->domain;
 
   domain.propagate();
-  if (domain.infeasible()) return Result::kPrimalInfeasible;
+  if (domain.infeasible()) {
+    mipsolver->analysis_.mipTimerStop(kMipClockProbingPresolve);
+    return Result::kPrimalInfeasible;
+  }
   HighsCliqueTable& cliquetable = mipsolver->mipdata_->cliquetable;
   HighsImplications& implications = mipsolver->mipdata_->implications;
   bool firstCall = !mipsolver->mipdata_->cliquesExtracted;
@@ -1368,7 +1373,10 @@ HPresolve::Result HPresolve::runProbing(HighsPostsolveStack& postsolve_stack) {
   // packing constraints so that the clique merging step can extend/delete them
   if (firstCall) {
     cliquetable.extractCliques(*mipsolver);
-    if (domain.infeasible()) return Result::kPrimalInfeasible;
+    if (domain.infeasible()) {
+      mipsolver->analysis_.mipTimerStop(kMipClockProbingPresolve);
+      return Result::kPrimalInfeasible;
+    }
 
     // during presolve we keep the objective upper bound without the current
     // offset so we need to update it
@@ -1379,15 +1387,24 @@ HPresolve::Result HPresolve::runProbing(HighsPostsolveStack& postsolve_stack) {
       cliquetable.extractObjCliques(*mipsolver);
       mipsolver->mipdata_->upper_limit = tmpLimit;
 
-      if (domain.infeasible()) return Result::kPrimalInfeasible;
+      if (domain.infeasible()) {
+        mipsolver->analysis_.mipTimerStop(kMipClockProbingPresolve);
+        return Result::kPrimalInfeasible;
+      }
     }
 
     domain.propagate();
-    if (domain.infeasible()) return Result::kPrimalInfeasible;
+    if (domain.infeasible()) {
+      mipsolver->analysis_.mipTimerStop(kMipClockProbingPresolve);
+      return Result::kPrimalInfeasible;
+    }
   }
 
   cliquetable.cleanupFixed(domain);
-  if (domain.infeasible()) return Result::kPrimalInfeasible;
+  if (domain.infeasible()) {
+    mipsolver->analysis_.mipTimerStop(kMipClockProbingPresolve);
+    return Result::kPrimalInfeasible;
+  }
 
   // store binary variables in vector with their number of implications on
   // other binaries
@@ -1466,7 +1483,8 @@ HPresolve::Result HPresolve::runProbing(HighsPostsolveStack& postsolve_stack) {
 
       HighsInt numBoundChgs = 0;
       HighsInt numNewCliques = -cliquetable.numCliques();
-      if (!implications.runProbing(i, numBoundChgs)) continue;
+      const bool probing_result = implications.runProbing(i, numBoundChgs);
+      if (!probing_result) continue;
       probingContingent += numBoundChgs;
       numNewCliques += cliquetable.numCliques();
       numNewCliques = std::max(numNewCliques, HighsInt{0});
@@ -1501,6 +1519,7 @@ HPresolve::Result HPresolve::runProbing(HighsPostsolveStack& postsolve_stack) {
       // "\n", nprobed,
       //       cliquetable.numCliques());
       if (domain.infeasible()) {
+        mipsolver->analysis_.mipTimerStop(kMipClockProbingPresolve);
         return Result::kPrimalInfeasible;
       }
     }
@@ -1564,6 +1583,7 @@ HPresolve::Result HPresolve::runProbing(HighsPostsolveStack& postsolve_stack) {
                 addednnz);
   }
 
+  mipsolver->analysis_.mipTimerStop(kMipClockProbingPresolve);
   return checkLimits(postsolve_stack);
 }
 
@@ -4077,8 +4097,7 @@ HPresolve::Result HPresolve::presolve(HighsPostsolveStack& postsolve_stack) {
         HighsInt numRow = model->num_row_ - numDeletedRows;
         HighsInt numNonz = Avalue.size() - freeslots.size();
         // Only read the run time if it's to be printed
-        const double run_time =
-            options->output_flag ? this->timer->read(run_clock) : 0;
+        const double run_time = options->output_flag ? this->timer->read() : 0;
 #ifndef NDEBUG
         std::string time_str = " " + std::to_string(run_time) + "s";
 #else
@@ -4091,17 +4110,11 @@ HPresolve::Result HPresolve::presolve(HighsPostsolveStack& postsolve_stack) {
       }
     };
 
-    // Need to check for time-out in checkLimits. However, when
-    // presolve is called from the MIP solver timer->solve_clock is
-    // running, and when presolve is called before the LP solver, the
-    // HighsClock is running. So have to set run_clock accordingly.
+    // Need to check for time-out in checkLimits, so make sure that
+    // the timer is well defined, and that its total time clock is
+    // running
     assert(this->timer);
-    if (this->timer->runningRunHighsClock()) {
-      run_clock = timer->run_highs_clock;
-    } else {
-      assert(this->timer->running(timer->solve_clock));
-      run_clock = timer->solve_clock;
-    }
+    assert(this->timer->runningRunHighsClock());
 
     HPRESOLVE_CHECKED_CALL(initialRowAndColPresolve(postsolve_stack));
 
@@ -4267,9 +4280,7 @@ HPresolve::Result HPresolve::presolve(HighsPostsolveStack& postsolve_stack) {
 
 HPresolve::Result HPresolve::checkTimeLimit() {
   assert(timer);
-  assert(run_clock >= 0);
-  if (options->time_limit < kHighsInf &&
-      timer->read(run_clock) >= options->time_limit)
+  if (options->time_limit < kHighsInf && timer->read() >= options->time_limit)
     return Result::kStopped;
   return Result::kOk;
 }
@@ -4319,6 +4330,7 @@ HPresolve::Result HPresolve::checkLimits(HighsPostsolveStack& postsolve_stack) {
   }
 
   if ((numreductions & 1023u) == 0) HPRESOLVE_CHECKED_CALL(checkTimeLimit());
+
   return numreductions >= reductionLimit ? Result::kStopped : Result::kOk;
 }
 
