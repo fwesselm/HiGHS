@@ -2959,7 +2959,8 @@ HPresolve::Result HPresolve::detectDominatedCol(
       analysis_.logging_on_ = logging_on;
       if (logging_on) analysis_.stopPresolveRuleLog(kPresolveRuleForcingCol);
     }
-  } else if (colDualUpper <= options->dual_feasibility_tolerance) {
+  }
+  if (colDualUpper <= options->dual_feasibility_tolerance) {
     if (model->col_upper_[col] != kHighsInf) {
       if (logging_on) analysis_.startPresolveRuleLog(kPresolveRuleDominatedCol);
       if (fixColToUpperOrUnbounded(postsolve_stack, col)) {
