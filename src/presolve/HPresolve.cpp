@@ -2911,7 +2911,9 @@ HPresolve::Result HPresolve::detectDominatedCol(
     if (handleSingletonRows)
       HPRESOLVE_CHECKED_CALL(removeRowSingletons(postsolve_stack));
     return checkLimits(postsolve_stack);
-  } else if (colDualUpper < -options->dual_feasibility_tolerance) {
+  }
+
+  if (colDualUpper < -options->dual_feasibility_tolerance) {
     if (model->col_upper_[col] == kHighsInf) return Result::kDualInfeasible;
     if (logging_on) analysis_.startPresolveRuleLog(kPresolveRuleDominatedCol);
     if (fixColToUpperOrUnbounded(postsolve_stack, col)) {
@@ -2960,6 +2962,7 @@ HPresolve::Result HPresolve::detectDominatedCol(
       if (logging_on) analysis_.stopPresolveRuleLog(kPresolveRuleForcingCol);
     }
   }
+
   if (colDualUpper <= options->dual_feasibility_tolerance) {
     if (model->col_upper_[col] != kHighsInf) {
       if (logging_on) analysis_.startPresolveRuleLog(kPresolveRuleDominatedCol);
