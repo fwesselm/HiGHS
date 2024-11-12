@@ -2841,6 +2841,7 @@ HPresolve::Result HPresolve::singletonCol(HighsPostsolveStack& postsolve_stack,
 
   // detect dominated column
   HPRESOLVE_CHECKED_CALL(detectDominatedCol(postsolve_stack, col, false));
+  if (colDeleted[col]) return checkLimits(postsolve_stack);
 
   if (mipsolver != nullptr) convertImpliedInteger(col, row);
 
@@ -3755,15 +3756,17 @@ HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
       // in reverse, it will first restore the column primal and dual values
       // as the dual values are required to find the proper dual multiplier for
       // the row and the column that we put in the basis.
-      Result res = checkForcingRow(row, HighsInt{1}, model->row_lower_[row],
-                                   HighsPostsolveStack::RowType::kGeq);
-      if (rowDeleted[row]) return res;
+      HPRESOLVE_CHECKED_CALL(
+          checkForcingRow(row, HighsInt{1}, model->row_lower_[row],
+                          HighsPostsolveStack::RowType::kGeq));
+      if (rowDeleted[row]) return checkLimits(postsolve_stack);
 
     } else if (impliedRowLower >= model->row_upper_[row] - primal_feastol) {
       // forcing row in the other direction
-      Result res = checkForcingRow(row, HighsInt{-1}, model->row_upper_[row],
-                                   HighsPostsolveStack::RowType::kLeq);
-      if (rowDeleted[row]) return res;
+      HPRESOLVE_CHECKED_CALL(
+          checkForcingRow(row, HighsInt{-1}, model->row_upper_[row],
+                          HighsPostsolveStack::RowType::kLeq));
+      if (rowDeleted[row]) return checkLimits(postsolve_stack);
     }
   }
 
@@ -3864,6 +3867,7 @@ HPresolve::Result HPresolve::colPresolve(HighsPostsolveStack& postsolve_stack,
 
   // detect dominated column
   HPRESOLVE_CHECKED_CALL(detectDominatedCol(postsolve_stack, col));
+  if (colDeleted[col]) return checkLimits(postsolve_stack);
 
   // column is not (weakly) dominated
 
