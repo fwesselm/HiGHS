@@ -2939,6 +2939,7 @@ HPresolve::Result HPresolve::detectDominatedCol(
       }
       analysis_.logging_on_ = logging_on;
       if (logging_on) analysis_.stopPresolveRuleLog(kPresolveRuleDominatedCol);
+      return checkLimits(postsolve_stack);
     } else if (impliedDualRowBounds.getSumUpperOrig(col) == 0.0 &&
                analysis_.allow_rule_[kPresolveRuleForcingCol]) {
       if (logging_on) analysis_.startPresolveRuleLog(kPresolveRuleForcingCol);
@@ -2960,6 +2961,7 @@ HPresolve::Result HPresolve::detectDominatedCol(
       }
       analysis_.logging_on_ = logging_on;
       if (logging_on) analysis_.stopPresolveRuleLog(kPresolveRuleForcingCol);
+      return checkLimits(postsolve_stack);
     }
   }
 
@@ -2973,6 +2975,7 @@ HPresolve::Result HPresolve::detectDominatedCol(
       }
       analysis_.logging_on_ = logging_on;
       if (logging_on) analysis_.stopPresolveRuleLog(kPresolveRuleDominatedCol);
+      return checkLimits(postsolve_stack);
     } else if (impliedDualRowBounds.getSumLowerOrig(col) == 0.0 &&
                analysis_.allow_rule_[kPresolveRuleForcingCol]) {
       if (logging_on) analysis_.startPresolveRuleLog(kPresolveRuleForcingCol);
@@ -2994,6 +2997,7 @@ HPresolve::Result HPresolve::detectDominatedCol(
       }
       analysis_.logging_on_ = logging_on;
       if (logging_on) analysis_.stopPresolveRuleLog(kPresolveRuleForcingCol);
+      return checkLimits(postsolve_stack);
     }
   }
   return checkLimits(postsolve_stack);
