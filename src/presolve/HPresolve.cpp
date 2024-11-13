@@ -2876,6 +2876,7 @@ HPresolve::Result HPresolve::singletonCol(HighsPostsolveStack& postsolve_stack,
     if (logging_on)
       analysis_.startPresolveRuleLog(kPresolveRuleFreeColSubstitution);
 
+    storeRow(row);
     substituteFreeCol(postsolve_stack, row, col);
 
     analysis_.logging_on_ = logging_on;
@@ -2896,10 +2897,6 @@ void HPresolve::substituteFreeCol(HighsPostsolveStack& postsolve_stack,
   assert(!colDeleted[col]);
   assert(isDualImpliedFree(row));
   assert(isImpliedFree(col));
-
-  // todo, store which side of an implied free dual variable needs to be used
-  // for substitution
-  storeRow(row);
 
   HighsPostsolveStack::RowType rowType;
   double rhs;
@@ -4780,6 +4777,7 @@ HPresolve::Result HPresolve::aggregator(HighsPostsolveStack& postsolve_stack) {
     // in the case where the row has length two or the column has length two
     // we always do the substitution since the fillin can never be problematic
     if (rowsize[row] == 2 || colsize[col] == 2) {
+      storeRow(row);
       substituteFreeCol(postsolve_stack, row, col, true);
       substitutionOpportunities[i].first = -1;
       HPRESOLVE_CHECKED_CALL(removeRowSingletons(postsolve_stack));
@@ -4799,6 +4797,7 @@ HPresolve::Result HPresolve::aggregator(HighsPostsolveStack& postsolve_stack) {
       }
     }
 
+    storeRow(row);
     HighsInt fillin = -(rowsize[row] + colsize[col] - 1);
     for (const auto& nz : getColumnVector(col)) {
       if (nz.index() == row) continue;
