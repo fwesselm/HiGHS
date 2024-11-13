@@ -2890,7 +2890,8 @@ HPresolve::Result HPresolve::singletonCol(HighsPostsolveStack& postsolve_stack,
 }
 
 void HPresolve::substituteFreeCol(HighsPostsolveStack& postsolve_stack,
-                                  HighsInt row, HighsInt col) {
+                                  HighsInt row, HighsInt col,
+                                  bool relaxRowDualBounds) {
   assert(!rowDeleted[row]);
   assert(!colDeleted[col]);
   assert(isDualImpliedFree(row));
@@ -2902,7 +2903,7 @@ void HPresolve::substituteFreeCol(HighsPostsolveStack& postsolve_stack,
 
   HighsPostsolveStack::RowType rowType;
   double rhs;
-  dualImpliedFreeGetRhsAndRowType(row, rhs, rowType);
+  dualImpliedFreeGetRhsAndRowType(row, rhs, rowType, relaxRowDualBounds);
 
   postsolve_stack.freeColSubstitution(row, col, rhs, model->col_cost_[col],
                                       rowType, getStoredRow(),
@@ -4779,7 +4780,7 @@ HPresolve::Result HPresolve::aggregator(HighsPostsolveStack& postsolve_stack) {
     // in the case where the row has length two or the column has length two
     // we always do the substitution since the fillin can never be problematic
     if (rowsize[row] == 2 || colsize[col] == 2) {
-      substituteFreeCol(postsolve_stack, row, col);
+      substituteFreeCol(postsolve_stack, row, col, true);
       substitutionOpportunities[i].first = -1;
       HPRESOLVE_CHECKED_CALL(removeRowSingletons(postsolve_stack));
       HPRESOLVE_CHECKED_CALL(checkLimits(postsolve_stack));
@@ -4816,7 +4817,7 @@ HPresolve::Result HPresolve::aggregator(HighsPostsolveStack& postsolve_stack) {
     }
 
     nfail = 0;
-    substituteFreeCol(postsolve_stack, row, col);
+    substituteFreeCol(postsolve_stack, row, col, true);
     substitutionOpportunities[i].first = -1;
     HPRESOLVE_CHECKED_CALL(removeRowSingletons(postsolve_stack));
     HPRESOLVE_CHECKED_CALL(checkLimits(postsolve_stack));
