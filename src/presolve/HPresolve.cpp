@@ -2956,42 +2956,6 @@ HPresolve::Result HPresolve::detectDominatedCol(
   }
 
   // check for weakly dominated column
-  if (colDualLower >= -options->dual_feasibility_tolerance) {
-    if (model->col_lower_[col] != -kHighsInf) {
-      if (logging_on) analysis_.startPresolveRuleLog(kPresolveRuleDominatedCol);
-      if (fixColToLowerOrUnbounded(postsolve_stack, col)) {
-        // Handle unboundedness
-        presolve_status_ = HighsPresolveStatus::kUnboundedOrInfeasible;
-        return Result::kDualInfeasible;
-      }
-      analysis_.logging_on_ = logging_on;
-      if (logging_on) analysis_.stopPresolveRuleLog(kPresolveRuleDominatedCol);
-      return checkLimits(postsolve_stack);
-    } else if (impliedDualRowBounds.getSumUpperOrig(col) == 0.0 &&
-               analysis_.allow_rule_[kPresolveRuleForcingCol]) {
-      if (logging_on) analysis_.startPresolveRuleLog(kPresolveRuleForcingCol);
-      postsolve_stack.forcingColumn(
-          col, getColumnVector(col), model->col_cost_[col],
-          model->col_upper_[col], false,
-          model->integrality_[col] == HighsVarType::kInteger);
-      markColDeleted(col);
-      HighsInt coliter = colhead[col];
-      while (coliter != -1) {
-        HighsInt row = Arow[coliter];
-        double rhs = Avalue[coliter] > 0.0 ? model->row_upper_[row]
-                                           : model->row_lower_[row];
-        coliter = Anext[coliter];
-
-        postsolve_stack.forcingColumnRemovedRow(col, row, rhs,
-                                                getRowVector(row));
-        removeRow(row);
-      }
-      analysis_.logging_on_ = logging_on;
-      if (logging_on) analysis_.stopPresolveRuleLog(kPresolveRuleForcingCol);
-      return checkLimits(postsolve_stack);
-    }
-  }
-
   if (colDualUpper <= options->dual_feasibility_tolerance) {
     if (model->col_upper_[col] != kHighsInf) {
       if (logging_on) analysis_.startPresolveRuleLog(kPresolveRuleDominatedCol);
@@ -3016,6 +2980,42 @@ HPresolve::Result HPresolve::detectDominatedCol(
         HighsInt row = Arow[coliter];
         double rhs = Avalue[coliter] > 0.0 ? model->row_lower_[row]
                                            : model->row_upper_[row];
+        coliter = Anext[coliter];
+
+        postsolve_stack.forcingColumnRemovedRow(col, row, rhs,
+                                                getRowVector(row));
+        removeRow(row);
+      }
+      analysis_.logging_on_ = logging_on;
+      if (logging_on) analysis_.stopPresolveRuleLog(kPresolveRuleForcingCol);
+      return checkLimits(postsolve_stack);
+    }
+  }
+
+  if (colDualLower >= -options->dual_feasibility_tolerance) {
+    if (model->col_lower_[col] != -kHighsInf) {
+      if (logging_on) analysis_.startPresolveRuleLog(kPresolveRuleDominatedCol);
+      if (fixColToLowerOrUnbounded(postsolve_stack, col)) {
+        // Handle unboundedness
+        presolve_status_ = HighsPresolveStatus::kUnboundedOrInfeasible;
+        return Result::kDualInfeasible;
+      }
+      analysis_.logging_on_ = logging_on;
+      if (logging_on) analysis_.stopPresolveRuleLog(kPresolveRuleDominatedCol);
+      return checkLimits(postsolve_stack);
+    } else if (impliedDualRowBounds.getSumUpperOrig(col) == 0.0 &&
+               analysis_.allow_rule_[kPresolveRuleForcingCol]) {
+      if (logging_on) analysis_.startPresolveRuleLog(kPresolveRuleForcingCol);
+      postsolve_stack.forcingColumn(
+          col, getColumnVector(col), model->col_cost_[col],
+          model->col_upper_[col], false,
+          model->integrality_[col] == HighsVarType::kInteger);
+      markColDeleted(col);
+      HighsInt coliter = colhead[col];
+      while (coliter != -1) {
+        HighsInt row = Arow[coliter];
+        double rhs = Avalue[coliter] > 0.0 ? model->row_upper_[row]
+                                           : model->row_lower_[row];
         coliter = Anext[coliter];
 
         postsolve_stack.forcingColumnRemovedRow(col, row, rhs,
