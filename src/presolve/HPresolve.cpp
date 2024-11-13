@@ -2855,7 +2855,7 @@ HPresolve::Result HPresolve::singletonCol(HighsPostsolveStack& postsolve_stack,
 
   // detect dominated column
   HPRESOLVE_CHECKED_CALL(detectDominatedCol(postsolve_stack, col, false));
-  if (colDeleted[col]) return checkLimits(postsolve_stack);
+  if (colDeleted[col]) return Result::kOk;
 
   if (mipsolver != nullptr) convertImpliedInteger(col, row);
 
@@ -3027,7 +3027,7 @@ HPresolve::Result HPresolve::detectDominatedCol(
       return checkLimits(postsolve_stack);
     }
   }
-  return checkLimits(postsolve_stack);
+  return Result::kOk;
 }
 
 HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
@@ -3794,14 +3794,14 @@ HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
       HPRESOLVE_CHECKED_CALL(
           checkForcingRow(row, HighsInt{1}, model->row_lower_[row],
                           HighsPostsolveStack::RowType::kGeq));
-      if (rowDeleted[row]) return checkLimits(postsolve_stack);
+      if (rowDeleted[row]) return Result::kOk;
 
     } else if (impliedRowLower >= model->row_upper_[row] - primal_feastol) {
       // forcing row in the other direction
       HPRESOLVE_CHECKED_CALL(
           checkForcingRow(row, HighsInt{-1}, model->row_upper_[row],
                           HighsPostsolveStack::RowType::kLeq));
-      if (rowDeleted[row]) return checkLimits(postsolve_stack);
+      if (rowDeleted[row]) return Result::kOk;
     }
   }
 
@@ -3888,7 +3888,7 @@ HPresolve::Result HPresolve::colPresolve(HighsPostsolveStack& postsolve_stack,
 
   // detect dominated column
   HPRESOLVE_CHECKED_CALL(detectDominatedCol(postsolve_stack, col));
-  if (colDeleted[col]) return checkLimits(postsolve_stack);
+  if (colDeleted[col]) return Result::kOk;
 
   // column is not (weakly) dominated
 
