@@ -2928,8 +2928,12 @@ HPresolve::Result HPresolve::detectDominatedCol(
       return Result::kOk;
     if (direction * bound == -kHighsInf) return Result::kDualInfeasible;
     if (logging_on) analysis_.startPresolveRuleLog(kPresolveRuleDominatedCol);
-    if (direction > 0 ? fixColToLowerOrUnbounded(postsolve_stack, col)
-                      : fixColToUpperOrUnbounded(postsolve_stack, col)) {
+    bool unbounded = false;
+    if (direction > 0)
+      unbounded = fixColToLowerOrUnbounded(postsolve_stack, col);
+    else
+      unbounded = fixColToUpperOrUnbounded(postsolve_stack, col);
+    if (unbounded) {
       // Handle unboundedness
       presolve_status_ = HighsPresolveStatus::kUnboundedOrInfeasible;
       return Result::kDualInfeasible;
@@ -2947,8 +2951,12 @@ HPresolve::Result HPresolve::detectDominatedCol(
       return Result::kOk;
     if (direction * bound != -kHighsInf) {
       if (logging_on) analysis_.startPresolveRuleLog(kPresolveRuleDominatedCol);
-      if (direction > 0 ? fixColToLowerOrUnbounded(postsolve_stack, col)
-                        : fixColToUpperOrUnbounded(postsolve_stack, col)) {
+      bool unbounded = false;
+      if (direction > 0)
+        unbounded = fixColToLowerOrUnbounded(postsolve_stack, col);
+      else
+        unbounded = fixColToUpperOrUnbounded(postsolve_stack, col);
+      if (unbounded) {
         // Handle unboundedness
         presolve_status_ = HighsPresolveStatus::kUnboundedOrInfeasible;
         return Result::kDualInfeasible;
@@ -2956,29 +2964,34 @@ HPresolve::Result HPresolve::detectDominatedCol(
       analysis_.logging_on_ = logging_on;
       if (logging_on) analysis_.stopPresolveRuleLog(kPresolveRuleDominatedCol);
       return checkLimits(postsolve_stack);
-    } else if ((direction > 0
-                    ? impliedDualRowBounds.getSumUpperOrig(col)
-                    : impliedDualRowBounds.getSumLowerOrig(col)) == 0.0 &&
-               analysis_.allow_rule_[kPresolveRuleForcingCol]) {
-      if (logging_on) analysis_.startPresolveRuleLog(kPresolveRuleForcingCol);
-      postsolve_stack.forcingColumn(
-          col, getColumnVector(col), model->col_cost_[col], otherBound,
-          direction < 0, model->integrality_[col] == HighsVarType::kInteger);
-      markColDeleted(col);
-      HighsInt coliter = colhead[col];
-      while (coliter != -1) {
-        HighsInt row = Arow[coliter];
-        double rhs = direction * Avalue[coliter] > 0.0 ? model->row_upper_[row]
-                                                       : model->row_lower_[row];
-        coliter = Anext[coliter];
+    } else if (analysis_.allow_rule_[kPresolveRuleForcingCol]) {
+      HighsCDouble sum = 0;
+      if (direction > 0)
+        sum = impliedDualRowBounds.getSumUpperOrig(col);
+      else
+        sum = impliedDualRowBounds.getSumLowerOrig(col);
+      if (sum == 0.0) {
+        if (logging_on) analysis_.startPresolveRuleLog(kPresolveRuleForcingCol);
+        postsolve_stack.forcingColumn(
+            col, getColumnVector(col), model->col_cost_[col], otherBound,
+            direction < 0, model->integrality_[col] == HighsVarType::kInteger);
+        markColDeleted(col);
+        HighsInt coliter = colhead[col];
+        while (coliter != -1) {
+          HighsInt row = Arow[coliter];
+          double rhs = direction * Avalue[coliter] > 0.0
+                           ? model->row_upper_[row]
+                           : model->row_lower_[row];
+          coliter = Anext[coliter];
 
-        postsolve_stack.forcingColumnRemovedRow(col, row, rhs,
-                                                getRowVector(row));
-        removeRow(row);
+          postsolve_stack.forcingColumnRemovedRow(col, row, rhs,
+                                                  getRowVector(row));
+          removeRow(row);
+        }
+        analysis_.logging_on_ = logging_on;
+        if (logging_on) analysis_.stopPresolveRuleLog(kPresolveRuleForcingCol);
+        return checkLimits(postsolve_stack);
       }
-      analysis_.logging_on_ = logging_on;
-      if (logging_on) analysis_.stopPresolveRuleLog(kPresolveRuleForcingCol);
-      return checkLimits(postsolve_stack);
     }
     return Result::kOk;
   };
