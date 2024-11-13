@@ -4798,7 +4798,6 @@ HPresolve::Result HPresolve::aggregator(HighsPostsolveStack& postsolve_stack) {
       }
     }
 
-    storeRow(row);
     HighsInt fillin = -(rowsize[row] + colsize[col] - 1);
     for (const auto& nz : getColumnVector(col)) {
       if (nz.index() == row) continue;
