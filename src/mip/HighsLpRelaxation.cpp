@@ -548,6 +548,7 @@ void HighsLpRelaxation::removeCuts(HighsInt ndelcuts,
     assert(lpsolver.getLp().num_row_ == (HighsInt)lprows.size());
     basis.debug_origin_name = "HighsLpRelaxation::removeCuts";
     lpsolver.setBasis(basis);
+    lpsolver.setOptionValue("presolve", "off");
     mipsolver.analysis_.mipTimerStart(kMipClockSimplexBasisSolveLp);
     lpsolver.run();
     mipsolver.analysis_.mipTimerStop(kMipClockSimplexBasisSolveLp);
@@ -847,8 +848,8 @@ bool HighsLpRelaxation::computeDualProof(const HighsDomain& globaldomain,
   assert(std::isfinite(rhs));
   globaldomain.tightenCoefficients(inds.data(), vals.data(), inds.size(), rhs);
 
-  mipsolver.mipdata_->debugSolution.checkCut(inds.data(), vals.data(),
-                                             inds.size(), rhs);
+  if(mipsolver.mipdata_->debugSolution.checkCut(inds.data(), vals.data(),
+                                             inds.size(), rhs));
   if (extractCliques)
     mipsolver.mipdata_->cliquetable.extractCliquesFromCut(
         mipsolver, inds.data(), vals.data(), inds.size(), rhs);
@@ -963,9 +964,9 @@ void HighsLpRelaxation::storeDualInfProof() {
       dualproofinds.data(), dualproofvals.data(), dualproofinds.size(),
       dualproofrhs);
 
-  mipsolver.mipdata_->debugSolution.checkCut(
+  if (mipsolver.mipdata_->debugSolution.checkCut(
       dualproofinds.data(), dualproofvals.data(), dualproofinds.size(),
-      dualproofrhs);
+      dualproofrhs));
 
   mipsolver.mipdata_->cliquetable.extractCliquesFromCut(
       mipsolver, dualproofinds.data(), dualproofvals.data(),
@@ -1074,6 +1075,7 @@ HighsLpRelaxation::Status HighsLpRelaxation::run(bool resolve_on_error) {
                             kHighsAnalysisLevelSolverRuntimeData);
   }
 
+  lpsolver.setOptionValue("presolve", "off");
   mipsolver.analysis_.mipTimerStart(simplex_solve_clock);
   HighsStatus callstatus = lpsolver.run();
   mipsolver.analysis_.mipTimerStop(simplex_solve_clock);

@@ -1049,7 +1049,6 @@ bool HighsCutGeneration::preprocessBaseInequality(bool& hasUnboundedInts,
   return maxact > rhs;
 }
 
-#if 0
 static void checkNumerics(const double* vals, HighsInt len, double rhs) {
   double maxAbsCoef = 0.0;
   double minAbsCoef = kHighsInf;
@@ -1066,54 +1065,55 @@ static void checkNumerics(const double* vals, HighsInt len, double rhs) {
   //       ", minCoef: %g, maxCoef, %g, norm %g, rhs: %g, dynamism=%g\n",
   //       len, minAbsCoef, maxAbsCoef, norm, rhs, maxAbsCoef / minAbsCoef);
 }
-#endif
 
 bool HighsCutGeneration::generateCut(HighsTransformedLp& transLp,
                                      std::vector<HighsInt>& inds_,
                                      std::vector<double>& vals_, double& rhs_,
                                      bool onlyInitialCMIRScale) {
-#if 0
-  if (vals_.size() > 1) {
-    std::vector<HighsInt> indsCheck_ = inds_;
-    std::vector<double> valsCheck_ = vals_;
-    double tmprhs_ = rhs_;
-    bool intsPositive = true;
-    if (!transLp.transform(valsCheck_, upper, solval, indsCheck_, tmprhs_,
-                           intsPositive))
-      return false;
+  bool mydebug = false;
+  if (mydebug) {
+    if (vals_.size() > 1) {
+      std::vector<HighsInt> indsCheck_ = inds_;
+      std::vector<double> valsCheck_ = vals_;
+      double tmprhs_ = rhs_;
+      bool intsPositive = true;
+      if (!transLp.transform(valsCheck_, upper, solval, indsCheck_, tmprhs_,
+                             intsPositive))
+        return false;
 
-    rowlen = indsCheck_.size();
-    this->inds = indsCheck_.data();
-    this->vals = valsCheck_.data();
-    this->rhs = tmprhs_;
-    complementation.clear();
-    bool hasUnboundedInts = false;
-    bool hasGeneralInts = false;
-    bool hasContinuous = false;
-    // printf("before preprocessing of base inequality:\n");
-    checkNumerics(vals, rowlen, double(rhs));
-    if (!preprocessBaseInequality(hasUnboundedInts, hasGeneralInts,
-                                  hasContinuous))
-      return false;
-    // printf("after preprocessing of base inequality:\n");
-    checkNumerics(vals, rowlen, double(rhs));
+      rowlen = indsCheck_.size();
+      this->inds = indsCheck_.data();
+      this->vals = valsCheck_.data();
+      this->rhs = tmprhs_;
+      complementation.clear();
+      bool hasUnboundedInts = false;
+      bool hasGeneralInts = false;
+      bool hasContinuous = false;
+      // printf("before preprocessing of base inequality:\n");
+      checkNumerics(vals, rowlen, double(rhs));
+      if (!preprocessBaseInequality(hasUnboundedInts, hasGeneralInts,
+                                    hasContinuous))
+        return false;
+      // printf("after preprocessing of base inequality:\n");
+      checkNumerics(vals, rowlen, double(rhs));
 
-    tmprhs_ = (double)rhs;
-    valsCheck_.resize(rowlen);
-    indsCheck_.resize(rowlen);
-    if (!transLp.untransform(valsCheck_, indsCheck_, tmprhs_)) return false;
+      tmprhs_ = (double)rhs;
+      valsCheck_.resize(rowlen);
+      indsCheck_.resize(rowlen);
+      if (!transLp.untransform(valsCheck_, indsCheck_, tmprhs_)) return false;
 
-    // printf("after untransform of base inequality:\n");
-    checkNumerics(vals, rowlen, double(rhs));
+      // printf("after untransform of base inequality:\n");
+      checkNumerics(vals, rowlen, double(rhs));
 
-    // finally check whether the cut is violated
-    rowlen = indsCheck_.size();
-    inds = indsCheck_.data();
-    vals = valsCheck_.data();
-    lpRelaxation.getMipSolver().mipdata_->debugSolution.checkCut(
-        inds, vals, rowlen, tmprhs_);
+      // finally check whether the cut is violated
+      rowlen = indsCheck_.size();
+      inds = indsCheck_.data();
+      vals = valsCheck_.data();
+      if (!lpRelaxation.getMipSolver().mipdata_->debugSolution.checkCut(
+              inds, vals, rowlen, tmprhs_))
+        return false;
+    }
   }
-#endif
 
   bool intsPositive = true;
   if (!transLp.transform(vals_, upper, solval, inds_, rhs_, intsPositive))
@@ -1184,7 +1184,13 @@ bool HighsCutGeneration::generateCut(HighsTransformedLp& transLp,
       }
     } while (false);
 
+    // save data that might otherwise be overwritten when calling the cmir
+    // separator
+    bool saveIntegalSupport = integralSupport;
+    bool saveIntegralCoefficients = integralCoefficients;
+
     double minMirEfficacy = minEfficacy;
+
     if (success) {
       double violation = -double(rhs);
       double sqrnorm = 0.0;
@@ -1239,6 +1245,8 @@ bool HighsCutGeneration::generateCut(HighsTransformedLp& transLp,
       complementation.clear();
       inds = inds_.data();
       vals = vals_.data();
+      integralSupport = saveIntegalSupport;
+      integralCoefficients = saveIntegralCoefficients;
     } else
       // neither cmir nor lifted cut successful
       return false;
@@ -1275,8 +1283,9 @@ bool HighsCutGeneration::generateCut(HighsTransformedLp& transLp,
   vals = vals_.data();
   rhs = rhs_;
 
-  lpRelaxation.getMipSolver().mipdata_->debugSolution.checkCut(inds, vals,
-                                                               rowlen, rhs_);
+  if (!lpRelaxation.getMipSolver().mipdata_->debugSolution.checkCut(
+          inds, vals, rowlen, rhs_))
+    return false;
   // apply cut postprocessing including scaling and removal of small
   // coefficients
   if (!postprocessCut()) return false;
@@ -1284,8 +1293,9 @@ bool HighsCutGeneration::generateCut(HighsTransformedLp& transLp,
   vals_.resize(rowlen);
   inds_.resize(rowlen);
 
-  lpRelaxation.getMipSolver().mipdata_->debugSolution.checkCut(
-      inds_.data(), vals_.data(), rowlen, rhs_);
+  if (!lpRelaxation.getMipSolver().mipdata_->debugSolution.checkCut(
+          inds_.data(), vals_.data(), rowlen, rhs_))
+    return false;
 
   // finally determine the violation of the cut in the original space
   HighsCDouble violation = -rhs_;
@@ -1317,8 +1327,9 @@ bool HighsCutGeneration::generateConflict(HighsDomain& localdomain,
   this->rhs = proofrhs;
   rowlen = proofinds.size();
 
-  lpRelaxation.getMipSolver().mipdata_->debugSolution.checkCut(
-      inds, vals, rowlen, proofrhs);
+  if (!lpRelaxation.getMipSolver().mipdata_->debugSolution.checkCut(
+          inds, vals, rowlen, proofrhs))
+    ;
 
   complementation.assign(rowlen, 0);
 
@@ -1494,8 +1505,9 @@ bool HighsCutGeneration::finalizeAndAddCut(std::vector<HighsInt>& inds_,
   vals_.resize(rowlen);
   inds_.resize(rowlen);
 
-  lpRelaxation.getMipSolver().mipdata_->debugSolution.checkCut(inds, vals,
-                                                               rowlen, rhs_);
+  if (!lpRelaxation.getMipSolver().mipdata_->debugSolution.checkCut(
+          inds, vals, rowlen, rhs_))
+    return false;
   // apply cut postprocessing including scaling and removal of small
   // coefficients
   if (!postprocessCut()) return false;
@@ -1503,8 +1515,9 @@ bool HighsCutGeneration::finalizeAndAddCut(std::vector<HighsInt>& inds_,
   vals_.resize(rowlen);
   inds_.resize(rowlen);
 
-  lpRelaxation.getMipSolver().mipdata_->debugSolution.checkCut(
-      inds_.data(), vals_.data(), rowlen, rhs_);
+  if (!lpRelaxation.getMipSolver().mipdata_->debugSolution.checkCut(
+          inds_.data(), vals_.data(), rowlen, rhs_))
+    return false;
 
   // finally determine the violation of the cut in the original space
   HighsCDouble violation = -rhs_;

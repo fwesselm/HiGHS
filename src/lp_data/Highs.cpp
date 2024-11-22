@@ -1481,7 +1481,7 @@ HighsStatus Highs::run() {
             if (perform_kkt_check) {
               // Possibly force debug to perform KKT check on what's
               // returned from postsolve
-              const bool force_debug = false;
+              const bool force_debug = true;
               HighsInt save_highs_debug_level = options_.highs_debug_level;
               if (force_debug)
                 options_.highs_debug_level = kHighsDebugLevelCostly;

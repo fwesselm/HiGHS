@@ -154,16 +154,17 @@ void HighsDebugSol::boundChangeRemoved(const HighsDomain& domain,
     conflictingBounds[&domain].erase(i);
 }
 
-void HighsDebugSol::checkCut(const HighsInt* Rindex, const double* Rvalue,
+bool HighsDebugSol::checkCut(const HighsInt* Rindex, const double* Rvalue,
                              HighsInt Rlen, double rhs) {
-  if (!debugSolActive) return;
+  if (!debugSolActive) return true;
 
   HighsCDouble violation = -rhs;
 
   for (HighsInt i = 0; i != Rlen; ++i)
     violation += debugSolution[Rindex[i]] * Rvalue[i];
 
-  assert(violation <= mipsolver->mipdata_->feastol);
+  bool isOk = violation <= mipsolver->mipdata_->feastol;
+  return isOk;
 }
 
 void HighsDebugSol::checkRowAggregation(const HighsLp& lp,

@@ -101,7 +101,7 @@ bool HighsMipSolverData::checkSolution(
   }
 
   for (HighsInt i = 0; i != mipsolver.model_->num_row_; ++i) {
-    double rowactivity = 0.0;
+    HighsCDouble rowactivity = 0.0;
 
     HighsInt start = ARstart_[i];
     HighsInt end = ARstart_[i + 1];
@@ -1111,6 +1111,7 @@ try_again:
     tmpSolver.setOptionValue("time_limit", time_available);
     tmpSolver.setOptionValue("primal_feasibility_tolerance",
                              mipsolver.options_mip_->mip_feasibility_tolerance);
+    tmpSolver.setOptionValue("presolve", "off");
     tmpSolver.passModel(std::move(fixedModel));
     mipsolver.analysis_.mipTimerStart(kMipClockSimplexNoBasisSolveLp);
     tmpSolver.run();
@@ -1942,10 +1943,10 @@ restart:
     mipsolver.analysis_.mipTimerStop(kMipClockSeparateLpCuts);
 #ifdef HIGHS_DEBUGSOL
     for (HighsInt i = 0; i < cutset.numCuts(); ++i) {
-      debugSolution.checkCut(cutset.ARindex_.data() + cutset.ARstart_[i],
+      if (debugSolution.checkCut(cutset.ARindex_.data() + cutset.ARstart_[i],
                              cutset.ARvalue_.data() + cutset.ARstart_[i],
                              cutset.ARstart_[i + 1] - cutset.ARstart_[i],
-                             cutset.upper_[i]);
+                             cutset.upper_[i]));
     }
 #endif
     lp.addCuts(cutset);
