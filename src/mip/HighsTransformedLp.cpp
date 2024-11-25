@@ -140,20 +140,21 @@ bool HighsTransformedLp::transform(std::vector<double>& vals,
   HighsInt numNz = inds.size();
   bool removeZeros = false;
 
+  auto getLb = [&](HighsInt col) {
+    return (col < slackOffset ? mip.mipdata_->domain.col_lower_[col]
+                              : lprelaxation.slackLower(col - slackOffset));
+  };
+
+  auto getUb = [&](HighsInt col) {
+    return (col < slackOffset ? mip.mipdata_->domain.col_upper_[col]
+                              : lprelaxation.slackUpper(col - slackOffset));
+  };
+
   for (HighsInt i = 0; i != numNz; ++i) {
     HighsInt col = inds[i];
 
-    double lb;
-    double ub;
-
-    if (col < slackOffset) {
-      lb = mip.mipdata_->domain.col_lower_[col];
-      ub = mip.mipdata_->domain.col_upper_[col];
-    } else {
-      HighsInt row = col - slackOffset;
-      lb = lprelaxation.slackLower(row);
-      ub = lprelaxation.slackUpper(row);
-    }
+    double lb = getLb(col);
+    double ub = getUb(col);
 
     if (ub - lb < mip.options_mip_->small_matrix_value) {
       tmpRhs -= std::min(lb, ub) * vals[i];
@@ -179,7 +180,6 @@ bool HighsTransformedLp::transform(std::vector<double>& vals,
     BoundType oldBoundType = boundTypes[col];
 
     if (lprelaxation.isColIntegral(col)) {
-      if (lb == -kHighsInf || ub == kHighsInf) integersPositive = false;
       if (ub - lb <= 1.5 || boundDist[col] != 0.0 || simpleLbDist[col] == 0 ||
           simpleUbDist[col] == 0)
         continue;
@@ -254,7 +254,7 @@ bool HighsTransformedLp::transform(std::vector<double>& vals,
       case BoundType::kVariableLb:
         tmpRhs -= bestVlb[col].second.constant * vals[i];
         vectorsum.add(bestVlb[col].first, vals[i] * bestVlb[col].second.coef);
-        // arbitrarily initialize bound type for VLB
+        // arbitrarily initialize bound type for slack variable from VLB
         boundTypes[bestVlb[col].first] = BoundType::kSimpleLb;
         if (vals[i] > 0) {
           // relax
@@ -265,7 +265,7 @@ bool HighsTransformedLp::transform(std::vector<double>& vals,
       case BoundType::kVariableUb:
         tmpRhs -= bestVub[col].second.constant * vals[i];
         vectorsum.add(bestVub[col].first, vals[i] * bestVub[col].second.coef);
-        // arbitrarily initialize bound type for VUB
+        // arbitrarily initialize bound type for slack variable from VUB
         boundTypes[bestVub[col].first] = BoundType::kSimpleLb;
         vals[i] = -vals[i];
         if (vals[i] > 0) {
@@ -323,13 +323,13 @@ bool HighsTransformedLp::transform(std::vector<double>& vals,
     HighsInt col = inds[j];
 
     // skip non-integer variables as their bound types were set above
-    if (!lprelaxation.isColIntegral(col)) continue;
-
-    // skip vlb / vub variables since their status was also already set (and
-    // it would otherwise be overwritten)
-    // if (boundTypes[col] == BoundType::kVariableLb ||
-    //    boundTypes[col] == BoundType::kVariableUb)
-    //  continue;
+    // also skip integer-constrained slack variables from vlb / vub constraints
+    // since their status was also already set (and it would otherwise be
+    // overwritten)
+    if (!lprelaxation.isColIntegral(col) ||
+        boundTypes[col] == BoundType::kVariableLb ||
+        boundTypes[col] == BoundType::kVariableUb)
+      continue;
 
     if ((integersPositive && vals[j] > 0) ||
         (!integersPositive && lbDist[col] < ubDist[col]))
@@ -344,17 +344,8 @@ bool HighsTransformedLp::transform(std::vector<double>& vals,
   for (HighsInt j = 0; j != numNz; ++j) {
     HighsInt col = inds[j];
 
-    double lb;
-    double ub;
-
-    if (col < slackOffset) {
-      lb = mip.mipdata_->domain.col_lower_[col];
-      ub = mip.mipdata_->domain.col_upper_[col];
-    } else {
-      HighsInt row = col - slackOffset;
-      lb = lprelaxation.slackLower(row);
-      ub = lprelaxation.slackUpper(row);
-    }
+    double lb = getLb(col);
+    double ub = getUb(col);
 
     upper[j] = ub - lb;
 
@@ -383,9 +374,12 @@ bool HighsTransformedLp::transform(std::vector<double>& vals,
       }
       case BoundType::kVariableUb: {
         solval[j] = ubDist[col];
-        continue;
+        break;
       }
     }
+
+    if (lprelaxation.isColIntegral(col))
+      integersPositive = integersPositive && vals[j] > 0;
   }
 
   rhs = double(tmpRhs);
