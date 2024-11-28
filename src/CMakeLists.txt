@@ -1,7 +1,7 @@
 if (NOT BUILD_CXX)
   return()
 endif()
-  
+
 # Define library.
 include(sources)
 set(sources ${highs_sources} ${cupdlp_sources} ${ipx_sources} ${basiclu_sources})
@@ -26,6 +26,7 @@ if(NOT FAST_BUILD)
   if(${BUILD_SHARED_LIBS})
     # put version information into shared library file
     set_target_properties(libhighs PROPERTIES
+      PDB_NAME libhighs
       VERSION
       ${HIGHS_VERSION_MAJOR}.${HIGHS_VERSION_MINOR}.${HIGHS_VERSION_PATCH}
       SOVERSION ${HIGHS_VERSION_MAJOR}.${HIGHS_VERSION_MINOR})
@@ -84,7 +85,7 @@ if(NOT FAST_BUILD)
     # target_compile_options(libipx PRIVATE "-Wno-sign-compare")
     # target_compile_options(libipx PRIVATE "-Wno-logical-op-parentheses")
   endif()
-  
+
   install(TARGETS libhighs EXPORT highs-targets
     LIBRARY
     ARCHIVE
@@ -134,6 +135,7 @@ else()
   if(${BUILD_SHARED_LIBS})
     # put version information into shared library file
     set_target_properties(highs PROPERTIES
+      PDB_NAME libhighs
       VERSION
       ${HIGHS_VERSION_MAJOR}.${HIGHS_VERSION_MINOR}.${HIGHS_VERSION_PATCH}
       SOVERSION ${HIGHS_VERSION_MAJOR}.${HIGHS_VERSION_MINOR})
@@ -228,13 +230,13 @@ else()
       $<BUILD_INTERFACE:${HIGHS_SOURCE_DIR}/extern/zstr>
     )
     target_link_libraries(highs ZLIB::ZLIB)
-    set(CONF_DEPS 
+    set(CONF_DEPS
       "include(CMakeFindDependencyMacro)\nfind_dependency(Threads)\nfind_dependency(ZLIB)")
     set(CONF_DEPENDENCIES ${CONF_DEPS})
-  else() 
+  else()
     set(CONF_DEPENDENCIES "include(CMakeFindDependencyMacro)\nfind_dependency(Threads)")
   endif()
-    
+
 
   # # on UNIX system the 'lib' prefix is automatically added
   # set_target_properties(highs PROPERTIES
@@ -245,7 +247,7 @@ else()
   # set_target_properties(highs PROPERTIES
   # LIBRARY_OUTPUT_DIRECTORY "${HIGHS_BINARY_DIR}/${CMAKE_INSTALL_LIBDIR}")
   # endif()
-  
+
   # set_target_properties(highs PROPERTIES PUBLIC_HEADER "src/Highs.h;src/lp_data/HighsLp.h;src/lp_data/HighsLpSolverObject.h")
 
   # install the header files of highs
@@ -262,10 +264,27 @@ else()
 
   # target_compile_options(highs PRIVATE "-Wall")
   # target_compile_options(highs PRIVATE "-Wunused")
-  
+
   if (UNIX)
     target_compile_options(highs PRIVATE "-Wno-unused-variable")
     target_compile_options(highs PRIVATE "-Wno-unused-const-variable")
+  endif()
+
+  if (MSVC)
+    # Generate PDB files in Release mode
+    set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /Zi /Od /Ob0 /Oy-")
+    # Ensure the PDB files are placed in the correct directory
+    set(CMAKE_PDB_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/pdb_files")
+
+    # Add linker flags to include debug info in the PDB files for Release mode
+    # This ensures that the debug information is not stripped from the binary
+    set(CMAKE_EXE_LINKER_FLAGS_RELEASE "${CMAKE_EXE_LINKER_FLAGS_RELEASE} /DEBUG /OPT:REF /OPT:ICF")
+    set(CMAKE_SHARED_LINKER_FLAGS_RELEASE "${CMAKE_SHARED_LINKER_FLAGS_RELEASE} /DEBUG /OPT:REF /OPT:ICF")
+    set(CMAKE_STATIC_LINKER_FLAGS_RELEASE "${CMAKE_STATIC_LINKER_FLAGS_RELEASE} /DEBUG /OPT:REF /OPT:ICF")
+
+    # Turn off optimization in Release mode
+    # Note: This is not generally recommended as it negates the benefits of a Release build
+    string(REPLACE "/O2" "/Od" CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}")
   endif()
 
   # Configure the config file for the build tree:
@@ -295,7 +314,7 @@ else()
 
 
   if (BUILD_DOTNET)
-  
+
       # see: https://docs.microsoft.com/en-us/dotnet/core/rid-catalog
       if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(aarch64|arm64)")
         set(DOTNET_PLATFORM arm64)
@@ -326,8 +345,8 @@ else()
         set(TARGET_FILE_NAME "highs.dll")
       endif()
 
-      add_custom_command(TARGET highs POST_BUILD 
-        COMMAND "${CMAKE_COMMAND}" -E copy 
+      add_custom_command(TARGET highs POST_BUILD
+        COMMAND "${CMAKE_COMMAND}" -E copy
           "$<TARGET_FILE:highs>"
         ${DOTNET_PROJECT_DIR}/runtimes/${DOTNET_RID}/native/${TARGET_FILE_NAME}
         COMMENT "Copying to output directory")
@@ -346,7 +365,7 @@ if(FORTRAN_FOUND)
     target_link_libraries(FortranHighs PUBLIC highs)
   endif()
 
-  install(TARGETS FortranHighs 
+  install(TARGETS FortranHighs
     LIBRARY
     ARCHIVE
     RUNTIME
