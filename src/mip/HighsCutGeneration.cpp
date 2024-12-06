@@ -947,6 +947,7 @@ bool HighsCutGeneration::preprocessBaseInequality(bool& hasUnboundedInts,
         complementation[i] = 1 - complementation[i];
         rhs -= upper[i] * vals[i];
         vals[i] = -vals[i];
+        solval[i] = upper[i] - solval[i];
       }
 
       // relax positive continuous variables and those with small contributions
@@ -1210,7 +1211,7 @@ bool HighsCutGeneration::generateCut(HighsTransformedLp& transLp,
             if (complementation[i]) {
               rhs -= upper[i] * vals[i];
               vals[i] = -vals[i];
-              solval[i] = upper[i] - solval[i];
+              //solval[i] = upper[i] - solval[i];
             }
           }
         }
