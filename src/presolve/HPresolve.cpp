@@ -2666,10 +2666,22 @@ HPresolve::Result HPresolve::doubletonEq(HighsPostsolveStack& postsolve_stack,
 
   // possibly tighten bounds of the column that stays
   bool lowerTightened = stayImplLower > oldStayLower + primal_feastol;
-  if (lowerTightened) changeColLower(staycol, stayImplLower);
+  if (lowerTightened) {
+    // reject large lower bound
+    if (std::fabs(stayImplLower * kHighsTiny) > primal_feastol)
+      return Result::kOk;
+    // change lower bound
+    changeColLower(staycol, stayImplLower);
+  }
 
   bool upperTightened = stayImplUpper < oldStayUpper - primal_feastol;
-  if (upperTightened) changeColUpper(staycol, stayImplUpper);
+  if (upperTightened) {
+    // reject large upper bound
+    if (std::fabs(stayImplUpper * kHighsTiny) > primal_feastol)
+      return Result::kOk;
+    // change upper bound
+    changeColUpper(staycol, stayImplUpper);
+  }
 
   postsolve_stack.doubletonEquation(
       row, substcol, staycol, substcoef, staycoef, rhs, substLower, substUpper,
@@ -2756,6 +2768,14 @@ HPresolve::Result HPresolve::singletonRow(HighsPostsolveStack& postsolve_stack,
     if (model->row_lower_[row] != -kHighsInf)
       newColUpper = model->row_lower_[row] / val;
   }
+
+  // reject large bounds
+  if (newColLower != -kHighsInf &&
+      std::fabs(newColLower * kHighsTiny) > primal_feastol)
+    return Result::kOk;
+  if (newColUpper != kHighsInf &&
+      std::fabs(newColUpper * kHighsTiny) > primal_feastol)
+    return Result::kOk;
 
   // use either the primal feasibility tolerance for the bound constraint or
   // for the singleton row including scaling, whichever is tighter.
