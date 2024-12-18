@@ -2719,38 +2719,15 @@ HPresolve::Result HPresolve::singletonRow(HighsPostsolveStack& postsolve_stack,
   HighsInt col = Acol[nzPos];
   double val = Avalue[nzPos];
 
+  // zeros should not be linked in the matrix
+  assert(std::fabs(val) > options->small_matrix_value);
+
   // printf("singleton row\n");
   // debugPrintRow(row);
   // delete row singleton nonzero directly, we have all information that we need
   // in local variables
   markRowDeleted(row);
   unlink(nzPos);
-
-  // check for simple
-  if (val > 0) {
-    if (model->col_upper_[col] * val <=
-            model->row_upper_[row] + primal_feastol &&
-        model->col_lower_[col] * val >=
-            model->row_lower_[row] - primal_feastol) {
-      postsolve_stack.redundantRow(row);
-      analysis_.logging_on_ = logging_on;
-      if (logging_on) analysis_.stopPresolveRuleLog(kPresolveRuleSingletonRow);
-      return checkLimits(postsolve_stack);
-    }
-  } else {
-    if (model->col_lower_[col] * val <=
-            model->row_upper_[row] + primal_feastol &&
-        model->col_upper_[col] * val >=
-            model->row_lower_[row] - primal_feastol) {
-      postsolve_stack.redundantRow(row);
-      analysis_.logging_on_ = logging_on;
-      if (logging_on) analysis_.stopPresolveRuleLog(kPresolveRuleSingletonRow);
-      return checkLimits(postsolve_stack);
-    }
-  }
-
-  // zeros should not be linked in the matrix
-  assert(std::fabs(val) > options->small_matrix_value);
 
   double newColUpper = kHighsInf;
   double newColLower = -kHighsInf;
@@ -2764,6 +2741,15 @@ HPresolve::Result HPresolve::singletonRow(HighsPostsolveStack& postsolve_stack,
       newColLower = model->row_upper_[row] / val;
     if (model->row_lower_[row] != -kHighsInf)
       newColUpper = model->row_lower_[row] / val;
+  }
+
+  // check for redundancy
+  if (model->col_upper_[col] <= newColUpper + primal_feastol &&
+      model->col_lower_[col] >= newColLower - primal_feastol) {
+    postsolve_stack.redundantRow(row);
+    analysis_.logging_on_ = logging_on;
+    if (logging_on) analysis_.stopPresolveRuleLog(kPresolveRuleSingletonRow);
+    return checkLimits(postsolve_stack);
   }
 
   // use either the primal feasibility tolerance for the bound constraint or
