@@ -49,9 +49,7 @@ void HSimplexNla::frozenBasisClearAllData() {
 }
 
 void HSimplexNla::frozenBasisClearAllUpdate() {
-  for (size_t frozen_basis_id = 0; frozen_basis_id < this->frozen_basis_.size();
-       frozen_basis_id++)
-    this->frozen_basis_[frozen_basis_id].update_.clear();
+  for (auto& basis : this->frozen_basis_) basis.update_.clear();
   this->update_.clear();
 }
 

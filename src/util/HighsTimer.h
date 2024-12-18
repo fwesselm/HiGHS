@@ -277,8 +277,7 @@ class HighsTimer {
     // determine the total clock times
     HighsInt sum_calls = 0;
     double sum_clock_times = 0;
-    for (size_t i = 0; i < num_clock_list_entries; i++) {
-      HighsInt iClock = clock_list[i];
+    for (HighsInt iClock : clock_list) {
       assert(iClock >= 0);
       assert(iClock < num_clock);
       // Check that the clock's not still running. It should be set to

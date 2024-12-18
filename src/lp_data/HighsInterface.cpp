@@ -217,8 +217,7 @@ HighsStatus Highs::formStandardFormLp() {
     }
   }
   // Now add the slack variables
-  for (HighsInt iX = 0; iX < HighsInt(slack_ix.size()); iX++) {
-    HighsInt iRow = slack_ix[iX];
+  for (HighsInt iRow : slack_ix) {
     this->standard_form_cost_.push_back(0);
     if (iRow > 0) {
       this->standard_form_matrix_.index_.push_back(iRow - 1);
@@ -3073,11 +3072,11 @@ HighsStatus Highs::computeIllConditioning(
     std::vector<double> value(incumbent_lp.num_col_);
     HighsInt* p_index = index.data();
     double* p_value = value.data();
-    for (HighsInt iX = 0; iX < HighsInt(ill_conditioning.record.size()); iX++) {
+    for (const auto& rec : ill_conditioning.record) {
       ss.str(std::string());
       bool newline = false;
-      HighsInt iRow = ill_conditioning.record[iX].index;
-      double multiplier = ill_conditioning.record[iX].multiplier;
+      HighsInt iRow = rec.index;
+      double multiplier = rec.multiplier;
       // Extract the row corresponding to this constraint
       num_nz = 0;
       incumbent_matrix.getRow(iRow, num_nz, p_index, p_value);
@@ -3118,11 +3117,11 @@ HighsStatus Highs::computeIllConditioning(
                      ss.str().c_str());
     }
   } else {
-    for (HighsInt iX = 0; iX < HighsInt(ill_conditioning.record.size()); iX++) {
+    for (const auto& rec : ill_conditioning.record) {
       ss.str(std::string());
       bool newline = false;
-      double multiplier = ill_conditioning.record[iX].multiplier;
-      HighsInt iCol = basic_var[ill_conditioning.record[iX].index];
+      double multiplier = rec.multiplier;
+      HighsInt iCol = basic_var[rec.index];
       if (iCol < incumbent_lp.num_col_) {
         std::string col_name = has_col_names ? incumbent_lp.col_names_[iCol]
                                              : "C" + std::to_string(iCol);

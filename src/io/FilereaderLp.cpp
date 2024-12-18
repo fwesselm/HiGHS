@@ -73,8 +73,7 @@ FilereaderRetcode FilereaderLp::readModelFromFile(const HighsOptions& options,
     //
     lp.offset_ = m.objective->offset;
     lp.col_cost_.resize(lp.num_col_, 0.0);
-    for (size_t i = 0; i < m.objective->linterms.size(); i++) {
-      std::shared_ptr<LinTerm> lt = m.objective->linterms[i];
+    for (const auto& lt : m.objective->linterms) {
       lp.col_cost_[varindex[lt->var->name]] = lt->coef;
     }
 
@@ -130,8 +129,7 @@ FilereaderRetcode FilereaderLp::readModelFromFile(const HighsOptions& options,
     for (size_t i = 0; i < m.constraints.size(); i++) {
       std::shared_ptr<Constraint> con = m.constraints[i];
       lp.row_names_[i] = con->expr->name;
-      for (size_t j = 0; j < con->expr->linterms.size(); j++) {
-        std::shared_ptr<LinTerm> lt = con->expr->linterms[j];
+      for (const auto& lt : con->expr->linterms) {
         if (consofvarmap_index.count(lt->var) == 0) {
           consofvarmap_index[lt->var] = std::vector<unsigned int>();
           consofvarmap_value[lt->var] = std::vector<double>();

@@ -950,8 +950,8 @@ void HEkkDual::majorRollback() {
     ekk_instance_.updateMatrix(finish->variable_out, finish->variable_in);
 
     // 3. Roll back flips
-    for (unsigned i = 0; i < finish->flipList.size(); i++) {
-      ekk_instance_.flipBound(finish->flipList[i]);
+    for (const HighsInt& flip : finish->flipList) {
+      ekk_instance_.flipBound(flip);
     }
 
     // 4. Roll back cost

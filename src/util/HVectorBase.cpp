@@ -90,8 +90,8 @@ void HVectorBase<Real>::tight() {
   HighsInt totalCount = 0;
   using std::abs;
   if (count < 0) {
-    for (size_t my_index = 0; my_index < array.size(); my_index++)
-      if (abs(array[my_index]) < kHighsTiny) array[my_index] = 0;
+    for (auto& v : array)
+      if (abs(v) < kHighsTiny) v = 0;
   } else {
     for (HighsInt i = 0; i < count; i++) {
       const HighsInt my_index = index[i];

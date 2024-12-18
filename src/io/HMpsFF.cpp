@@ -106,11 +106,9 @@ FreeFormatParserReturnCode HMpsFF::loadProblem(
 
   // Only set up lp.integrality_ if non-continuous
   bool is_mip = false;
-  for (size_t iCol = 0; iCol < col_integrality.size(); iCol++) {
-    if (col_integrality[iCol] != HighsVarType::kContinuous) {
-      is_mip = true;
-      break;
-    }
+  for (const auto& status : col_integrality) {
+    is_mip = status != HighsVarType::kContinuous;
+    if (is_mip) break;
   }
   if (is_mip) lp.integrality_ = std::move(col_integrality);
 
@@ -191,9 +189,8 @@ HighsInt HMpsFF::fillHessian(const HighsLogOptions& log_options) {
   std::vector<HighsInt> q_length;
   q_length.assign(q_dim, 0);
 
-  for (size_t iEl = 0; iEl < num_entries; iEl++) {
-    HighsInt iCol = std::get<1>(q_entries[iEl]);
-    q_length[iCol]++;
+  for (const auto& entry : q_entries) {
+    q_length[std::get<1>(entry)]++;
   }
   q_start[0] = 0;
   for (HighsInt iCol = 0; iCol < num_col; iCol++) {
@@ -201,10 +198,10 @@ HighsInt HMpsFF::fillHessian(const HighsLogOptions& log_options) {
     q_length[iCol] = q_start[iCol];
   }
 
-  for (size_t iEl = 0; iEl < num_entries; iEl++) {
-    HighsInt iRow = std::get<0>(q_entries[iEl]);
-    HighsInt iCol = std::get<1>(q_entries[iEl]);
-    double value = std::get<2>(q_entries[iEl]);
+  for (const auto& entry : q_entries) {
+    HighsInt iRow = std::get<0>(entry);
+    HighsInt iCol = std::get<1>(entry);
+    double value = std::get<2>(entry);
     q_index[q_length[iCol]] = iRow;
     q_value[q_length[iCol]] = value;
     q_length[iCol]++;

@@ -1964,8 +1964,7 @@ void HPresolve::scaleMIP(HighsPostsolveStack& postsolve_stack) {
 
     double maxAbsVal = 0.0;
 
-    for (size_t j = 0; j < rowpositions.size(); ++j) {
-      HighsInt nzPos = rowpositions[j];
+    for (HighsInt nzPos : rowpositions) {
       if (model->integrality_[Acol[nzPos]] != HighsVarType::kContinuous)
         continue;
 
@@ -2368,10 +2367,9 @@ void HPresolve::scaleStoredRow(HighsInt row, double scale, bool integral) {
       model->row_lower_[row] = std::round(model->row_lower_[row]);
   }
 
-  for (size_t j = 0; j < rowpositions.size(); ++j) {
-    Avalue[rowpositions[j]] *= scale;
-    if (std::abs(Avalue[rowpositions[j]]) <= options->small_matrix_value)
-      unlink(rowpositions[j]);
+  for (HighsInt nzPos : rowpositions) {
+    Avalue[nzPos] *= scale;
+    if (std::abs(Avalue[nzPos]) <= options->small_matrix_value) unlink(nzPos);
   }
 
   impliedRowBounds.sumScaled(row, scale);
@@ -4767,19 +4765,19 @@ HPresolve::Result HPresolve::aggregator(HighsPostsolveStack& postsolve_stack) {
       });
 
   HighsInt nfail = 0;
-  for (size_t i = 0; i < substitutionOpportunities.size(); ++i) {
-    HighsInt row = substitutionOpportunities[i].first;
-    HighsInt col = substitutionOpportunities[i].second;
+  for (auto& opp : substitutionOpportunities) {
+    HighsInt row = opp.first;
+    HighsInt col = opp.second;
 
     if (rowDeleted[row] || colDeleted[col] || !isImpliedFree(col) ||
         !isDualImpliedFree(row)) {
-      substitutionOpportunities[i].first = -1;
+      opp.first = -1;
       continue;
     }
 
     HighsInt nzPos = findNonzero(row, col);
     if (nzPos == -1) {
-      substitutionOpportunities[i].first = -1;
+      opp.first = -1;
       continue;
     }
     if (model->integrality_[col] == HighsVarType::kInteger) {
@@ -4795,7 +4793,7 @@ HPresolve::Result HPresolve::aggregator(HighsPostsolveStack& postsolve_stack) {
     if (rowsize[row] == 2 || colsize[col] == 2) {
       storeRow(row);
       substituteFreeCol(postsolve_stack, row, col, true);
-      substitutionOpportunities[i].first = -1;
+      opp.first = -1;
       HPRESOLVE_CHECKED_CALL(removeRowSingletons(postsolve_stack));
       HPRESOLVE_CHECKED_CALL(checkLimits(postsolve_stack));
       continue;
@@ -4808,7 +4806,7 @@ HPresolve::Result HPresolve::aggregator(HighsPostsolveStack& postsolve_stack) {
                                            : getMaxAbsRowVal(row);
       if (std::fabs(Avalue[nzPos]) <
           maxVal * options->presolve_pivot_threshold) {
-        substitutionOpportunities[i].first = -1;
+        opp.first = -1;
         continue;
       }
     }
@@ -4833,7 +4831,7 @@ HPresolve::Result HPresolve::aggregator(HighsPostsolveStack& postsolve_stack) {
 
     nfail = 0;
     substituteFreeCol(postsolve_stack, row, col, true);
-    substitutionOpportunities[i].first = -1;
+    opp.first = -1;
     HPRESOLVE_CHECKED_CALL(removeRowSingletons(postsolve_stack));
     HPRESOLVE_CHECKED_CALL(checkLimits(postsolve_stack));
   }
@@ -5052,8 +5050,7 @@ void HPresolve::removeFixedCol(HighsInt col) {
 
 HPresolve::Result HPresolve::removeRowSingletons(
     HighsPostsolveStack& postsolve_stack) {
-  for (size_t i = 0; i != singletonRows.size(); ++i) {
-    HighsInt row = singletonRows[i];
+  for (HighsInt row : singletonRows) {
     if (rowDeleted[row] || rowsize[row] > 1) continue;
     // row presolve will delegate to rowSingleton() if the row size is 1
     // if the singleton row has become empty it will also remove the row
@@ -5067,8 +5064,7 @@ HPresolve::Result HPresolve::removeRowSingletons(
 
 HPresolve::Result HPresolve::presolveColSingletons(
     HighsPostsolveStack& postsolve_stack) {
-  for (size_t i = 0; i != singletonColumns.size(); ++i) {
-    HighsInt col = singletonColumns[i];
+  for (HighsInt col : singletonColumns) {
     if (colDeleted[col]) continue;
     HPRESOLVE_CHECKED_CALL(colPresolve(postsolve_stack, col));
   }
@@ -6391,8 +6387,8 @@ HPresolve::Result HPresolve::sparsify(HighsPostsolveStack& postsolve_stack) {
     HighsInt secondSparsestColumn = -1;
     HighsInt sparsestCol = Acol[rowpositions[0]];
     HighsInt sparsestColLen = kHighsIInf;
-    for (size_t i = 1; i < rowpositions.size(); ++i) {
-      HighsInt col = Acol[rowpositions[i]];
+    for (HighsInt nzPos : rowpositions) {
+      HighsInt col = Acol[nzPos];
       if (colsize[col] < sparsestColLen) {
         sparsestColLen = colsize[col];
         secondSparsestColumn = sparsestCol;

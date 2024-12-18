@@ -291,8 +291,7 @@ bool doubleUserDataNotNull(const HighsLogOptions& log_options,
 
 double getNorm2(const std::vector<double> values) {
   double sum = 0;
-  HighsInt values_size = values.size();
-  for (HighsInt i = 0; i < values_size; i++) sum += values[i] * values[i];
+  for (const double& v : values) sum += v * v;
   return sum;
 }
 

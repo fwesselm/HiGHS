@@ -559,11 +559,11 @@ bool HighsCutGeneration::cmirCutGenerationHeuristic(double minEfficacy,
 
   pdqsort(deltas.begin(), deltas.end());
   double curdelta = deltas[0];
-  for (size_t i = 1; i < deltas.size(); ++i) {
-    if (deltas[i] - curdelta <= 10 * feastol)
-      deltas[i] = 0.0;
+  for (double& delta : deltas) {
+    if (delta - curdelta <= 10 * feastol)
+      delta = 0.0;
     else
-      curdelta = deltas[i];
+      curdelta = delta;
   }
 
   deltas.erase(std::remove(deltas.begin(), deltas.end(), 0.0), deltas.end());

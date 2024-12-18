@@ -207,10 +207,8 @@ HighsStatus HighsIis::getData(const HighsLp& lp, const HighsOptions& options,
   if (this->compute(to_lp, options) != HighsStatus::kOk)
     return HighsStatus::kError;
   // Indirect the values into the original LP
-  for (HighsInt iCol = 0; iCol < HighsInt(this->col_index_.size()); iCol++)
-    this->col_index_[iCol] = from_col[this->col_index_[iCol]];
-  for (HighsInt iRow = 0; iRow < HighsInt(this->row_index_.size()); iRow++)
-    this->row_index_[iRow] = from_row[this->row_index_[iRow]];
+  for (HighsInt& iCol : this->col_index_) iCol = from_col[iCol];
+  for (HighsInt& iRow : this->row_index_) iRow = from_row[iRow];
   if (kIisDevReport) this->report("On exit", lp);
   return HighsStatus::kOk;
 }

@@ -2022,16 +2022,15 @@ void HighsDomain::setDomainChangeStack(
   domchgstack_.clear();
   domchgreason_.clear();
   branchPos_.clear();
-  HighsInt stacksize = domchgstack.size();
-  for (HighsInt k = 0; k != stacksize; ++k) {
-    if (domchgstack[k].boundtype == HighsBoundType::kLower &&
-        domchgstack[k].boundval <= col_lower_[domchgstack[k].column])
+  for (const auto& change : domchgstack) {
+    if (change.boundtype == HighsBoundType::kLower &&
+        change.boundval <= col_lower_[change.column])
       continue;
-    if (domchgstack[k].boundtype == HighsBoundType::kUpper &&
-        domchgstack[k].boundval >= col_upper_[domchgstack[k].column])
+    if (change.boundtype == HighsBoundType::kUpper &&
+        change.boundval >= col_upper_[change.column])
       continue;
 
-    changeBound(domchgstack[k], Reason::unspecified());
+    changeBound(change, Reason::unspecified());
 
     if (infeasible_) break;
   }
@@ -2870,8 +2869,7 @@ bool HighsDomain::ConflictSet::resolveLinearGeq(HighsCDouble M, double Mupper,
   resolvedDomainChanges.clear();
   double covered = double(M - Mupper);
   if (covered > 0) {
-    for (HighsInt k = 0; k < (HighsInt)resolveBuffer.size(); ++k) {
-      ResolveCandidate& reasonDomchg = resolveBuffer[k];
+    for (const ResolveCandidate& reasonDomchg : resolveBuffer) {
       LocalDomChg locdomchg;
       locdomchg.pos = reasonDomchg.boundPos;
       locdomchg.domchg = localdom.domchgstack_[reasonDomchg.boundPos];
@@ -2980,8 +2978,7 @@ bool HighsDomain::ConflictSet::resolveLinearLeq(HighsCDouble M, double Mlower,
   resolvedDomainChanges.clear();
   double covered = double(M - Mlower);
   if (covered < 0) {
-    for (HighsInt k = 0; k < (HighsInt)resolveBuffer.size(); ++k) {
-      ResolveCandidate& reasonDomchg = resolveBuffer[k];
+    for (const ResolveCandidate& reasonDomchg : resolveBuffer) {
       LocalDomChg locdomchg;
       locdomchg.pos = reasonDomchg.boundPos;
       locdomchg.domchg = localdom.domchgstack_[reasonDomchg.boundPos];
