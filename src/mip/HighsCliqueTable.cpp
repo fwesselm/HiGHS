@@ -2,7 +2,7 @@
 /*                                                                       */
 /*    This file is part of the HiGHS linear optimization suite           */
 /*                                                                       */
-/*    Written and engineered 2008-2023 by Julian Hall, Ivet Galabova,    */
+/*    Written and engineered 2008-2024 by Julian Hall, Ivet Galabova,    */
 /*    Leona Gottwald and Michael Feldmeier                               */
 /*                                                                       */
 /*    Available as open-source under the MIT License                     */
@@ -15,13 +15,13 @@
 #include <cstdio>
 #include <numeric>
 
+#include "../extern/pdqsort/pdqsort.h"
 #include "mip/HighsCutPool.h"
 #include "mip/HighsDomain.h"
 #include "mip/HighsMipSolver.h"
 #include "mip/HighsMipSolverData.h"
 #include "parallel/HighsCombinable.h"
 #include "parallel/HighsParallel.h"
-#include "pdqsort/pdqsort.h"
 #include "presolve/HighsPostsolveStack.h"
 #include "util/HighsSplay.h"
 
@@ -189,7 +189,7 @@ void HighsCliqueTable::bronKerboschRecurse(BronKerboschData& data,
   if (data.stop()) return;
 
   double pivweight = -1.0;
-  CliqueVar pivot;
+  CliqueVar pivot{0, 0};
 
   for (HighsInt i = 0; i != Xlen; ++i) {
     if (X[i].weight(data.sol) > pivweight) {
@@ -2023,8 +2023,9 @@ void HighsCliqueTable::runCliqueMerging(HighsDomain& globaldomain,
           std::remove_if(clique.begin(), clique.end(),
                          [&](CliqueVar v) {
                            return globaldomain.isFixed(v.col) &&
-                                  int(globaldomain.col_lower_[v.col]) ==
-                                      (1 - v.val);
+                                  static_cast<int>(
+                                      globaldomain.col_lower_[v.col]) ==
+                                      static_cast<int>(1 - v.val);
                          }),
           clique.end());
     }
@@ -2192,8 +2193,9 @@ void HighsCliqueTable::runCliqueMerging(HighsDomain& globaldomain) {
             std::remove_if(extensionvars.begin(), extensionvars.end(),
                            [&](CliqueVar v) {
                              return globaldomain.isFixed(v.col) &&
-                                    int(globaldomain.col_lower_[v.col]) ==
-                                        (1 - v.val);
+                                    static_cast<int>(
+                                        globaldomain.col_lower_[v.col]) ==
+                                        static_cast<int>(1 - v.val);
                            }),
             extensionvars.end());
 

@@ -1,7 +1,5 @@
 # HiGHS - High Performance Optimization Software
 
-[![Build Status](https://github.com/ERGO-Code/HiGHS/workflows/build/badge.svg)](https://github.com/ERGO-Code/HiGHS/actions?query=workflow%3Abuild+branch%3Amaster)
-
 !!! warning
     This HiGHS documentation is a work in progress.
 
@@ -41,7 +39,7 @@ Get started by following [Install HiGHS](@ref).
 
 ## Overview
 
-The standalone [Executable](@ref) allows models to be solved from
+The standalone [executable](@ref executable) allows models to be solved from
 [MPS](https://en.wikipedia.org/wiki/MPS_(format)) or (CPLEX)
 [LP](https://web.mit.edu/lpsolve/doc/CPLEX-format.htm) files, with full control
 of the HiGHS run-time options, and the solution can be written to files in human
@@ -56,10 +54,12 @@ calls. These can be studied via the [C++ header file](https://github.com/ERGO-Co
 
 The C interface cannot make use of the C++ structures and enums, and its methods are documented [explicitly](@ref c-api).
 
-## Solution algorithms
+## Solvers
 
-For LPs, HiGHS has implementations of both the revised simplex and interior
-point methods. MIPs are solved by branch-and-price, and QPs by active set.
+For LPs, HiGHS has implementations of the revised simplex method,
+interior point method, and PDLP first order method. MIPs are solved by
+branch-and-cut, and QPs by active set. More information on the HiGHS
+solvers is [available](@ref solvers).
 
 ## Citing HiGHS
 

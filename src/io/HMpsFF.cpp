@@ -2,7 +2,7 @@
 /*                                                                       */
 /*    This file is part of the HiGHS linear optimization suite           */
 /*                                                                       */
-/*    Written and engineered 2008-2023 by Julian Hall, Ivet Galabova,    */
+/*    Written and engineered 2008-2024 by Julian Hall, Ivet Galabova,    */
 /*    Leona Gottwald and Michael Feldmeier                               */
 /*                                                                       */
 /*    Available as open-source under the MIT License                     */
@@ -14,10 +14,12 @@
 #include "lp_data/HighsModelUtils.h"
 
 #ifdef ZLIB_FOUND
-#include "zstr/zstr.hpp"
+#include "../extern/zstr/zstr.hpp"
 #endif
 
 namespace free_format_parser {
+
+const bool kNoClockCalls = false;
 
 FreeFormatParserReturnCode HMpsFF::loadProblem(
     const HighsLogOptions& log_options, const std::string filename,
@@ -208,6 +210,34 @@ HighsInt HMpsFF::fillHessian(const HighsLogOptions& log_options) {
     q_length[iCol]++;
   }
   return 0;
+}
+
+bool HMpsFF::timeout() {
+  return time_limit > 0 && getWallTime() - start_time > time_limit;
+}
+
+bool HMpsFF::getMpsLine(std::istream& file, std::string& strline, bool& skip) {
+  const bool remove_trailing_comments = false;
+  skip = false;
+  if (!getline(file, strline)) return false;
+  if (is_empty(strline) || strline[0] == '*') {
+    skip = true;
+  } else {
+    if (remove_trailing_comments) {
+      // Remove any trailing comment
+      const size_t p = strline.find_first_of(mps_comment_chars);
+      if (p <= strline.length()) {
+        // A comment character has been found, so erase from it to the end
+        // of the line and check whether the line is now empty
+        strline.erase(p);
+        skip = is_empty(strline);
+        if (skip) return true;
+      }
+    }
+    strline = trim(strline);
+    skip = is_empty(strline);
+  }
+  return true;
 }
 
 FreeFormatParserReturnCode HMpsFF::parse(const HighsLogOptions& log_options,
@@ -448,9 +478,11 @@ HighsInt HMpsFF::getColIdx(const std::string& colname, const bool add_if_new) {
 HMpsFF::Parsekey HMpsFF::parseDefault(const HighsLogOptions& log_options,
                                       std::istream& file) {
   std::string strline, word;
-  if (getline(file, strline)) {
-    strline = trim(strline);
-    if (strline.empty()) return HMpsFF::Parsekey::kComment;
+  bool skip;
+  if (getMpsLine(file, strline, skip)) {
+    if (skip) return HMpsFF::Parsekey::kComment;
+    if (timeout()) return HMpsFF::Parsekey::kTimeout;
+
     size_t s, e;
     HMpsFF::Parsekey key = checkFirstWord(strline, s, e, word);
     if (key == HMpsFF::Parsekey::kName) {
@@ -487,16 +519,22 @@ HMpsFF::Parsekey HMpsFF::parseDefault(const HighsLogOptions& log_options,
 
 double getWallTime() {
   using namespace std::chrono;
-  return duration_cast<duration<double> >(wall_clock::now().time_since_epoch())
-      .count();
+  const double wall_time = kNoClockCalls
+                               ? 0
+                               : duration_cast<duration<double> >(
+                                     wall_clock::now().time_since_epoch())
+                                     .count();
+  return wall_time;
 }
 
 HMpsFF::Parsekey HMpsFF::parseObjsense(const HighsLogOptions& log_options,
                                        std::istream& file) {
   std::string strline, word;
 
-  while (getline(file, strline)) {
-    if (is_empty(strline) || strline[0] == '*') continue;
+  bool skip;
+  while (getMpsLine(file, strline, skip)) {
+    if (skip) continue;
+    if (timeout()) return HMpsFF::Parsekey::kTimeout;
 
     size_t start = 0;
     size_t end = 0;
@@ -532,11 +570,10 @@ HMpsFF::Parsekey HMpsFF::parseRows(const HighsLogOptions& log_options,
   assert(num_row == 0);
   assert(row_lower.size() == 0);
   assert(row_upper.size() == 0);
-  while (getline(file, strline)) {
-    if (is_empty(strline) || strline[0] == '*') continue;
-    double current = getWallTime();
-    if (time_limit > 0 && current - start_time > time_limit)
-      return HMpsFF::Parsekey::kTimeout;
+  bool skip;
+  while (getMpsLine(file, strline, skip)) {
+    if (skip) continue;
+    if (timeout()) return HMpsFF::Parsekey::kTimeout;
 
     bool isobj = false;
     bool isFreeRow = false;
@@ -670,22 +707,10 @@ typename HMpsFF::Parsekey HMpsFF::parseCols(const HighsLogOptions& log_options,
       assert(-1 == rowidx || -2 == rowidx);
   };
 
-  while (getline(file, strline)) {
-    double current = getWallTime();
-    if (time_limit > 0 && current - start_time > time_limit)
-      return HMpsFF::Parsekey::kTimeout;
-
-    if (kAnyFirstNonBlankAsStarImpliesComment) {
-      trim(strline);
-      if (strline.size() == 0 || strline[0] == '*') continue;
-    } else {
-      if (strline.size() > 0) {
-        // Just look for comment character in column 1
-        if (strline[0] == '*') continue;
-      }
-      trim(strline);
-      if (strline.size() == 0) continue;
-    }
+  bool skip;
+  while (getMpsLine(file, strline, skip)) {
+    if (skip) continue;
+    if (timeout()) return HMpsFF::Parsekey::kTimeout;
 
     HMpsFF::Parsekey key = checkFirstWord(strline, start, end, word);
 
@@ -832,7 +857,13 @@ typename HMpsFF::Parsekey HMpsFF::parseCols(const HighsLogOptions& log_options,
           "Row name \"%s\" in COLUMNS section is not defined: ignored\n",
           marker.c_str());
     } else {
-      double value = atof(word.c_str());
+      bool is_nan = false;
+      double value = getValue(word, is_nan);  // atof(word.c_str());
+      if (is_nan) {
+        highsLogUser(log_options, HighsLogType::kError,
+                     "Coefficient for column \"%s\" is NaN\n", marker.c_str());
+        return HMpsFF::Parsekey::kFail;
+      }
       if (value) {
         parseName(marker);  // rowidx set and num_nz incremented
         if (rowidx >= 0) {
@@ -887,7 +918,13 @@ typename HMpsFF::Parsekey HMpsFF::parseCols(const HighsLogOptions& log_options,
             marker.c_str());
         continue;
       };
-      double value = atof(word.c_str());
+      bool is_nan = false;
+      double value = getValue(word, is_nan);  // atof(word.c_str());
+      if (is_nan) {
+        highsLogUser(log_options, HighsLogType::kError,
+                     "Coefficient for column \"%s\" is NaN\n", marker.c_str());
+        return HMpsFF::Parsekey::kFail;
+      }
       if (value) {
         parseName(marker);  // rowidx set and num_nz incremented
         if (rowidx >= 0) {
@@ -965,22 +1002,10 @@ HMpsFF::Parsekey HMpsFF::parseRhs(const HighsLogOptions& log_options,
   has_obj_entry_ = false;
   bool has_entry = false;
 
-  while (getline(file, strline)) {
-    double current = getWallTime();
-    if (time_limit > 0 && current - start_time > time_limit)
-      return HMpsFF::Parsekey::kTimeout;
-
-    if (kAnyFirstNonBlankAsStarImpliesComment) {
-      trim(strline);
-      if (strline.size() == 0 || strline[0] == '*') continue;
-    } else {
-      if (strline.size() > 0) {
-        // Just look for comment character in column 1
-        if (strline[0] == '*') continue;
-      }
-      trim(strline);
-      if (strline.size() == 0) continue;
-    }
+  bool skip;
+  while (getMpsLine(file, strline, skip)) {
+    if (skip) continue;
+    if (timeout()) return HMpsFF::Parsekey::kTimeout;
 
     size_t begin = 0;
     size_t end = 0;
@@ -1053,7 +1078,13 @@ HMpsFF::Parsekey HMpsFF::parseRhs(const HighsLogOptions& log_options,
                      "ignored\n",
                      marker.c_str());
       } else {
-        double value = atof(word.c_str());
+        bool is_nan = false;
+        double value = getValue(word, is_nan);  // atof(word.c_str());
+        if (is_nan) {
+          highsLogUser(log_options, HighsLogType::kError,
+                       "RHS for row \"%s\" is NaN\n", marker.c_str());
+          return HMpsFF::Parsekey::kFail;
+        }
         addRhs(value, rowidx);
       }
     }
@@ -1093,7 +1124,13 @@ HMpsFF::Parsekey HMpsFF::parseRhs(const HighsLogOptions& log_options,
                      "ignored\n",
                      marker.c_str());
       } else {
-        double value = atof(word.c_str());
+        bool is_nan = false;
+        double value = getValue(word, is_nan);  // atof(word.c_str());
+        if (is_nan) {
+          highsLogUser(log_options, HighsLogType::kError,
+                       "RHS for row \"%s\" is NaN\n", marker.c_str());
+          return HMpsFF::Parsekey::kFail;
+        }
         addRhs(value, rowidx);
       }
     }
@@ -1119,22 +1156,10 @@ HMpsFF::Parsekey HMpsFF::parseBounds(const HighsLogOptions& log_options,
   has_lower.assign(num_col, false);
   has_upper.assign(num_col, false);
 
-  while (getline(file, strline)) {
-    double current = getWallTime();
-    if (time_limit > 0 && current - start_time > time_limit)
-      return HMpsFF::Parsekey::kTimeout;
-
-    if (kAnyFirstNonBlankAsStarImpliesComment) {
-      trim(strline);
-      if (strline.size() == 0 || strline[0] == '*') continue;
-    } else {
-      if (strline.size() > 0) {
-        // Just look for comment character in column 1
-        if (strline[0] == '*') continue;
-      }
-      trim(strline);
-      if (strline.size() == 0) continue;
-    }
+  bool skip;
+  while (getMpsLine(file, strline, skip)) {
+    if (skip) continue;
+    if (timeout()) return HMpsFF::Parsekey::kTimeout;
 
     size_t begin = 0;
     size_t end = 0;
@@ -1327,7 +1352,13 @@ HMpsFF::Parsekey HMpsFF::parseBounds(const HighsLogOptions& log_options,
                    marker.c_str());
       return HMpsFF::Parsekey::kFail;
     }
-    double value = atof(word.c_str());
+    bool is_nan = false;
+    double value = getValue(word, is_nan);  // atof(word.c_str());
+    if (is_nan) {
+      highsLogUser(log_options, HighsLogType::kError,
+                   "Bound for column \"%s\" is NaN\n", marker.c_str());
+      return HMpsFF::Parsekey::kFail;
+    }
     if (is_integral) {
       assert(is_lb || is_ub || is_semi);
       // Must be LI, UI or SI, and value should be integer
@@ -1392,22 +1423,10 @@ HMpsFF::Parsekey HMpsFF::parseRanges(const HighsLogOptions& log_options,
   // Initialise tracking for duplicate entries
   has_row_entry_.assign(num_row, false);
 
-  while (getline(file, strline)) {
-    double current = getWallTime();
-    if (time_limit > 0 && current - start_time > time_limit)
-      return HMpsFF::Parsekey::kTimeout;
-
-    if (kAnyFirstNonBlankAsStarImpliesComment) {
-      trim(strline);
-      if (strline.size() == 0 || strline[0] == '*') continue;
-    } else {
-      if (strline.size() > 0) {
-        // Just look for comment character in column 1
-        if (strline[0] == '*') continue;
-      }
-      trim(strline);
-      if (strline.size() == 0) continue;
-    }
+  bool skip;
+  while (getMpsLine(file, strline, skip)) {
+    if (skip) continue;
+    if (timeout()) return HMpsFF::Parsekey::kTimeout;
 
     size_t begin, end;
     std::string word;
@@ -1455,7 +1474,13 @@ HMpsFF::Parsekey HMpsFF::parseRanges(const HighsLogOptions& log_options,
                      "definition: ignored\n",
                      marker.c_str());
       } else {
-        double value = atof(word.c_str());
+        bool is_nan = false;
+        double value = getValue(word, is_nan);  // atof(word.c_str());
+        if (is_nan) {
+          highsLogUser(log_options, HighsLogType::kError,
+                       "Range for row \"%s\" is NaN\n", marker.c_str());
+          return HMpsFF::Parsekey::kFail;
+        }
         addRhs(value, rowidx);
       }
     }
@@ -1495,7 +1520,13 @@ HMpsFF::Parsekey HMpsFF::parseRanges(const HighsLogOptions& log_options,
                        "definition: ignored\n",
                        marker.c_str());
         } else {
-          double value = atof(word.c_str());
+          bool is_nan = false;
+          double value = getValue(word, is_nan);  // atof(word.c_str());
+          if (is_nan) {
+            highsLogUser(log_options, HighsLogType::kError,
+                         "Range for row \"%s\" is NaN\n", marker.c_str());
+            return HMpsFF::Parsekey::kFail;
+          }
           addRhs(value, rowidx);
         }
       }
@@ -1533,21 +1564,10 @@ typename HMpsFF::Parsekey HMpsFF::parseHessian(
   size_t end_coeff_name;
   HighsInt colidx, rowidx;
 
-  while (getline(file, strline)) {
-    double current = getWallTime();
-    if (time_limit > 0 && current - start_time > time_limit)
-      return HMpsFF::Parsekey::kTimeout;
-    if (kAnyFirstNonBlankAsStarImpliesComment) {
-      trim(strline);
-      if (strline.size() == 0 || strline[0] == '*') continue;
-    } else {
-      if (strline.size() > 0) {
-        // Just look for comment character in column 1
-        if (strline[0] == '*') continue;
-      }
-      trim(strline);
-      if (strline.size() == 0) continue;
-    }
+  bool skip;
+  while (getMpsLine(file, strline, skip)) {
+    if (skip) continue;
+    if (timeout()) return HMpsFF::Parsekey::kTimeout;
 
     size_t begin = 0;
     size_t end = 0;
@@ -1590,7 +1610,15 @@ typename HMpsFF::Parsekey HMpsFF::parseHessian(
       rowidx = getColIdx(row_name);
       assert(rowidx >= 0 && rowidx < num_col);
 
-      double coeff = atof(coeff_name.c_str());
+      bool is_nan = false;
+      double coeff = getValue(coeff_name, is_nan);  // atof(word.c_str());
+      if (is_nan) {
+        highsLogUser(
+            log_options, HighsLogType::kError,
+            "Hessian coefficient for entry \"%s\" in column \"%s\" is NaN\n",
+            row_name.c_str(), col_name.c_str());
+        return HMpsFF::Parsekey::kFail;
+      }
       if (coeff) {
         if (qmatrix) {
           // QMATRIX has the whole Hessian, so store the entry if the
@@ -1652,7 +1680,11 @@ typename HMpsFF::Parsekey HMpsFF::parseQuadRows(
                    "Row name \"%s\" in %s section is not defined: ignored\n",
                    rowname.c_str(), section_name.c_str());
     // read lines until start of new section
-    while (getline(file, strline)) {
+    bool skip;
+    while (getMpsLine(file, strline, skip)) {
+      if (skip) continue;
+      if (timeout()) return HMpsFF::Parsekey::kTimeout;
+
       size_t begin = 0;
       size_t end = 0;
       HMpsFF::Parsekey key = checkFirstWord(strline, begin, end, col_name);
@@ -1675,21 +1707,10 @@ typename HMpsFF::Parsekey HMpsFF::parseQuadRows(
 
   auto& qentries = (rowidx == -1 ? q_entries : qrows_entries[rowidx]);
 
-  while (getline(file, strline)) {
-    double current = getWallTime();
-    if (time_limit > 0 && current - start_time > time_limit)
-      return HMpsFF::Parsekey::kTimeout;
-    if (kAnyFirstNonBlankAsStarImpliesComment) {
-      trim(strline);
-      if (strline.size() == 0 || strline[0] == '*') continue;
-    } else {
-      if (strline.size() > 0) {
-        // Just look for comment character in column 1
-        if (strline[0] == '*') continue;
-      }
-      trim(strline);
-      if (strline.size() == 0) continue;
-    }
+  bool skip;
+  while (getMpsLine(file, strline, skip)) {
+    if (skip) continue;
+    if (timeout()) return HMpsFF::Parsekey::kTimeout;
 
     size_t begin = 0;
     size_t end = 0;
@@ -1732,7 +1753,15 @@ typename HMpsFF::Parsekey HMpsFF::parseQuadRows(
       qrowidx = getColIdx(row_name);
       assert(qrowidx >= 0 && qrowidx < num_col);
 
-      double coeff = atof(coeff_name.c_str());
+      bool is_nan = false;
+      double coeff = getValue(coeff_name, is_nan);  // atof(word.c_str());
+      if (is_nan) {
+        highsLogUser(
+            log_options, HighsLogType::kError,
+            "Hessian coefficient for entry \"%s\" in column \"%s\" is NaN\n",
+            row_name.c_str(), col_name.c_str());
+        return HMpsFF::Parsekey::kFail;
+      }
       if (coeff) {
         if (qcmatrix) {
           // QCMATRIX has the whole Hessian, so store the entry if the
@@ -1820,22 +1849,10 @@ typename HMpsFF::Parsekey HMpsFF::parseCones(const HighsLogOptions& log_options,
 
   // now parse the cone entries: one column per line
   std::string strline;
-  while (getline(file, strline)) {
-    double current = getWallTime();
-    if (time_limit > 0 && current - start_time > time_limit)
-      return HMpsFF::Parsekey::kTimeout;
-
-    if (kAnyFirstNonBlankAsStarImpliesComment) {
-      trim(strline);
-      if (strline.size() == 0 || strline[0] == '*') continue;
-    } else {
-      if (strline.size() > 0) {
-        // Just look for comment character in column 1
-        if (strline[0] == '*') continue;
-      }
-      trim(strline);
-      if (strline.size() == 0) continue;
-    }
+  bool skip;
+  while (getMpsLine(file, strline, skip)) {
+    if (skip) continue;
+    if (timeout()) return HMpsFF::Parsekey::kTimeout;
 
     size_t begin;
     std::string colname;
@@ -1863,22 +1880,10 @@ typename HMpsFF::Parsekey HMpsFF::parseSos(const HighsLogOptions& log_options,
                                            const HMpsFF::Parsekey keyword) {
   std::string strline, word;
 
-  while (getline(file, strline)) {
-    double current = getWallTime();
-    if (time_limit > 0 && current - start_time > time_limit)
-      return HMpsFF::Parsekey::kTimeout;
-
-    if (kAnyFirstNonBlankAsStarImpliesComment) {
-      trim(strline);
-      if (strline.size() == 0 || strline[0] == '*') continue;
-    } else {
-      if (strline.size() > 0) {
-        // Just look for comment character in column 1
-        if (strline[0] == '*') continue;
-      }
-      trim(strline);
-      if (strline.size() == 0) continue;
-    }
+  bool skip;
+  while (getMpsLine(file, strline, skip)) {
+    if (skip) continue;
+    if (timeout()) return HMpsFF::Parsekey::kTimeout;
 
     size_t begin, end;
     std::string word;
@@ -1953,7 +1958,13 @@ typename HMpsFF::Parsekey HMpsFF::parseSos(const HighsLogOptions& log_options,
     double weight = 0.0;
     if (!is_end(strline, end)) {
       word = first_word(strline, end);
-      weight = atof(word.c_str());
+      bool is_nan = false;
+      weight = getValue(word, is_nan);  // atof(word.c_str());
+      if (is_nan) {
+        highsLogUser(log_options, HighsLogType::kError,
+                     "Weight for column \"%s\" is NaN\n", colname.c_str());
+        return HMpsFF::Parsekey::kFail;
+      }
     }
 
     sos_entries.back().push_back(std::make_pair(colidx, weight));
@@ -1968,4 +1979,29 @@ bool HMpsFF::allZeroed(const std::vector<double>& value) {
   return true;
 }
 
+double HMpsFF::getValue(const std::string& word, bool& is_nan,
+                        const HighsInt id) const {
+  // Lambda to replace any d or D by E
+  auto dD2e = [&](std::string& word) {
+    size_t ix = word.find("D");
+    if (ix != std::string::npos) {
+      word.replace(ix, 1, "E");
+    } else {
+      ix = word.find("d");
+      if (ix != std::string::npos) word.replace(ix, 1, "E");
+    }
+  };
+
+  std::string local_word = word;
+  dD2e(local_word);
+  const double value = atof(local_word.c_str());
+  is_nan = false;
+  //  printf("value(%d) = %g\n", int(id), value);
+  //  if (std::isnan(value)) return true;
+  //  // atof('nan') yields 0 with some Windows compilers, so try a string
+  //  // comparison
+  //  std::string lower_word = word;
+  //  if (str_tolower(lower_word) == "nan") return true;
+  return value;
+}
 }  // namespace free_format_parser

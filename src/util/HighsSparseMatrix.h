@@ -2,7 +2,7 @@
 /*                                                                       */
 /*    This file is part of the HiGHS linear optimization suite           */
 /*                                                                       */
-/*    Written and engineered 2008-2023 by Julian Hall, Ivet Galabova,    */
+/*    Written and engineered 2008-2024 by Julian Hall, Ivet Galabova,    */
 /*    Leona Gottwald and Michael Feldmeier                               */
 /*                                                                       */
 /*    Available as open-source under the MIT License                     */
@@ -66,6 +66,9 @@ class HighsSparseMatrix {
   void deleteRows(const HighsIndexCollection& index_collection);
   HighsStatus assessDimensions(const HighsLogOptions& log_options,
                                const std::string matrix_name);
+  HighsStatus assessStart(const HighsLogOptions& log_options);
+  HighsStatus assessIndexBounds(const HighsLogOptions& log_options);
+
   HighsStatus assess(const HighsLogOptions& log_options,
                      const std::string matrix_name,
                      const double small_matrix_value,
@@ -94,6 +97,9 @@ class HighsSparseMatrix {
   void productTranspose(vector<double>& result, const vector<double>& x) const;
   void productQuad(vector<double>& result, const vector<double>& x,
                    const HighsInt debug_report = kDebugReportOff) const;
+  void productTransposeQuad(
+      vector<double>& result_value, const vector<double>& x,
+      const HighsInt debug_report = kDebugReportOff) const;
   void productTransposeQuad(
       vector<double>& result_value, vector<HighsInt>& result_index,
       const HVector& x, const HighsInt debug_report = kDebugReportOff) const;

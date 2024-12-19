@@ -41,6 +41,13 @@ This defines the feasible values of a variable within a model:
  * `kSemiContinuous`: The variable must be zero or take continuous values between its bounds
  * `kSemiInteger`: The variable must be zero or take integer values between its bounds
 
+## HessianFormat
+
+This defines the format of a [HighsHessian](@ref):
+
+ * `kTriangular`: The lower triangular component of the Hessian is stored column-wise or, equivalently, the upper triangular component is stored row-wise 
+ * `kSquare`: The whole Hessian ``Q`` is stored column-wise. This is for input only: internally the lower triangular component of ``(Q+Q^T)/2`` will be stored
+
 ## SolutionStatus
 
 This defines the nature of any primal or dual solution information:
@@ -73,6 +80,8 @@ This defines the status of the model after a call to `run`
  * `kTimeLimit`: The run time limit has been reached
  * `kIterationLimit`: The iteration limit has been reached
  * `kSolutionLimit`: The MIP solver has reached the limit on the number of LPs solved
+ * `kInterrupt`: The solver has been interrupted by the user
+ * `kMemoryLimit`: The solver has been unable to allocate sufficient memory
  * `kUnknown`: The model status is unknown
 
 ## HighsBasisStatus

@@ -2,8 +2,9 @@
 *                                                                       *
 *    This file is part of the HiGHS linear optimization suite           *
 *                                                                       *
-*    Written and engineered 2008-2023 by Julian Hall, Ivet Galabova,    *
+*    Written and engineered 2008-2024 by Julian Hall, Ivet Galabova,    *
 *    Leona Gottwald and Michael Feldmeier                               *
+*                                                                       *
 *    Available as open-source under the MIT License                     *
 *                                                                       *
 * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *=#
@@ -61,24 +62,31 @@ Documenter.makedocs(
                 "structures/classes/index.md",
                 "structures/classes/HighsSparseMatrix.md",
                 "structures/classes/HighsLp.md",
-                "structures/classes/HighsSolution.md",
-                "structures/classes/HighsBasis.md",
-                "structures/classes/HighsInfo.md",
+                "structures/classes/HighsHessian.md",
+                "structures/classes/HighsModel.md"
+            ],
+	    "Structures" => Any[
+                "structures/structs/index.md",
+                "structures/structs/HighsSolution.md",
+                "structures/structs/HighsBasis.md",
+                "structures/structs/HighsInfo.md",
+                "structures/structs/HighsLinearObjective.md"
             ],
 	],
         "Callbacks" => "callbacks.md",
         "Interfaces" => Any[
+            "C++" => Any[
+                "interfaces/cpp/index.md",
+                "The HiGHS library" => "interfaces/cpp/library.md",
+                "Examples" => "interfaces/cpp/examples.md",
+            ],
+            "C" => "interfaces/c_api.md",
+            "Fortran" => "interfaces/fortran.md",
             "Python" => Any[
                 "interfaces/python/index.md",
                 "interfaces/python/example-py.md",
             ],
-            "C++" => Any[
-                "interfaces/cpp/index.md",
-                "The HiGHS library" => "interfaces/cpp/library.md",
-                "Linking" => "interfaces/cpp/link.md",
-                "Examples" => "interfaces/cpp/examples.md",
-            ],
-            "C" => "interfaces/c/index.md",
+            "CSharp" => "interfaces/csharp.md",
             "Julia" => "interfaces/julia/index.md",
             "Other" => "interfaces/other.md",
         ],
@@ -87,6 +95,7 @@ Documenter.makedocs(
             "options/definitions.md"
         ],
         "Parallel" => "parallel.md",
+        "Solvers" => "solvers.md",
         "Terminology" => "terminology.md",
     ],
 )

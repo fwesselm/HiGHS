@@ -1,6 +1,6 @@
-project('highs', 'cpp',
-  version : '1.6.0',
-  meson_version: '>= 1.2.0',
+project('highs', 'cpp', 'c',
+  version : '1.8.1',
+  meson_version: '>= 1.1.0',
   default_options : ['warning_level=1',
                      'cpp_std=c++17',
                      'wrap_mode=forcefallback',
@@ -10,10 +10,8 @@ project('highs', 'cpp',
 # Add C++ compiler options
 _args = [] # Extra arguments
 _deps = [] # Dependencies
-_linkto = [] # All the sub-libraries
 _incdirs = [] # All the includes
 
-add_languages('c', required: true)
 cc = meson.get_compiler('c')
 cppc = meson.get_compiler('cpp')
 
@@ -22,14 +20,54 @@ host_system = host_machine.system()
 is_windows = host_system == 'windows'
 is_mingw = is_windows and cc.get_id() == 'gcc'
 
+# Granular flags
+# C++
+_cpp_Wno_invalid_offsetof = cppc.get_supported_arguments('-Wno-invalid-offsetof')
+_cpp_Wno_maybe_uninitialized = cppc.get_supported_arguments('-Wno-maybe-uninitialized')
+_cpp_Wno_reorder = cppc.get_supported_arguments('-Wno-reorder')
+_cpp_Wno_reorder_ctor = cppc.get_supported_arguments('-Wno-reorder-ctor')
+_cpp_Wno_sometimes_uninitialized = cppc.get_supported_arguments('-Wno-sometimes-uninitialized')
+_cpp_Wno_unused_but_set_variable = cppc.get_supported_arguments('-Wno-unused-but-set-variable')
+_cpp_Wno_unused_variable = cppc.get_supported_arguments('-Wno-unused-variable')
+_cpp_Wno_use_after_free = cppc.get_supported_arguments('-Wno-use-after-free')
+_cpp_Wno_comment = cppc.get_supported_arguments('-Wno-comment')
+
+
+# C
+Wno_comment = cc.get_supported_arguments('-Wno-comment')
+Wno_invalid_offsetof = cc.get_supported_arguments('-Wno-invalid-offsetof')
+Wno_maybe_uninitialized = cc.get_supported_arguments('-Wno-maybe-uninitialized')
+Wno_sometimes_uninitialized = cc.get_supported_arguments('-Wno-sometimes-uninitialized')
+Wno_unused_label = cc.get_supported_arguments('-Wno-unused-label')
+Wno_use_after_free = cc.get_supported_arguments('-Wno-use-after-free')
+Wno_unused_but_set_variable = cc.get_supported_arguments('-Wno-unused-but-set-variable')
+Wno_unused_variable = cc.get_supported_arguments('-Wno-unused-variable')
+Wno_use_after_free = cc.get_supported_arguments('-Wno-use-after-free')
+
 # Conditional arguments
-if host_system == 'linux'
-  _args += '-Wno-return-type'
-  _args += '-Wno-switch'
-  _args += '-Wno-unused-variable'
-  _args += '-Wno-unused-but-set-variable'
-  _args += '-Wno-unused-const-variable'
-endif
+_highs_cpp_suppressions = [
+  _cpp_Wno_comment,
+  _cpp_Wno_invalid_offsetof,
+  _cpp_Wno_maybe_uninitialized,
+  _cpp_Wno_reorder,
+  _cpp_Wno_reorder_ctor,
+  _cpp_Wno_sometimes_uninitialized,
+  _cpp_Wno_unused_but_set_variable,
+  _cpp_Wno_unused_variable,
+  _cpp_Wno_use_after_free,
+]
+
+_highs_c_suppressions = [
+  Wno_comment,
+  Wno_invalid_offsetof,
+  Wno_maybe_uninitialized,
+  Wno_sometimes_uninitialized,
+  Wno_unused_but_set_variable,
+  Wno_unused_label,
+  Wno_unused_variable,
+  Wno_use_after_free,
+]
+
 
 if cppc.get_id() == 'msvc'
   add_project_arguments(
@@ -60,10 +98,10 @@ endif
 cpu_family = host_machine.cpu_family()
 
 if cpu_family in ['x86_64', 'i686'] and not is_windows
-    add_project_arguments('-mpopcnt', language: 'cpp')
+    add_project_arguments(cppc.get_supported_arguments('-mpopcnt'), language: 'cpp')
 endif
 if cpu_family in ['ppc64', 'powerpc64'] and not meson.is_cross_build()
-    add_project_arguments('-mpopcntd', language: 'cpp')
+    add_project_arguments(cppc.get_supported_arguments('-mpopcntd'), language: 'cpp')
 endif
 
 if is_mingw
@@ -72,17 +110,7 @@ if is_mingw
 endif
 
 # --------------------- Dependencies
-if not is_windows
-  # libm for Unix systems
-  m_dep = cppc.find_library('m', required: false)
-  _deps += m_dep
-  # For building with clang
-  _deps += [declare_dependency(link_args: '-lstdc++')]
-endif
-
-# Required
-threads_dep = dependency('threads',
-                        required: true)
+threads_dep = dependency('threads', required: false)
 _deps += threads_dep
 
 # Determine whether it is necessary to link libatomic. This could be the case
@@ -160,12 +188,6 @@ endif
 # --------------------- Library
 
 subdir('src') # defines highslib
-_linkto += highslib
-
-highs_dep = declare_dependency(link_with: _linkto,
-                               dependencies: _deps,
-                               include_directories: _incdirs,
-                               )
 
 # --------------------- Tests
 
@@ -175,12 +197,4 @@ if get_option('with_tests')
 endif
 
 # --------------------- Bindings
-highspy_cpp = files([
-  'highspy/highs_bindings.cpp'
-])
-highsoptions_cpp = files([
-  'highspy/highs_options.cpp'
-])
-if get_option('with_pybind11')
-  subdir('highspy')
-endif
+# now in src/

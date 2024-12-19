@@ -2,7 +2,7 @@
 /*                                                                       */
 /*    This file is part of the HiGHS linear optimization suite           */
 /*                                                                       */
-/*    Written and engineered 2008-2023 by Julian Hall, Ivet Galabova,    */
+/*    Written and engineered 2008-2024 by Julian Hall, Ivet Galabova,    */
 /*    Leona Gottwald and Michael Feldmeier                               */
 /*                                                                       */
 /*    Available as open-source under the MIT License                     */
@@ -87,46 +87,6 @@ class InfoRecordDouble : public InfoRecord {
   virtual ~InfoRecordDouble() {}
 };
 
-InfoStatus getInfoIndex(const HighsLogOptions& report_log_options,
-                        const std::string& name,
-                        const std::vector<InfoRecord*>& info_records,
-                        HighsInt& index);
-
-InfoStatus checkInfo(const HighsLogOptions& report_log_options,
-                     const std::vector<InfoRecord*>& info_records);
-InfoStatus checkInfo(const InfoRecordInt& info);
-InfoStatus checkInfo(const InfoRecordDouble& info);
-
-InfoStatus getLocalInfoValue(const HighsLogOptions& report_log_options,
-                             const std::string& name, const bool valid,
-                             const std::vector<InfoRecord*>& info_records,
-                             int64_t& value);
-InfoStatus getLocalInfoValue(const HighsLogOptions& report_log_options,
-                             const std::string& name, const bool valid,
-                             const std::vector<InfoRecord*>& info_records,
-                             HighsInt& value);
-InfoStatus getLocalInfoValue(const HighsLogOptions& report_log_options,
-                             const std::string& name, const bool valid,
-                             const std::vector<InfoRecord*>& info_records,
-                             double& value);
-
-InfoStatus getLocalInfoType(const HighsLogOptions& report_log_options,
-                            const std::string& name,
-                            const std::vector<InfoRecord*>& info_records,
-                            HighsInfoType& type);
-
-HighsStatus writeInfoToFile(
-    FILE* file, const bool valid, const std::vector<InfoRecord*>& info_records,
-    const HighsFileType file_type = HighsFileType::kOther);
-void reportInfo(FILE* file, const std::vector<InfoRecord*>& info_records,
-                const HighsFileType file_type = HighsFileType::kOther);
-void reportInfo(FILE* file, const InfoRecordInt64& info,
-                const HighsFileType file_type = HighsFileType::kOther);
-void reportInfo(FILE* file, const InfoRecordInt& info,
-                const HighsFileType file_type = HighsFileType::kOther);
-void reportInfo(FILE* file, const InfoRecordDouble& info,
-                const HighsFileType file_type = HighsFileType::kOther);
-
 // For now, but later change so HiGHS properties are string based so that new
 // info (for debug and testing too) can be added easily. The info below
 // are just what has been used to parse info from argv.
@@ -138,6 +98,7 @@ struct HighsInfoStruct {
   HighsInt simplex_iteration_count;
   HighsInt ipm_iteration_count;
   HighsInt crossover_iteration_count;
+  HighsInt pdlp_iteration_count;
   HighsInt qp_iteration_count;
   HighsInt primal_solution_status;
   HighsInt dual_solution_status;
@@ -152,6 +113,9 @@ struct HighsInfoStruct {
   HighsInt num_dual_infeasibilities;
   double max_dual_infeasibility;
   double sum_dual_infeasibilities;
+  double max_complementarity_violation;
+  double sum_complementarity_violations;
+  double primal_dual_integral;
 };
 
 class HighsInfo : public HighsInfoStruct {
@@ -214,6 +178,11 @@ class HighsInfo : public HighsInfoStruct {
     record_int = new InfoRecordInt("crossover_iteration_count",
                                    "Iteration count for crossover", advanced,
                                    &crossover_iteration_count, 0);
+    records.push_back(record_int);
+
+    record_int = new InfoRecordInt("pdlp_iteration_count",
+                                   "Iteration count for PDLP solver", advanced,
+                                   &pdlp_iteration_count, 0);
     records.push_back(record_int);
 
     record_int =
@@ -295,10 +264,69 @@ class HighsInfo : public HighsInfoStruct {
         "sum_dual_infeasibilities", "Sum of dual infeasibilities", advanced,
         &sum_dual_infeasibilities, 0);
     records.push_back(record_double);
+
+    record_double = new InfoRecordDouble(
+        "max_complementarity_violation", "Max complementarity violation",
+        advanced, &max_complementarity_violation, 0);
+    records.push_back(record_double);
+
+    record_double = new InfoRecordDouble(
+        "sum_complementarity_violations", "Sum of complementarity violations",
+        advanced, &sum_complementarity_violations, 0);
+    records.push_back(record_double);
+
+    record_double =
+        new InfoRecordDouble("primal_dual_integral", "Primal-dual integral",
+                             advanced, &primal_dual_integral, 0);
+    records.push_back(record_double);
   }
 
  public:
   std::vector<InfoRecord*> records;
 };
+
+HighsStatus writeInfoToFile(
+    FILE* file, const bool valid, const HighsInfo& info,
+    const HighsFileType file_type = HighsFileType::kFull);
+
+InfoStatus getInfoIndex(const HighsLogOptions& report_log_options,
+                        const std::string& name,
+                        const std::vector<InfoRecord*>& info_records,
+                        HighsInt& index);
+
+InfoStatus checkInfo(const HighsLogOptions& report_log_options,
+                     const std::vector<InfoRecord*>& info_records);
+InfoStatus checkInfo(const InfoRecordInt& info);
+InfoStatus checkInfo(const InfoRecordDouble& info);
+
+InfoStatus getLocalInfoValue(const HighsLogOptions& report_log_options,
+                             const std::string& name, const bool valid,
+                             const std::vector<InfoRecord*>& info_records,
+                             int64_t& value);
+InfoStatus getLocalInfoValue(const HighsLogOptions& report_log_options,
+                             const std::string& name, const bool valid,
+                             const std::vector<InfoRecord*>& info_records,
+                             HighsInt& value);
+InfoStatus getLocalInfoValue(const HighsLogOptions& report_log_options,
+                             const std::string& name, const bool valid,
+                             const std::vector<InfoRecord*>& info_records,
+                             double& value);
+
+InfoStatus getLocalInfoType(const HighsLogOptions& report_log_options,
+                            const std::string& name,
+                            const std::vector<InfoRecord*>& info_records,
+                            HighsInfoType& type);
+
+HighsStatus writeInfoToFile(
+    FILE* file, const bool valid, const std::vector<InfoRecord*>& info_records,
+    const HighsFileType file_type = HighsFileType::kFull);
+void reportInfo(FILE* file, const std::vector<InfoRecord*>& info_records,
+                const HighsFileType file_type = HighsFileType::kFull);
+void reportInfo(FILE* file, const InfoRecordInt64& info,
+                const HighsFileType file_type = HighsFileType::kFull);
+void reportInfo(FILE* file, const InfoRecordInt& info,
+                const HighsFileType file_type = HighsFileType::kFull);
+void reportInfo(FILE* file, const InfoRecordDouble& info,
+                const HighsFileType file_type = HighsFileType::kFull);
 
 #endif

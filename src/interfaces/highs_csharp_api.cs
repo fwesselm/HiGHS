@@ -5,6 +5,7 @@ using System.Text;
 
 // mcs -out:highscslib.dll -t:library highs_csharp_api.cs -unsafe
 
+namespace Highs {
 public enum HighsStatus
 {
     kError = -1,
@@ -16,6 +17,12 @@ public enum HighsMatrixFormat
 {
     kColwise = 1,
     kRowwise
+}
+
+public enum HessianFormat
+{
+    kTriangular = 1,
+    kSquare
 }
 
 public enum HighsBasisStatus
@@ -52,7 +59,8 @@ public enum HighsModelStatus
     kIterationLimit,
     kUnknown,
     kSolutionLimit,
-    kInterrupt
+    kInterrupt,
+    kMemoryLimit
 }
 
 public enum HighsIntegrality
@@ -99,6 +107,29 @@ public class HighsModel
         this.a_format = a_format;
         this.sense = sense;
         this.highs_integrality = highs_integrality;
+    }
+}
+
+public class HighsHessian
+{
+    public HessianFormat q_format;
+    public int dim;
+    public int[] qstart;
+    public int[] qindex;
+    public double[] qvalue;
+
+    public HighsHessian()
+    {
+
+    }
+
+    public HighsHessian(int dim, int[] qstart, int[] qindex, double[] qvalue, HessianFormat q_format = HessianFormat.kTriangular)
+    {
+        this.dim = dim;
+        this.qstart = qstart;
+        this.qindex = qindex;
+        this.qvalue = qvalue;
+        this.q_format = q_format;
     }
 }
 
@@ -150,7 +181,7 @@ public class HighsLpSolver : IDisposable
 
     private bool _disposed;
 
-    private const string highslibname = "libhighs";
+    private const string highslibname = "highs";
 
     [DllImport(highslibname)]
     private static extern int Highs_call(
@@ -187,6 +218,9 @@ public class HighsLpSolver : IDisposable
 
     [DllImport(highslibname)]
     private static extern int Highs_writeModel(IntPtr highs, string filename);
+
+    [DllImport(highslibname)]
+    private static extern int Highs_writePresolvedModel(IntPtr highs, string filename);
 
     [DllImport(highslibname)]
     private static extern int Highs_writeSolutionPretty(IntPtr highs, string filename);
@@ -232,6 +266,40 @@ public class HighsLpSolver : IDisposable
         int[] highs_integrality);
 
     [DllImport(highslibname)]
+    private static extern int Highs_passModel(
+        IntPtr highs,
+        int numcol,
+        int numrow,
+        int numnz,
+        int qnumnz,
+        int aformat,
+        int qformat,
+        int sense,
+        double offset,
+        double[] colcost,
+        double[] collower,
+        double[] colupper,
+        double[] rowlower,
+        double[] rowupper,
+        int[] astart,
+        int[] aindex,
+        double[] avalue,
+        int[] qstart,
+        int[] qindex,
+        double[] qvalue,
+        int[] highs_integrality);
+
+    [DllImport(highslibname)]
+    private static extern int Highs_passHessian(
+        IntPtr highs,
+        int dim,
+        int numnz,
+        int q_format,
+        int[] qstart,
+        int[] qindex,
+        double[] qvalue);
+
+    [DllImport(highslibname)]
     private static extern int Highs_setOptionValue(IntPtr highs, string option, string value);
 
     [DllImport(highslibname)]
@@ -269,6 +337,9 @@ public class HighsLpSolver : IDisposable
 
     [DllImport(highslibname)]
     private static extern int Highs_getNumNz(IntPtr highs);
+
+    [DllImport(highslibname)]
+    private static extern int Highs_getHessianNumNz(IntPtr highs);
 
     [DllImport(highslibname)]
     private static extern int Highs_getBasis(IntPtr highs, int[] colstatus, int[] rowstatus);
@@ -596,6 +667,11 @@ public class HighsLpSolver : IDisposable
         return (HighsStatus)HighsLpSolver.Highs_writeModel(this.highs, filename);
     }
 
+    public HighsStatus writePresolvedModel(string filename)
+    {
+        return (HighsStatus)HighsLpSolver.Highs_writePresolvedModel(this.highs, filename);
+    }
+
     public HighsStatus writeSolutionPretty(string filename)
     {
         return (HighsStatus)HighsLpSolver.Highs_writeSolutionPretty(this.highs, filename);
@@ -645,6 +721,18 @@ public class HighsLpSolver : IDisposable
             model.aindex,
             model.avalue,
             model.highs_integrality);
+    }
+
+    public HighsStatus passHessian(HighsHessian hessian)
+    {
+        return (HighsStatus)HighsLpSolver.Highs_passHessian(
+            this.highs,
+            hessian.dim,
+            hessian.qvalue.Length,
+            (int)hessian.q_format,
+            hessian.qstart,
+            hessian.qindex,
+            hessian.qvalue);
     }
 
     public HighsStatus setOptionValue(string option, string value)
@@ -908,9 +996,10 @@ public class HighsLpSolver : IDisposable
             MipGap = this.GetValueOrFallback(HighsLpSolver.Highs_getDoubleInfoValue, "mip_gap", double.NaN),
             DualBound = this.GetValueOrFallback(HighsLpSolver.Highs_getDoubleInfoValue, "mip_dual_bound", double.NaN),
             ObjectiveValue = this.GetValueOrFallback(HighsLpSolver.Highs_getDoubleInfoValue, "objective_function_value", double.NaN),
-            NodeCount = this.GetValueOrFallback(HighsLpSolver.Highs_getInt64InfoValue, "mip_node_count", 0l),
-            IpmIterationCount = this.GetValueOrFallback(HighsLpSolver.Highs_getIntInfoValue, "simplex_iteration_count", 0),
-            SimplexIterationCount = this.GetValueOrFallback(HighsLpSolver.Highs_getIntInfoValue, "ipm_iteration_count", 0),
+            NodeCount = this.GetValueOrFallback(HighsLpSolver.Highs_getInt64InfoValue, "mip_node_count", 0L),
+            IpmIterationCount = this.GetValueOrFallback(HighsLpSolver.Highs_getIntInfoValue, "ipm_iteration_count", 0),
+            SimplexIterationCount = this.GetValueOrFallback(HighsLpSolver.Highs_getIntInfoValue, "simplex_iteration_count", 0),
+            PdlpIterationCount = this.GetValueOrFallback(HighsLpSolver.Highs_getIntInfoValue, "pdlp_iteration_count", 0),
         };
         return info;
     }
@@ -1002,6 +1091,11 @@ public class SolutionInfo
     public int IpmIterationCount { get; set; }
 
     /// <summary>
+    /// Gets or sets the PDLP iteration count.
+    /// </summary>
+    public int PdlpIterationCount { get; set; }
+
+    /// <summary>
     /// Gets or sets the MIP gap.
     /// </summary>
     public double MipGap { get; set; }
@@ -1020,4 +1114,5 @@ public class SolutionInfo
     /// Gets or sets the objective value.
     /// </summary>
     public double ObjectiveValue { get; set; }
+}
 }

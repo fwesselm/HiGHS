@@ -2,7 +2,7 @@
 /*                                                                       */
 /*    This file is part of the HiGHS linear optimization suite           */
 /*                                                                       */
-/*    Written and engineered 2008-2023 by Julian Hall, Ivet Galabova,    */
+/*    Written and engineered 2008-2024 by Julian Hall, Ivet Galabova,    */
 /*    Leona Gottwald and Michael Feldmeier                               */
 /*                                                                       */
 /*    Available as open-source under the MIT License                     */
@@ -14,9 +14,10 @@
 
 #include "ipm/IpxWrapper.h"
 #include "lp_data/HighsSolutionDebug.h"
+#include "pdlp/CupdlpWrapper.h"
 #include "simplex/HApp.h"
 
-// The method below runs simplex or ipx solver on the lp.
+// The method below runs simplex, ipx or pdlp solver on the lp.
 HighsStatus solveLp(HighsLpSolverObject& solver_object, const string message) {
   HighsStatus return_status = HighsStatus::kOk;
   HighsStatus call_status;
@@ -38,25 +39,47 @@ HighsStatus solveLp(HighsLpSolverObject& solver_object, const string message) {
     if (return_status == HighsStatus::kError) return return_status;
   }
   if (!solver_object.lp_.num_row_ || solver_object.lp_.a_matrix_.numNz() == 0) {
-    // LP is unconstrained due to having no rowws or a zero constraint
+    // LP is unconstrained due to having no rows or a zero constraint
     // matrix, so solve directly
     call_status = solveUnconstrainedLp(solver_object);
     return_status = interpretCallStatus(options.log_options, call_status,
                                         return_status, "solveUnconstrainedLp");
     if (return_status == HighsStatus::kError) return return_status;
-  } else if (options.solver == kIpmString) {
-    // Use IPM
-    // Use IPX to solve the LP
-    try {
-      call_status = solveLpIpx(solver_object);
-    } catch (const std::exception& exception) {
-      highsLogDev(options.log_options, HighsLogType::kError,
-                  "Exception %s in solveLpIpx\n", exception.what());
-      call_status = HighsStatus::kError;
+  } else if (options.solver == kIpmString || options.run_centring ||
+             options.solver == kPdlpString) {
+    // Use IPM or PDLP
+    if (options.solver == kIpmString || options.run_centring) {
+      // Use IPX to solve the LP
+      try {
+        call_status = solveLpIpx(solver_object);
+      } catch (const std::exception& exception) {
+        highsLogDev(options.log_options, HighsLogType::kError,
+                    "Exception %s in solveLpIpx\n", exception.what());
+        call_status = HighsStatus::kError;
+      }
+      return_status = interpretCallStatus(options.log_options, call_status,
+                                          return_status, "solveLpIpx");
+    } else {
+      // Use cuPDLP-C to solve the LP
+      try {
+        call_status = solveLpCupdlp(solver_object);
+      } catch (const std::exception& exception) {
+        highsLogDev(options.log_options, HighsLogType::kError,
+                    "Exception %s in solveLpCupdlp\n", exception.what());
+        call_status = HighsStatus::kError;
+      }
+      return_status = interpretCallStatus(options.log_options, call_status,
+                                          return_status, "solveLpCupdlp");
     }
-    return_status = interpretCallStatus(options.log_options, call_status,
-                                        return_status, "solveLpIpx");
     if (return_status == HighsStatus::kError) return return_status;
+    // IPM (and PDLP?) can claim optimality with large primal and/or
+    // dual residual errors, so must correct any residual errors that
+    // exceed the tolerance in this scenario.
+    //
+    // OK to correct residual errors whatever the model status, as
+    // it's only changed in the case of optimality
+    correctResiduals(solver_object);
+
     // Non-error return requires a primal solution
     assert(solver_object.solution_.value_valid);
     // Get the objective and any KKT failures
@@ -64,47 +87,114 @@ HighsStatus solveLp(HighsLpSolverObject& solver_object, const string message) {
         solver_object.lp_.objectiveValue(solver_object.solution_.col_value);
     getLpKktFailures(options, solver_object.lp_, solver_object.solution_,
                      solver_object.basis_, solver_object.highs_info_);
-    // Setting the IPM-specific values of (highs_)info_ has been done in
-    // solveLpIpx
-    const bool unwelcome_ipx_status =
-        solver_object.model_status_ == HighsModelStatus::kUnknown ||
-        (solver_object.model_status_ ==
-             HighsModelStatus::kUnboundedOrInfeasible &&
-         !options.allow_unbounded_or_infeasible);
-    if (unwelcome_ipx_status) {
-      highsLogUser(options.log_options, HighsLogType::kWarning,
-                   "Unwelcome IPX status of %s: basis is %svalid; solution is "
-                   "%svalid; run_crossover is \"%s\"\n",
-                   utilModelStatusToString(solver_object.model_status_).c_str(),
-                   solver_object.basis_.valid ? "" : "not ",
-                   solver_object.solution_.value_valid ? "" : "not ",
-                   options.run_crossover.c_str());
-      if (options.run_crossover != kHighsOffString) {
-        // IPX has returned a model status that HiGHS would rather
-        // avoid, so perform simplex clean-up if crossover was allowed.
-        //
-        // This is an unusual situation, and the cost will usually be
-        // acceptable. Worst case is if crossover wasn't run, in which
-        // case there's no basis to start simplex
-        //
-        // ToDo: Check whether simplex can exploit the primal solution returned
-        // by IPX
-        highsLogUser(options.log_options, HighsLogType::kWarning,
-                     "IPX solution is imprecise, so clean up with simplex\n");
-        // Reset the return status since it will now be determined by
-        // the outcome of the simplex solve
-        return_status = HighsStatus::kOk;
-        call_status = solveLpSimplex(solver_object);
-        return_status = interpretCallStatus(options.log_options, call_status,
-                                            return_status, "solveLpSimplex");
-        if (return_status == HighsStatus::kError) return return_status;
-        if (!isSolutionRightSize(solver_object.lp_, solver_object.solution_)) {
-          highsLogUser(options.log_options, HighsLogType::kError,
-                       "Inconsistent solution returned from solver\n");
-          return HighsStatus::kError;
+    if (solver_object.model_status_ == HighsModelStatus::kOptimal &&
+        (solver_object.highs_info_.num_primal_infeasibilities > 0 ||
+         solver_object.highs_info_.num_dual_infeasibilities))
+      solver_object.model_status_ = HighsModelStatus::kUnknown;
+    if (options.solver == kIpmString || options.run_centring) {
+      // Setting the IPM-specific values of (highs_)info_ has been done in
+      // solveLpIpx
+      const bool unwelcome_ipx_status =
+          solver_object.model_status_ == HighsModelStatus::kUnknown ||
+          (solver_object.model_status_ ==
+               HighsModelStatus::kUnboundedOrInfeasible &&
+           !options.allow_unbounded_or_infeasible);
+      if (unwelcome_ipx_status) {
+        // When performing an analytic centre calculation, the setting
+        // of options.run_crossover is ignored, so simplex clean-up is
+        // not possible - or desirable, anyway!
+        highsLogUser(
+            options.log_options, HighsLogType::kWarning,
+            "Unwelcome IPX status of %s: basis is %svalid; solution is "
+            "%svalid; run_crossover is \"%s\"\n",
+            utilModelStatusToString(solver_object.model_status_).c_str(),
+            solver_object.basis_.valid ? "" : "not ",
+            solver_object.solution_.value_valid ? "" : "not ",
+            options.run_centring ? "off" : options.run_crossover.c_str());
+        const bool allow_simplex_cleanup =
+            options.run_crossover != kHighsOffString && !options.run_centring;
+        if (allow_simplex_cleanup) {
+          // IPX has returned a model status that HiGHS would rather
+          // avoid, so perform simplex clean-up if crossover was allowed.
+          //
+          // This is an unusual situation, and the cost will usually be
+          // acceptable. Worst case is if crossover wasn't run, in which
+          // case there's no basis to start simplex
+          //
+          // ToDo: Check whether simplex can exploit the primal solution
+          // returned by IPX
+          highsLogUser(options.log_options, HighsLogType::kWarning,
+                       "IPX solution is imprecise, so clean up with simplex\n");
+          // Reset the return status since it will now be determined by
+          // the outcome of the simplex solve
+          return_status = HighsStatus::kOk;
+          call_status = solveLpSimplex(solver_object);
+          return_status = interpretCallStatus(options.log_options, call_status,
+                                              return_status, "solveLpSimplex");
+          if (return_status == HighsStatus::kError) return return_status;
+          if (!isSolutionRightSize(solver_object.lp_,
+                                   solver_object.solution_)) {
+            highsLogUser(options.log_options, HighsLogType::kError,
+                         "Inconsistent solution returned from solver\n");
+            return HighsStatus::kError;
+          }
+        }  // options.run_crossover == kHighsOnString
+           // clang-format off
+      }  // unwelcome_ipx_status
+      // clang-format on
+    } else {
+      // PDLP has been used, so check whether claim of optimality
+      // satisfies the HiGHS criteria
+      //
+      // Even when PDLP terminates with primal and dual feasibility
+      // and duality gap that are within the tolerances supplied by
+      // HiGHS, the HiGHS primal and dual feasibility tolerances may
+      // not be satisfied since they are absolute, and in PDLP they
+      // are relative. Note that, even when only one PDLP row activity
+      // fails to satisfy the absolute tolerance, the absolute norm
+      // measure reported by PDLP will not necessarily be the same as
+      // with HiGHS, since PDLP uses the 2-norm, and HiGHS the
+      // infinity- and 1-norm
+      //
+      // A single small HiGHS primal infeasibility from PDLP can yield
+      // a significant dual infeasibility, since the variable is
+      // interpreted as being off its bound so any dual value is an
+      // infeasibility. Hence, for context, the max and sum of
+      // complementarity violations are also computed.
+      const HighsInfo& info = solver_object.highs_info_;
+      if (solver_object.model_status_ == HighsModelStatus::kOptimal) {
+        if (info.num_primal_infeasibilities || info.num_dual_infeasibilities) {
+          if (info.num_primal_infeasibilities) {
+            highsLogUser(options.log_options, HighsLogType::kWarning,
+                         "PDLP claims optimality, but with num/max/sum %d / "
+                         "%9.4g / %9.4g primal infeasibilities\n",
+                         int(info.num_primal_infeasibilities),
+                         info.max_primal_infeasibility,
+                         info.sum_primal_infeasibilities);
+          } else if (info.num_dual_infeasibilities) {
+            highsLogUser(options.log_options, HighsLogType::kWarning,
+                         "PDLP claims optimality, but with num/max/sum %d / "
+                         "%9.4g / %9.4g dual infeasibilities\n",
+                         int(info.num_dual_infeasibilities),
+                         info.max_dual_infeasibility,
+                         info.sum_dual_infeasibilities);
+          }
+          highsLogUser(options.log_options, HighsLogType::kWarning,
+                       "                        and          max/sum     %9.4g "
+                       "/ %9.4g complementarity violations\n",
+                       info.max_complementarity_violation,
+                       info.sum_complementarity_violations);
+          highsLogUser(
+              options.log_options, HighsLogType::kWarning,
+              "                        so set model status to \"unknown\"\n");
+          solver_object.model_status_ = HighsModelStatus::kUnknown;
         }
-      }  // options.run_crossover == kHighsOnString
-    }    // unwelcome_ipx_status
+      } else if (solver_object.model_status_ ==
+                 HighsModelStatus::kUnboundedOrInfeasible) {
+        if (info.num_primal_infeasibilities == 0)
+          solver_object.model_status_ = HighsModelStatus::kUnbounded;
+      }
+    }
   } else {
     // Use Simplex
     call_status = solveLpSimplex(solver_object);
@@ -178,7 +268,7 @@ HighsStatus solveUnconstrainedLp(const HighsOptions& options, const HighsLp& lp,
 
   if (lp.num_row_ > 0) {
     // Assign primal, dual and basis status for rows, checking for
-    // infeasiblility
+    // infeasibility
     for (HighsInt iRow = 0; iRow < lp.num_row_; iRow++) {
       double primal_infeasibility = 0;
       double lower = lp.row_lower_[iRow];

@@ -2,7 +2,7 @@
 /*                                                                       */
 /*    This file is part of the HiGHS linear optimization suite           */
 /*                                                                       */
-/*    Written and engineered 2008-2023 by Julian Hall, Ivet Galabova,    */
+/*    Written and engineered 2008-2024 by Julian Hall, Ivet Galabova,    */
 /*    Leona Gottwald and Michael Feldmeier                               */
 /*                                                                       */
 /*    Available as open-source under the MIT License                     */
@@ -631,8 +631,8 @@ void writeRangingFile(FILE* file, const HighsLp& lp,
   std::array<char, 32> dn_value;
   std::array<char, 32> up_value;
 
-  std::array<char, 32> objective = highsDoubleToString(
-      objective_function_value, kRangingValueToStringTolerance);
+  auto objective = highsDoubleToString(objective_function_value,
+                                       kRangingValueToStringTolerance);
   fprintf(file, "Objective %s\n", objective.data());
   if (pretty) {
     fprintf(file,

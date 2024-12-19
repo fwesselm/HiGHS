@@ -2,7 +2,7 @@
 /*                                                                       */
 /*    This file is part of the HiGHS linear optimization suite           */
 /*                                                                       */
-/*    Written and engineered 2008-2023 by Julian Hall, Ivet Galabova,    */
+/*    Written and engineered 2008-2024 by Julian Hall, Ivet Galabova,    */
 /*    Leona Gottwald and Michael Feldmeier                               */
 /*                                                                       */
 /*    Available as open-source under the MIT License                     */
@@ -174,7 +174,7 @@ void HighsPathSeparator::separateLpSolution(HighsLpRelaxation& lpRelaxation,
   HighsInt currentPath[maxPathLen];
   std::vector<std::pair<std::vector<HighsInt>, std::vector<double>>>
       aggregatedPath;
-  double scales[2];
+  std::array<double, 2> scales;
   for (HighsInt i = 0; i != lp.num_row_; ++i) {
     switch (rowtype[i]) {
       case RowType::kUnusuable:
@@ -351,16 +351,17 @@ void HighsPathSeparator::separateLpSolution(HighsLpRelaxation& lpRelaxation,
 
         if (addedSubstitutionRows) continue;
 
+        // generate cut
         double rhs = 0;
-
         success = cutGen.generateCut(transLp, baseRowInds, baseRowVals, rhs);
 
         lpAggregator.getCurrentAggregation(baseRowInds, baseRowVals, true);
         if (!aggregatedPath.empty() || bestOutArcCol != -1 ||
             bestInArcCol != -1)
           aggregatedPath.emplace_back(baseRowInds, baseRowVals);
-        rhs = 0;
 
+        // generate reverse cut
+        rhs = 0;
         success |= cutGen.generateCut(transLp, baseRowInds, baseRowVals, rhs);
 
         if (success || (bestOutArcCol == -1 && bestInArcCol == -1)) break;

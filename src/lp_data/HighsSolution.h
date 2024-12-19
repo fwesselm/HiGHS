@@ -2,7 +2,7 @@
 /*                                                                       */
 /*    This file is part of the HiGHS linear optimization suite           */
 /*                                                                       */
-/*    Written and engineered 2008-2023 by Julian Hall, Ivet Galabova,    */
+/*    Written and engineered 2008-2024 by Julian Hall, Ivet Galabova,    */
 /*    Leona Gottwald and Michael Feldmeier                               */
 /*                                                                       */
 /*    Available as open-source under the MIT License                     */
@@ -85,7 +85,7 @@ void getKktFailures(const HighsOptions& options, const HighsLp& lp,
                     HighsPrimalDualErrors& primal_dual_errors,
                     const bool get_residuals = false);
 
-void getVariableKktFailures(const double primal_feasibility_tolerance,
+bool getVariableKktFailures(const double primal_feasibility_tolerance,
                             const double dual_feasibility_tolerance,
                             const double lower, const double upper,
                             const double value, const double dual,
@@ -94,6 +94,14 @@ void getVariableKktFailures(const double primal_feasibility_tolerance,
                             double& absolute_primal_infeasibility,
                             double& relative_primal_infeasibility,
                             double& dual_infeasibility, double& value_residual);
+
+bool getComplementarityViolations(const HighsLp& lp,
+                                  const HighsSolution& solution,
+                                  double& max_complementarity_violation,
+                                  double& sum_complementarity_violations);
+
+bool computeDualObjectiveValue(const HighsLp& lp, const HighsSolution& solution,
+                               double& dual_objective_value);
 
 double computeObjectiveValue(const HighsLp& lp, const HighsSolution& solution);
 
@@ -122,6 +130,8 @@ HighsStatus formSimplexLpBasisAndFactor(
     const bool only_from_known_basis = false);
 
 void accommodateAlienBasis(HighsLpSolverObject& solver_object);
+
+void correctResiduals(HighsLpSolverObject& solver_object);
 
 void resetModelStatusAndHighsInfo(HighsLpSolverObject& solver_object);
 void resetModelStatusAndHighsInfo(HighsModelStatus& model_status,

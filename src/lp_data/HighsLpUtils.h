@@ -2,7 +2,7 @@
 /*                                                                       */
 /*    This file is part of the HiGHS linear optimization suite           */
 /*                                                                       */
-/*    Written and engineered 2008-2023 by Julian Hall, Ivet Galabova,    */
+/*    Written and engineered 2008-2024 by Julian Hall, Ivet Galabova,    */
 /*    Leona Gottwald and Michael Feldmeier                               */
 /*                                                                       */
 /*    Available as open-source under the MIT License                     */
@@ -85,6 +85,8 @@ HighsStatus applyScalingToLpCol(HighsLp& lp, const HighsInt col,
 HighsStatus applyScalingToLpRow(HighsLp& lp, const HighsInt row,
                                 const double rowScale);
 
+void unscaleSolution(HighsSolution& solution, const HighsScale& scale);
+
 void appendColsToLpVectors(HighsLp& lp, const HighsInt num_new_col,
                            const vector<double>& colCost,
                            const vector<double>& colLower,
@@ -93,16 +95,6 @@ void appendColsToLpVectors(HighsLp& lp, const HighsInt num_new_col,
 void appendRowsToLpVectors(HighsLp& lp, const HighsInt num_new_row,
                            const vector<double>& rowLower,
                            const vector<double>& rowUpper);
-
-void deleteLpCols(HighsLp& lp, const HighsIndexCollection& index_collection);
-
-void deleteColsFromLpVectors(HighsLp& lp, HighsInt& new_num_col,
-                             const HighsIndexCollection& index_collection);
-
-void deleteLpRows(HighsLp& lp, const HighsIndexCollection& index_collection);
-
-void deleteRowsFromLpVectors(HighsLp& lp, HighsInt& new_num_row,
-                             const HighsIndexCollection& index_collection);
 
 void deleteScale(vector<double>& scale,
                  const HighsIndexCollection& index_collection);
@@ -209,7 +201,7 @@ void getLpMatrixCoefficient(const HighsLp& lp, const HighsInt row,
 void analyseLp(const HighsLogOptions& log_options, const HighsLp& lp);
 
 HighsStatus readSolutionFile(const std::string filename,
-                             const HighsOptions& options, const HighsLp& lp,
+                             const HighsOptions& options, HighsLp& lp,
                              HighsBasis& basis, HighsSolution& solution,
                              const HighsInt style);
 
@@ -224,7 +216,9 @@ bool readSolutionFileKeywordLineOk(std::string& keyword,
                                    std::ifstream& in_file);
 bool readSolutionFileHashKeywordIntLineOk(std::string& keyword, HighsInt& value,
                                           std::ifstream& in_file);
-bool readSolutionFileIdDoubleLineOk(double& value, std::ifstream& in_file);
+bool readSolutionFileIdIgnoreLineOk(std::string& id, std::ifstream& in_file);
+bool readSolutionFileIdDoubleLineOk(std::string& id, double& value,
+                                    std::ifstream& in_file);
 bool readSolutionFileIdDoubleIntLineOk(double& value, HighsInt& index,
                                        std::ifstream& in_file);
 
@@ -233,18 +227,20 @@ void assessColPrimalSolution(const HighsOptions& options, const double primal,
                              const HighsVarType type, double& col_infeasibility,
                              double& integer_infeasibility);
 
-HighsStatus assessLpPrimalSolution(const HighsOptions& options,
+HighsStatus assessLpPrimalSolution(const std::string message,
+                                   const HighsOptions& options,
                                    const HighsLp& lp,
                                    const HighsSolution& solution, bool& valid,
                                    bool& integral, bool& feasible);
 
-HighsStatus calculateRowValues(const HighsLp& lp,
-                               const std::vector<double>& col_value,
-                               std::vector<double>& row_value);
-HighsStatus calculateRowValues(const HighsLp& lp, HighsSolution& solution);
+HighsStatus calculateRowValuesQuad(const HighsLp& lp,
+                                   const std::vector<double>& col_value,
+                                   std::vector<double>& row_value,
+                                   const HighsInt report_row = -1);
 HighsStatus calculateRowValuesQuad(const HighsLp& lp, HighsSolution& solution,
                                    const HighsInt report_row = -1);
-HighsStatus calculateColDuals(const HighsLp& lp, HighsSolution& solution);
+
+HighsStatus calculateColDualsQuad(const HighsLp& lp, HighsSolution& solution);
 
 bool isColDataNull(const HighsLogOptions& log_options,
                    const double* usr_col_cost, const double* usr_col_lower,

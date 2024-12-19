@@ -156,6 +156,20 @@ TEST_CASE("MIP-integrality", "[highs_test_mip_solver]") {
   REQUIRE(std::fabs(info.mip_gap) < 1e-12);
 }
 
+TEST_CASE("MIP-clear-integrality", "[highs_test_mip_solver]") {
+  SpecialLps special_lps;
+  HighsLp lp;
+  HighsModelStatus require_model_status;
+  double optimal_objective;
+  special_lps.distillationMip(lp, require_model_status, optimal_objective);
+  Highs highs;
+  highs.setOptionValue("output_flag", dev_run);
+  highs.passModel(lp);
+  REQUIRE(highs.getLp().integrality_.size() > 0);
+  highs.clearIntegrality();
+  REQUIRE(highs.getLp().integrality_.size() == 0);
+}
+
 TEST_CASE("MIP-nmck", "[highs_test_mip_solver]") {
   Highs highs;
   if (!dev_run) highs.setOptionValue("output_flag", false);
@@ -600,6 +614,122 @@ TEST_CASE("MIP-max-offset-test", "[highs_test_mip_solver]") {
       highs.getInfo().objective_function_value;
   REQUIRE(objectiveOk(max_offset_optimal_objective, -offset_optimal_objective,
                       dev_run));
+}
+
+TEST_CASE("MIP-get-saved-solutions-presolve", "[highs_test_mip_solver]") {
+  const std::string solution_file = "MipImproving.sol";
+  Highs highs;
+  highs.setOptionValue("output_flag", dev_run);
+  highs.setOptionValue("mip_improving_solution_save", true);
+  highs.setOptionValue("mip_improving_solution_report_sparse", true);
+  highs.setOptionValue("mip_improving_solution_file", solution_file);
+  // #1724: Add row to the example so that solution is non-zero
+  HighsLp lp;
+  lp.num_col_ = 2;
+  lp.num_row_ = 1;
+  lp.col_cost_ = {1, 1};
+  lp.col_lower_ = {0, 0};
+  lp.col_upper_ = {1, 1};
+  lp.integrality_ = {HighsVarType::kInteger, HighsVarType::kInteger};
+  lp.row_lower_ = {1};
+  lp.row_upper_ = {kHighsInf};
+  lp.a_matrix_.num_col_ = 2;
+  lp.a_matrix_.num_row_ = 1;
+  lp.a_matrix_.start_ = {0, 1, 1};
+  lp.a_matrix_.index_ = {0};
+  lp.a_matrix_.value_ = {1};
+  highs.passModel(lp);
+  highs.run();
+  const std::vector<HighsObjectiveSolution> saved_objective_and_solution =
+      highs.getSavedMipSolutions();
+  const HighsInt num_saved_solution = saved_objective_and_solution.size();
+  REQUIRE(num_saved_solution == 1);
+  const HighsInt last_saved_solution = num_saved_solution - 1;
+  REQUIRE(saved_objective_and_solution[last_saved_solution].objective ==
+          highs.getInfo().objective_function_value);
+  for (HighsInt iCol = 0; iCol < highs.getLp().num_col_; iCol++)
+    REQUIRE(saved_objective_and_solution[last_saved_solution].col_value[iCol] ==
+            highs.getSolution().col_value[iCol]);
+  std::remove(solution_file.c_str());
+}
+
+TEST_CASE("IP-infeasible-unbounded", "[highs_test_mip_solver]") {
+  Highs highs;
+  highs.setOptionValue("output_flag", dev_run);
+  double delta = 0.2;
+  HighsLp lp;
+  lp.num_col_ = 2;
+  lp.num_row_ = 0;
+  lp.col_cost_ = {-1, 0};
+  lp.integrality_ = {HighsVarType::kInteger, HighsVarType::kInteger};
+  highs.setOptionValue("presolve", kHighsOffString);
+  for (HighsInt k = 0; k < 2; k++) {
+    for (HighsInt l = 0; l < 2; l++) {
+      if (l == 0) {
+        // Infeasible
+        lp.col_lower_ = {0, delta};
+        lp.col_upper_ = {kHighsInf, 1 - delta};
+      } else {
+        // Unbounded
+        lp.col_lower_ = {0, -delta};
+        lp.col_upper_ = {kHighsInf, 1 + delta};
+      }
+      // Solve
+      highs.passModel(lp);
+      highs.run();
+      HighsModelStatus required_model_status;
+      if (k == 0) {
+        // Presolve off
+        if (l == 0) {
+          // MIP solver proves infeasiblilty
+          required_model_status = HighsModelStatus::kInfeasible;
+        } else {
+          // Relaxation is unbounded, but origin is feasible
+          required_model_status = HighsModelStatus::kUnbounded;
+        }
+      } else {
+        // Presolve on, and identifies primal infeasible or unbounded
+        required_model_status = HighsModelStatus::kUnboundedOrInfeasible;
+      }
+      REQUIRE(highs.getModelStatus() == required_model_status);
+    }
+    highs.setOptionValue("presolve", kHighsOnString);
+  }
+}
+
+TEST_CASE("IP-with-fract-bounds-no-presolve", "[highs_test_mip_solver]") {
+  Highs highs;
+  // No presolve
+  highs.setOptionValue("output_flag", dev_run);
+  highs.setOptionValue("presolve", "off");
+
+  // IP without constraints and fractional bounds on variables
+  HighsLp lp;
+  lp.num_col_ = 3;
+  lp.num_row_ = 0;
+  lp.col_cost_ = {1, -2, 3};
+  lp.col_lower_ = {2.5, 2.5, 2.5};
+  lp.col_upper_ = {6.5, 5.5, 7.5};
+  lp.integrality_ = {HighsVarType::kInteger, HighsVarType::kInteger,
+                     HighsVarType::kInteger};
+
+  // Solve
+  highs.passModel(lp);
+  highs.run();
+
+  // Check status and optimal objective value
+  REQUIRE(highs.getModelStatus() == HighsModelStatus::kOptimal);
+  REQUIRE(objectiveOk(highs.getInfo().objective_function_value, 2.0, dev_run));
+
+  // Fix an integer variable to a fractional value
+  lp.col_upper_[0] = 2.5;
+
+  // Solve again
+  highs.passModel(lp);
+  highs.run();
+
+  // Infeasible
+  REQUIRE(highs.getModelStatus() == HighsModelStatus::kInfeasible);
 }
 
 bool objectiveOk(const double optimal_objective,

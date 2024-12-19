@@ -5,21 +5,23 @@
 enum class QpSolverStatus { OK, NOTPOSITIVDEFINITE, DEGENERATE };
 
 enum class QpModelStatus {
-  INDETERMINED,
-  OPTIMAL,
-  UNBOUNDED,
-  INFEASIBLE,
-  ITERATIONLIMIT,
-  TIMELIMIT,
-  ERROR
+  kNotset,  // 0
+  kUndetermined,
+  kOptimal,
+  kUnbounded,
+  kInfeasible,
+  kIterationLimit,
+  kTimeLimit,
+  kLargeNullspace,
+  kInterrupt,
+  kError
 };
 
 enum class BasisStatus {
-  Inactive,
-  ActiveAtLower = 1,
-  ActiveAtUpper,
-  InactiveInBasis
+  kInactive,
+  kActiveAtLower = 1,
+  kActiveAtUpper,
+  kInactiveInBasis
 };
-
 
 #endif

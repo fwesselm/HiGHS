@@ -2,7 +2,7 @@
 /*                                                                       */
 /*    This file is part of the HiGHS linear optimization suite           */
 /*                                                                       */
-/*    Written and engineered 2008-2023 by Julian Hall, Ivet Galabova,    */
+/*    Written and engineered 2008-2024 by Julian Hall, Ivet Galabova,    */
 /*    Leona Gottwald and Michael Feldmeier                               */
 /*                                                                       */
 /*    Available as open-source under the MIT License                     */
@@ -261,10 +261,12 @@ void checkComplementarySlackness(const State& state,
         if (fabs(state.colDual[i]) > tol &&
             fabs(state.colValue[i] - state.colUpper[i]) > tol) {
           if (dev_print)
+            // clang-format off
             std::cout << "Comp. slackness fail: "
                       << "l[" << i << "]=" << state.colLower[i] << ", x[" << i
                       << "]=" << state.colValue[i] << ", z[" << i
                       << "]=" << state.colDual[i] << std::endl;
+          // clang-format on
           infeas = fabs(state.colDual[i]);
         }
       }

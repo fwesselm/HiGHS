@@ -11,6 +11,7 @@
 #include "lp_data/HighsLpUtils.h"
 
 const bool dev_run = false;
+const double inf = kHighsInf;
 
 TEST_CASE("filereader-edge-cases", "[highs_filereader]") {
   std::string model = "";
@@ -299,6 +300,21 @@ TEST_CASE("filereader-integrality-constraints", "[highs_filereader]") {
   REQUIRE(are_the_same);
 }
 
+/*
+TEST_CASE("filereader-nan", "[highs_filereader]") {
+  // Check that if
+  std::string model_file;
+  Highs highs;
+  highs.setOptionValue("output_flag", dev_run);
+  model_file = std::string(HIGHS_DIR) + "/check/instances/nan0.mps";
+  REQUIRE(highs.readModel(model_file) == HighsStatus::kError);
+  model_file = std::string(HIGHS_DIR) + "/check/instances/nan1.mps";
+  REQUIRE(highs.readModel(model_file) == HighsStatus::kError);
+  model_file = std::string(HIGHS_DIR) + "/check/instances/nan2.mps";
+  REQUIRE(highs.readModel(model_file) == HighsStatus::kError);
+}
+*/
+
 TEST_CASE("filereader-fixed-integer", "[highs_filereader]") {
   double objective_value;
   const double optimal_objective_value = 0;
@@ -311,4 +327,92 @@ TEST_CASE("filereader-fixed-integer", "[highs_filereader]") {
   REQUIRE(highs.run() == HighsStatus::kOk);
   objective_value = highs.getInfo().objective_function_value;
   REQUIRE(objective_value == optimal_objective_value);
+}
+
+TEST_CASE("filereader-dD2e", "[highs_filereader]") {
+  // dD2e.mps is min -x1 - 2x2 with upper bounds 1.0D3 and 1.0d3
+  //
+  // If read correctly, the optimal objective value is -3000
+  double objective_value;
+  const double optimal_objective_value = -3000;
+  std::string model_file = std::string(HIGHS_DIR) + "/check/instances/dD2e.mps";
+  Highs highs;
+  highs.setOptionValue("output_flag", dev_run);
+
+  REQUIRE(highs.readModel(model_file) == HighsStatus::kOk);
+  REQUIRE(highs.run() == HighsStatus::kOk);
+  objective_value = highs.getInfo().objective_function_value;
+  REQUIRE(objective_value == optimal_objective_value);
+}
+
+// TEST_CASE("filereader-comment", "[highs_filereader]") {
+//   // Check that comments - either whole line with * in first column,
+//   // or rest of line following */$ are handled correctly
+//   const double optimal_objective_value = -4;
+//   std::string model_file =
+//       std::string(HIGHS_DIR) + "/check/instances/comment.mps";
+//   Highs highs;
+//   highs.setOptionValue("output_flag", dev_run);
+//   REQUIRE(highs.readModel(model_file) == HighsStatus::kOk);
+//   REQUIRE(highs.run() == HighsStatus::kOk);
+//   double objective_value = highs.getInfo().objective_function_value;
+//   REQUIRE(objective_value == optimal_objective_value);
+// }
+
+TEST_CASE("writeLocalModel", "[highs_filereader]") {
+  Highs h;
+  h.setOptionValue("output_flag", dev_run);
+  std::string write_model_file = "foo.mps";
+  HighsModel model;
+  HighsLp& lp = model.lp_;
+  ;
+  lp.num_col_ = 2;
+  lp.num_row_ = 3;
+  lp.col_cost_ = {8, 10};
+  lp.row_lower_ = {7, 12, 6};
+  lp.row_upper_ = {inf, inf, inf};
+  lp.a_matrix_.start_ = {0, 3, 6};
+  lp.a_matrix_.index_ = {0, 1, 2, 0, 1, 2};
+  lp.a_matrix_.value_ = {2, 3, 2, 2, 4, 1};
+
+  if (dev_run) printf("\nModel with no column lower or upper bounds\n");
+  REQUIRE(h.writeLocalModel(model, write_model_file) == HighsStatus::kError);
+  lp.col_lower_ = {0, 0};
+
+  if (dev_run) printf("\nModel with no column upper bounds\n");
+  REQUIRE(h.writeLocalModel(model, write_model_file) == HighsStatus::kError);
+  lp.col_upper_ = {inf, inf};
+
+  // Model has no dimensions for a_matrix_, but these are set in
+  // writeLocalModel.
+  if (dev_run) printf("\nModel with no column or row names\n");
+  REQUIRE(h.writeLocalModel(model, write_model_file) == HighsStatus::kWarning);
+  lp.col_names_ = {"C0", "C1"};
+  lp.row_names_ = {"R0", "R1", "R2"};
+
+  if (dev_run) printf("\nModel with column and row names\n");
+  REQUIRE(h.writeLocalModel(model, write_model_file) == HighsStatus::kOk);
+
+  // Introduce illegal start
+  if (dev_run) printf("\nModel with start entry > num_nz\n");
+  lp.a_matrix_.start_ = {0, 7, 6};
+  REQUIRE(h.writeLocalModel(model, write_model_file) == HighsStatus::kError);
+
+  // Introduce illegal start
+  if (dev_run) printf("\nModel with start entry -1\n");
+  lp.a_matrix_.start_ = {0, -1, 6};
+  REQUIRE(h.writeLocalModel(model, write_model_file) == HighsStatus::kError);
+  lp.a_matrix_.start_ = {0, 3, 6};
+
+  // Introduce illegal index
+  if (dev_run) printf("\nModel with index entry -1\n");
+  lp.a_matrix_.index_ = {0, -1, 2, 0, 1, 2};
+  REQUIRE(h.writeLocalModel(model, write_model_file) == HighsStatus::kError);
+
+  // Introduce illegal index
+  if (dev_run) printf("\nModel with index entry 3 >= num_row\n");
+  lp.a_matrix_.index_ = {0, 1, 3, 0, 1, 2};
+  REQUIRE(h.writeLocalModel(model, write_model_file) == HighsStatus::kError);
+
+  std::remove(write_model_file.c_str());
 }

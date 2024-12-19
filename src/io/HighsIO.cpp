@@ -2,7 +2,7 @@
 /*                                                                       */
 /*    This file is part of the HiGHS linear optimization suite           */
 /*                                                                       */
-/*    Written and engineered 2008-2023 by Julian Hall, Ivet Galabova,    */
+/*    Written and engineered 2008-2024 by Julian Hall, Ivet Galabova,    */
 /*    Leona Gottwald and Michael Feldmeier                               */
 /*                                                                       */
 /*    Available as open-source under the MIT License                     */
@@ -20,15 +20,21 @@
 #include "lp_data/HighsLp.h"
 #include "lp_data/HighsOptions.h"
 
-void highsLogHeader(const HighsLogOptions& log_options) {
-  highsLogUser(log_options, HighsLogType::kInfo, "Running HiGHS %d.%d.%d (git hash: %s): %s\n",
-               (int)HIGHS_VERSION_MAJOR, (int)HIGHS_VERSION_MINOR,
-               (int)HIGHS_VERSION_PATCH, HIGHS_GITHASH, kHighsCopyrightStatement.c_str());
+void highsLogHeader(const HighsLogOptions& log_options,
+                    const bool log_githash) {
+  const std::string githash_string(HIGHS_GITHASH);
+  const std::string githash_text =
+      log_githash ? " (git hash: " + githash_string + ")" : "";
+  highsLogUser(log_options, HighsLogType::kInfo,
+               "Running HiGHS %d.%d.%d%s: %s\n", (int)HIGHS_VERSION_MAJOR,
+               (int)HIGHS_VERSION_MINOR, (int)HIGHS_VERSION_PATCH,
+               githash_text.c_str(), kHighsCopyrightStatement.c_str());
 }
 
 std::array<char, 32> highsDoubleToString(const double val,
                                          const double tolerance) {
-  std::array<char, 32> printString;
+  decltype(highsDoubleToString(std::declval<double>(),
+                               std::declval<double>())) printString = {};
   double l =
       std::abs(val) == kHighsInf
           ? 1.0
@@ -36,55 +42,55 @@ std::array<char, 32> highsDoubleToString(const double val,
              std::log10(std::max(tolerance, std::abs(val)) / (tolerance)));
   switch (int(l)) {
     case 0:
-      std::snprintf(printString.data(), 32, "%c", '0');
+      std::snprintf(printString.data(), printString.size(), "%c", '0');
       break;
     case 1:
-      std::snprintf(printString.data(), 32, "%.1g", val);
+      std::snprintf(printString.data(), printString.size(), "%.1g", val);
       break;
     case 2:
-      std::snprintf(printString.data(), 32, "%.2g", val);
+      std::snprintf(printString.data(), printString.size(), "%.2g", val);
       break;
     case 3:
-      std::snprintf(printString.data(), 32, "%.3g", val);
+      std::snprintf(printString.data(), printString.size(), "%.3g", val);
       break;
     case 4:
-      std::snprintf(printString.data(), 32, "%.4g", val);
+      std::snprintf(printString.data(), printString.size(), "%.4g", val);
       break;
     case 5:
-      std::snprintf(printString.data(), 32, "%.5g", val);
+      std::snprintf(printString.data(), printString.size(), "%.5g", val);
       break;
     case 6:
-      std::snprintf(printString.data(), 32, "%.6g", val);
+      std::snprintf(printString.data(), printString.size(), "%.6g", val);
       break;
     case 7:
-      std::snprintf(printString.data(), 32, "%.7g", val);
+      std::snprintf(printString.data(), printString.size(), "%.7g", val);
       break;
     case 8:
-      std::snprintf(printString.data(), 32, "%.8g", val);
+      std::snprintf(printString.data(), printString.size(), "%.8g", val);
       break;
     case 9:
-      std::snprintf(printString.data(), 32, "%.9g", val);
+      std::snprintf(printString.data(), printString.size(), "%.9g", val);
       break;
     case 10:
-      std::snprintf(printString.data(), 32, "%.10g", val);
+      std::snprintf(printString.data(), printString.size(), "%.10g", val);
       break;
     case 11:
-      std::snprintf(printString.data(), 32, "%.11g", val);
+      std::snprintf(printString.data(), printString.size(), "%.11g", val);
       break;
     case 12:
-      std::snprintf(printString.data(), 32, "%.12g", val);
+      std::snprintf(printString.data(), printString.size(), "%.12g", val);
       break;
     case 13:
-      std::snprintf(printString.data(), 32, "%.13g", val);
+      std::snprintf(printString.data(), printString.size(), "%.13g", val);
       break;
     case 14:
-      std::snprintf(printString.data(), 32, "%.14g", val);
+      std::snprintf(printString.data(), printString.size(), "%.14g", val);
       break;
     case 15:
-      std::snprintf(printString.data(), 32, "%.15g", val);
+      std::snprintf(printString.data(), printString.size(), "%.15g", val);
       break;
     default:
-      std::snprintf(printString.data(), 32, "%.16g", val);
+      std::snprintf(printString.data(), printString.size(), "%.16g", val);
   }
 
   return printString;
@@ -115,6 +121,7 @@ void highsLogUser(const HighsLogOptions& log_options_, const HighsLogType type,
         fprintf(log_options_.log_stream, "%-9s", HighsLogTypeTag[(int)type]);
       vfprintf(log_options_.log_stream, format, argptr);
       if (flush_streams) fflush(log_options_.log_stream);
+      va_end(argptr);
       va_start(argptr, format);
     }
     // Write to stdout unless log file stream is stdout
@@ -124,27 +131,31 @@ void highsLogUser(const HighsLogOptions& log_options_, const HighsLogType type,
       if (flush_streams) fflush(stdout);
     }
   } else {
-    int len = 0;
-    char msgbuffer[kIoBufferSize];
-    if (prefix)
-      len = snprintf(msgbuffer, sizeof(msgbuffer), "%-9s",
-                     HighsLogTypeTag[(int)type]);
-    if (len < (int)sizeof(msgbuffer))
-      len +=
-          vsnprintf(msgbuffer + len, sizeof(msgbuffer) - len, format, argptr);
-    if (len >= (int)sizeof(msgbuffer)) {
-      // Output was truncated: for now just ensure string is null-terminated
-      msgbuffer[sizeof(msgbuffer) - 1] = '\0';
+    size_t len = 0;
+    std::array<char, kIoBufferSize> msgbuffer = {};
+    if (prefix) {
+      int l = snprintf(msgbuffer.data(), msgbuffer.size(), "%-9s",
+                       HighsLogTypeTag[(int)type]);
+      // assert that there are no encoding errors
+      assert(l >= 0);
+      len = static_cast<size_t>(l);
+    }
+    if (len < msgbuffer.size()) {
+      int l = vsnprintf(msgbuffer.data() + len, msgbuffer.size() - len, format,
+                        argptr);
+      // assert that there are no encoding errors
+      assert(l >= 0);
+      len += static_cast<size_t>(l);
     }
     if (log_options_.user_log_callback) {
-      log_options_.user_log_callback(type, msgbuffer,
+      log_options_.user_log_callback(type, msgbuffer.data(),
                                      log_options_.user_log_callback_data);
     }
     if (log_options_.user_callback_active) {
       assert(log_options_.user_callback);
       HighsCallbackDataOut data_out;
       data_out.log_type = int(type);
-      log_options_.user_callback(kCallbackLogging, msgbuffer, &data_out,
+      log_options_.user_callback(kCallbackLogging, msgbuffer.data(), &data_out,
                                  nullptr, log_options_.user_callback_data);
     }
   }
@@ -183,6 +194,7 @@ void highsLogDev(const HighsLogOptions& log_options_, const HighsLogType type,
       // Write to log file stream
       vfprintf(log_options_.log_stream, format, argptr);
       if (flush_streams) fflush(log_options_.log_stream);
+      va_end(argptr);
       va_start(argptr, format);
     }
     // Write to stdout unless log file stream is stdout
@@ -191,25 +203,32 @@ void highsLogDev(const HighsLogOptions& log_options_, const HighsLogType type,
       if (flush_streams) fflush(stdout);
     }
   } else {
-    int len;
-    char msgbuffer[kIoBufferSize];
-    len = vsnprintf(msgbuffer, sizeof(msgbuffer), format, argptr);
-    if (len >= (int)sizeof(msgbuffer)) {
-      // Output was truncated: for now just ensure string is null-terminated
-      msgbuffer[sizeof(msgbuffer) - 1] = '\0';
-    }
+    std::array<char, kIoBufferSize> msgbuffer = {};
+    int len = vsnprintf(msgbuffer.data(), msgbuffer.size(), format, argptr);
+    // assert that there are no encoding errors
+    assert(len >= 0);
     if (log_options_.user_log_callback) {
-      log_options_.user_log_callback(type, msgbuffer,
+      log_options_.user_log_callback(type, msgbuffer.data(),
                                      log_options_.user_log_callback_data);
     } else if (log_options_.user_callback_active) {
       assert(log_options_.user_callback);
       HighsCallbackDataOut data_out;
       data_out.log_type = int(type);
-      log_options_.user_callback(kCallbackLogging, msgbuffer, &data_out,
+      log_options_.user_callback(kCallbackLogging, msgbuffer.data(), &data_out,
                                  nullptr, log_options_.user_callback_data);
     }
   }
   va_end(argptr);
+}
+
+void highsFprintfString(FILE* file, const HighsLogOptions& log_options_,
+                        const std::string& s) {
+  if (file == nullptr) return;
+  if (file == stdout) {
+    highsLogUser(log_options_, HighsLogType::kInfo, "%s", s.c_str());
+  } else {
+    fprintf(file, "%s", s.c_str());
+  }
 }
 
 void highsReportDevInfo(const HighsLogOptions* log_options,
@@ -243,16 +262,12 @@ void highsReportLogOptions(const HighsLogOptions& log_options_) {
 std::string highsFormatToString(const char* format, ...) {
   va_list argptr;
   va_start(argptr, format);
-  int len;
-  char msgbuffer[kIoBufferSize];
-  len = vsnprintf(msgbuffer, sizeof(msgbuffer), format, argptr);
-
-  if (len >= (int)sizeof(msgbuffer)) {
-    // Output was truncated: for now just ensure string is null-terminated
-    msgbuffer[sizeof(msgbuffer) - 1] = '\0';
-  }
+  std::array<char, kIoBufferSize> msgbuffer = {};
+  int len = vsnprintf(msgbuffer.data(), msgbuffer.size(), format, argptr);
+  // assert that there are no encoding errors
+  assert(len >= 0);
   va_end(argptr);
-  return std::string(msgbuffer);
+  return std::string(msgbuffer.data());
 }
 
 const std::string highsBoolToString(const bool b, const HighsInt field_width) {
