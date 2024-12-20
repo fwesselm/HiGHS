@@ -5908,8 +5908,6 @@ HPresolve::Result HPresolve::detectParallelRowsAndCols(
       HPRESOLVE_CHECKED_CALL(rowPresolve(postsolve_stack, i));
       continue;
     }
-    auto it = buckets.find(rowHashes[i]);
-    decltype(it) last = it;
 
     auto getNumSingletons = [&](HighsInt row) {
       const HighsInt* numSingletonPtr = numRowSingletons.find(row);
@@ -5923,8 +5921,11 @@ HPresolve::Result HPresolve::detectParallelRowsAndCols(
         numSingleton != 0)
       continue;
 #endif
-    HighsInt delRow = -1;
+
+    auto it = buckets.find(rowHashes[i]);
+    decltype(it) last = it;
     if (it != buckets.end()) storeRow(i);
+
     while (it != buckets.end() && it->first == rowHashes[i]) {
       HighsInt parallelRowCand = it->second;
       last = it++;
@@ -5981,6 +5982,13 @@ HPresolve::Result HPresolve::detectParallelRowsAndCols(
         if (!parallel) break;
       }
       if (!parallel) continue;
+
+      // lambda for removing a row from the multimap
+      auto removeRow = [&](HighsInt row) {
+        if (row != i) buckets.erase(last);
+        HPRESOLVE_CHECKED_CALL(checkLimits(postsolve_stack));
+        return Result::kOk;
+      };
 
       if (numSingleton == 0 && numSingletonCandidate == 0) {
         bool rowLowerTightened = false;
@@ -6058,9 +6066,9 @@ HPresolve::Result HPresolve::detectParallelRowsAndCols(
 
         postsolve_stack.duplicateRow(parallelRowCand, rowUpperTightened,
                                      rowLowerTightened, i, rowScale);
-        delRow = i;
         markRowDeleted(i);
         for (HighsInt rowiter : rowpositions) unlink(rowiter);
+        HPRESOLVE_CHECKED_CALL(removeRow(i));
         break;
       } else if (model->row_lower_[i] == model->row_upper_[i]) {
         // row i is equation and parallel (except for singletons)
@@ -6073,7 +6081,7 @@ HPresolve::Result HPresolve::detectParallelRowsAndCols(
         //        model->row_upper_[parallelRowCand]);
         HPRESOLVE_CHECKED_CALL(equalityRowAddition(
             postsolve_stack, i, parallelRowCand, -rowScale, getStoredRow()));
-        delRow = parallelRowCand;
+        HPRESOLVE_CHECKED_CALL(removeRow(parallelRowCand));
       } else if (model->row_lower_[parallelRowCand] ==
                  model->row_upper_[parallelRowCand]) {
         // printf(
@@ -6082,10 +6090,10 @@ HPresolve::Result HPresolve::detectParallelRowsAndCols(
         //    row\n", numSingletonCandidate, numSingleton);
         // the row parallelRowCand is an equation; add it to the other row
         HPRESOLVE_CHECKED_CALL(equalityRowAddition(
-            postsolve_stack, parallelRowCand, i,
-            -rowMax[i].first / rowMax[parallelRowCand].first,
+            postsolve_stack, parallelRowCand, i, -1.0 / rowScale,
             getRowVector(parallelRowCand)));
-        delRow = i;
+        HPRESOLVE_CHECKED_CALL(removeRow(i));
+        break;
       } else {
         assert(numSingleton == 1);
         assert(numSingletonCandidate == 1);
@@ -6113,12 +6121,8 @@ HPresolve::Result HPresolve::detectParallelRowsAndCols(
       }
     }
 
-    if (delRow != -1) {
-      if (delRow != i) buckets.erase(last);
-
-      HPRESOLVE_CHECKED_CALL(checkLimits(postsolve_stack));
-    } else
-      buckets.emplace_hint(last, rowHashes[i], i);
+    // store row
+    if (!rowDeleted[i]) buckets.emplace_hint(last, rowHashes[i], i);
   }
 
   analysis_.logging_on_ = logging_on;
