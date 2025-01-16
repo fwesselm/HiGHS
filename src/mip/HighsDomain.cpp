@@ -3159,6 +3159,12 @@ bool HighsDomain::ConflictSet::explainInfeasibility() {
       HighsCDouble minAct;
       globaldom.computeMinActivity(0, len, inds, vals, ninfmin, minAct);
 
+      // Why should there be no infinite contributions to the minimum activity
+      // when bounds from globaldom are used (see github issue #2122)? I
+      // commented out the assert and handled the case ninfmin != 0 below.
+
+      // assert(ninfmin == 0);
+
       return explainInfeasibilityLeq(
           inds, vals, len, rhs, ninfmin == 0 ? double(minAct) : -kHighsInf);
     }
@@ -3415,6 +3421,12 @@ bool HighsDomain::ConflictSet::explainBoundChange(
       HighsInt ninfmin;
       HighsCDouble minAct;
       globaldom.computeMinActivity(0, len, inds, vals, ninfmin, minAct);
+
+      // Why should there be at most one infinite contribution to the minimum
+      // activity when bounds from globaldom are used (see github issue #2122)?
+      // I commented out the assert and handled the case ninfmin != 0 below.
+
+      // assert(ninfmin <= 1);
 
       // todo: treat case with a single infinite contribution that propagated a
       // bound
