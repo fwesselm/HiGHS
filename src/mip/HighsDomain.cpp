@@ -3129,10 +3129,9 @@ bool HighsDomain::ConflictSet::explainInfeasibility() {
       const double* vals;
       localdom.mipsolver->mipdata_->getRow(rowIndex, len, inds, vals);
 
-      double maxAct = globaldom.getMaxActivity(rowIndex);
-
-      return explainInfeasibilityGeq(
-          inds, vals, len, localdom.mipsolver->rowLower(rowIndex), maxAct);
+      return explainInfeasibilityGeq(inds, vals, len,
+                                     localdom.mipsolver->rowLower(rowIndex),
+                                     globaldom.getMaxActivity(rowIndex));
     }
     case Reason::kModelRowUpper: {
       HighsInt rowIndex = localdom.infeasible_reason.index;
@@ -3143,10 +3142,9 @@ bool HighsDomain::ConflictSet::explainInfeasibility() {
       const double* vals;
       localdom.mipsolver->mipdata_->getRow(rowIndex, len, inds, vals);
 
-      double minAct = globaldom.getMinActivity(rowIndex);
-
-      return explainInfeasibilityLeq(
-          inds, vals, len, localdom.mipsolver->rowUpper(rowIndex), minAct);
+      return explainInfeasibilityLeq(inds, vals, len,
+                                     localdom.mipsolver->rowUpper(rowIndex),
+                                     globaldom.getMinActivity(rowIndex));
     }
     case Reason::kObjective: {
       HighsInt len;
@@ -3388,11 +3386,9 @@ bool HighsDomain::ConflictSet::explainBoundChange(
       const double* vals;
       localdom.mipsolver->mipdata_->getRow(rowIndex, len, inds, vals);
 
-      double maxAct = globaldom.getMaxActivity(rowIndex);
-
       return explainBoundChangeGeq(currentFrontier, domchg, inds, vals, len,
                                    localdom.mipsolver->rowLower(rowIndex),
-                                   maxAct);
+                                   globaldom.getMaxActivity(rowIndex));
     }
     case Reason::kModelRowUpper: {
       HighsInt rowIndex = localdom.domchgreason_[domchg.pos].index;
@@ -3403,11 +3399,9 @@ bool HighsDomain::ConflictSet::explainBoundChange(
       const double* vals;
       localdom.mipsolver->mipdata_->getRow(rowIndex, len, inds, vals);
 
-      double minAct = globaldom.getMinActivity(rowIndex);
-
       return explainBoundChangeLeq(currentFrontier, domchg, inds, vals, len,
                                    localdom.mipsolver->rowUpper(rowIndex),
-                                   minAct);
+                                   globaldom.getMinActivity(rowIndex));
     }
     case Reason::kObjective: {
       HighsInt len;
