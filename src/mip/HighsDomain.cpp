@@ -3160,9 +3160,9 @@ bool HighsDomain::ConflictSet::explainInfeasibility() {
       HighsInt ninfmin;
       HighsCDouble minAct;
       globaldom.computeMinActivity(0, len, inds, vals, ninfmin, minAct);
-      assert(ninfmin == 0);
 
-      return explainInfeasibilityLeq(inds, vals, len, rhs, double(minAct));
+      return explainInfeasibilityLeq(
+          inds, vals, len, rhs, ninfmin == 0 ? double(minAct) : -kHighsInf);
     }
     default:
       assert(localdom.infeasible_reason.type >= 0);
@@ -3421,13 +3421,12 @@ bool HighsDomain::ConflictSet::explainBoundChange(
       HighsInt ninfmin;
       HighsCDouble minAct;
       globaldom.computeMinActivity(0, len, inds, vals, ninfmin, minAct);
-      assert(ninfmin <= 1);
+
       // todo: treat case with a single infinite contribution that propagated a
       // bound
-      if (ninfmin == 1) return false;
-
       return explainBoundChangeLeq(currentFrontier, domchg, inds, vals, len,
-                                   rhs, double(minAct));
+                                   rhs,
+                                   ninfmin == 0 ? double(minAct) : -kHighsInf);
     }
     default:
       assert(localdom.domchgreason_[domchg.pos].type >= 0);
