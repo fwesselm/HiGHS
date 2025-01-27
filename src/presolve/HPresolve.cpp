@@ -481,10 +481,10 @@ void HPresolve::unlink(HighsInt pos) {
 
   // remove implied bounds on row duals that where implied by this column's dual
   // constraint
-  resetRowDualImpliedBoundsDerivedFromCol(Acol[pos]);
+  recomputeRowDualImpliedBounds(Acol[pos]);
 
   // remove implied bounds on columns that where implied by this row
-  resetColImpliedBoundsDerivedFromRow(Arow[pos]);
+  recomputeRowDualImpliedBounds(Arow[pos]);
 
   // remove non-zero
   Avalue[pos] = 0;
@@ -704,7 +704,6 @@ void HPresolve::resetColImpliedBoundsDerivedFromRow(HighsInt row) {
   for (const HighsInt& col : affectedCols) {
     // set implied bounds to infinite values if they were deduced from the
     // given row
-    assert(colLowerSource[col] == row || colUpperSource[col] == row);
     resetColImpliedBounds(col, row);
   }
 }
@@ -717,12 +716,11 @@ void HPresolve::resetRowDualImpliedBoundsDerivedFromCol(HighsInt col) {
   for (const HighsInt& row : affectedRows) {
     // set implied bounds to infinite values if they were deduced from the
     // given column
-    assert(rowDualLowerSource[row] == col || rowDualUpperSource[row] == col);
     resetRowDualImpliedBounds(row, col);
   }
 }
 
-void HPresolve::recomputeColImpliedBounds(HighsInt row) {
+void HPresolve::recomputeColImpliedBounds(HighsInt row, bool recomputeBounds) {
   // recompute implied column bounds affected by a modification in a row
   // (removed / added non-zeros, etc.)
   if (colImplSourceByRow[row].empty()) return;
@@ -730,17 +728,20 @@ void HPresolve::recomputeColImpliedBounds(HighsInt row) {
   for (const HighsInt& col : affectedCols) {
     // set implied bounds to infinite values if they were deduced from the given
     // row
-    if (colLowerSource[col] == row) changeImplColLower(col, -kHighsInf, -1);
-    if (colUpperSource[col] == row) changeImplColUpper(col, kHighsInf, -1);
+    resetColImpliedBounds(col, row);
 
     // iterate over column and recompute the implied bounds
-    for (const HighsSliceNonzero& nonz : getColumnVector(col)) {
-      updateColImpliedBounds(nonz.index(), col, nonz.value());
+    if (recomputeBounds && !colDeleted[col]) {
+      for (const HighsSliceNonzero& nonz : getColumnVector(col)) {
+        if (!rowDeleted[nonz.index()])
+          updateColImpliedBounds(nonz.index(), col, nonz.value());
+      }
     }
   }
 }
 
-void HPresolve::recomputeRowDualImpliedBounds(HighsInt col) {
+void HPresolve::recomputeRowDualImpliedBounds(HighsInt col,
+                                              bool recomputeBounds) {
   // recompute implied row dual bounds affected by a modification in a column
   // (removed / added non-zeros, etc.)
   if (implRowDualSourceByCol[col].empty()) return;
@@ -748,16 +749,16 @@ void HPresolve::recomputeRowDualImpliedBounds(HighsInt col) {
   for (const HighsInt& row : affectedRows) {
     // set implied bounds to infinite values if they were deduced from the given
     // column
-    if (rowDualLowerSource[row] == col)
-      changeImplRowDualLower(row, -kHighsInf, -1);
-    if (rowDualUpperSource[row] == col)
-      changeImplRowDualUpper(row, kHighsInf, -1);
+    resetRowDualImpliedBounds(row, col);
 
     // iterate over row and recompute the implied bounds
-    for (const HighsSliceNonzero& nonz : getRowVector(row)) {
-      // integer columns cannot be used to tighten bounds on dual multipliers
-      if (model->integrality_[nonz.index()] != HighsVarType::kInteger)
-        updateRowDualImpliedBounds(row, nonz.index(), nonz.value());
+    if (recomputeBounds && !rowDeleted[row]) {
+      for (const HighsSliceNonzero& nonz : getRowVector(row)) {
+        // integer columns cannot be used to tighten bounds on dual multipliers
+        if (!colDeleted[nonz.index()] &&
+            model->integrality_[nonz.index()] != HighsVarType::kInteger)
+          updateRowDualImpliedBounds(row, nonz.index(), nonz.value());
+      }
     }
   }
 }
@@ -1711,10 +1712,10 @@ void HPresolve::addToMatrix(const HighsInt row, const HighsInt col,
 
     // remove implied bounds on row duals that where implied by this column's
     // dual constraint
-    resetRowDualImpliedBoundsDerivedFromCol(col);
+    recomputeRowDualImpliedBounds(col);
 
     // remove implied bounds on columns that where implied by this row
-    resetColImpliedBoundsDerivedFromRow(row);
+    recomputeColImpliedBounds(row);
 
   } else {
     double sum = Avalue[pos] + val;
@@ -1723,10 +1724,10 @@ void HPresolve::addToMatrix(const HighsInt row, const HighsInt col,
     } else {
       // remove implied bounds on row duals that where implied by this column's
       // dual constraint
-      resetRowDualImpliedBoundsDerivedFromCol(col);
+      recomputeRowDualImpliedBounds(col);
 
       // remove implied bounds on columns that where implied by this row
-      resetColImpliedBoundsDerivedFromRow(row);
+      recomputeColImpliedBounds(row);
 
       // remove the locks and contribution to implied (dual) row bounds, then
       // add then again

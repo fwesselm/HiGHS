@@ -162,9 +162,9 @@ class HPresolve {
 
   void resetRowDualImpliedBoundsDerivedFromCol(HighsInt col);
 
-  void recomputeColImpliedBounds(HighsInt row);
+  void recomputeColImpliedBounds(HighsInt row, bool recomputeBounds = true);
 
-  void recomputeRowDualImpliedBounds(HighsInt col);
+  void recomputeRowDualImpliedBounds(HighsInt col, bool recomputeBounds = true);
 
   void updateRowDualImpliedBounds(HighsInt row, HighsInt col, double val);
 
