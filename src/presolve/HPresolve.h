@@ -154,19 +154,15 @@ class HPresolve {
 
   void updateColImpliedBounds(HighsInt row, HighsInt col, double val);
 
+  void updateRowDualImpliedBounds(HighsInt row, HighsInt col, double val);
+
   void resetColImpliedBounds(HighsInt col, HighsInt row = -1);
 
   void resetRowDualImpliedBounds(HighsInt row, HighsInt col = -1);
 
-  void resetColImpliedBoundsDerivedFromRow(HighsInt row);
+  void updateColImpliedBounds(HighsInt row, bool recomputeBounds = false);
 
-  void resetRowDualImpliedBoundsDerivedFromCol(HighsInt col);
-
-  void recomputeColImpliedBounds(HighsInt row, bool recomputeBounds = true);
-
-  void recomputeRowDualImpliedBounds(HighsInt col, bool recomputeBounds = true);
-
-  void updateRowDualImpliedBounds(HighsInt row, HighsInt col, double val);
+  void updateRowDualImpliedBounds(HighsInt col, bool recomputeBounds = false);
 
   bool rowCoefficientsIntegral(HighsInt row, double scale) const;
 
