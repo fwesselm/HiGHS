@@ -868,13 +868,20 @@ void HPresolve::shrinkProblem(HighsPostsolveStack& postsolve_stack) {
   impliedDualRowBounds.shrink(newColIndex, model->num_col_);
 
   HighsInt numNnz = Avalue.size();
+  HighsInt numFreeSlots = 0;
   for (HighsInt i = 0; i != numNnz; ++i) {
-    if (Avalue[i] == 0) continue;
+    if (Avalue[i] == 0) {
+      assert(std::find(freeslots.begin(), freeslots.end(), i) !=
+             freeslots.end());
+      numFreeSlots++;
+      continue;
+    }
     assert(newColIndex[Acol[i]] != -1);
     assert(newRowIndex[Arow[i]] != -1);
     Acol[i] = newColIndex[Acol[i]];
     Arow[i] = newRowIndex[Arow[i]];
   }
+  assert(numFreeSlots == freeslots.size());
 
   // update index sets
   for (HighsInt& singCol : singletonColumns) singCol = newColIndex[singCol];
@@ -941,8 +948,6 @@ void HPresolve::shrinkProblem(HighsPostsolveStack& postsolve_stack) {
 
     mipsolver->mipdata_->debugSolution.shrink(newColIndex);
     numProbes.resize(model->num_col_);
-    // Need to set the constraint matrix dimensions
-    model->setMatrixDimensions();
   }
   // Need to set the constraint matrix dimensions
   model->setMatrixDimensions();
