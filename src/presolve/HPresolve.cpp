@@ -4016,16 +4016,22 @@ HPresolve::Result HPresolve::initialRowAndColPresolve(
 
 HPresolve::Result HPresolve::fastPresolveLoop(
     HighsPostsolveStack& postsolve_stack) {
+  bool mydebug1 = false;
+  bool mydebug2 = false;
+  bool mydebug3 = false;
   do {
     storeCurrentProblemSize();
 
     HPRESOLVE_CHECKED_CALL(removeRowSingletons(postsolve_stack));
 
     HPRESOLVE_CHECKED_CALL(presolveChangedRows(postsolve_stack));
+    if (mydebug1) return Result::kStopped;
 
     HPRESOLVE_CHECKED_CALL(removeDoubletonEquations(postsolve_stack));
+    if (mydebug2) return Result::kStopped;
 
     HPRESOLVE_CHECKED_CALL(presolveColSingletons(postsolve_stack));
+    if (mydebug3) return Result::kStopped;
 
     HPRESOLVE_CHECKED_CALL(presolveChangedCols(postsolve_stack));
 
@@ -5085,10 +5091,13 @@ HPresolve::Result HPresolve::presolveChangedRows(
   std::vector<HighsInt> changedRows;
   changedRows.reserve(model->num_row_ - numDeletedRows);
   changedRows.swap(changedRowIndices);
+  bool mydebug = false;
+  HighsInt myrow = -1;
   for (HighsInt row : changedRows) {
     if (rowDeleted[row]) continue;
     HPRESOLVE_CHECKED_CALL(rowPresolve(postsolve_stack, row));
     changedRowFlag[row] = rowDeleted[row];
+    if (mydebug && row == myrow) return Result::kStopped;
   }
 
   return Result::kOk;
