@@ -1896,7 +1896,7 @@ restart:
     lp.getLpSolver().setBasis(firstrootbasis,
                               "HighsMipSolverData::evaluateRootNode");
   else
-    lp.getLpSolver().setOptionValue("presolve", "on");
+    lp.getLpSolver().setOptionValue("presolve", "off");
   if (mipsolver.options_mip_->highs_debug_level)
     lp.getLpSolver().setOptionValue("output_flag",
                                     mipsolver.options_mip_->output_flag);
