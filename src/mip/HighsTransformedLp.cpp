@@ -361,6 +361,19 @@ bool HighsTransformedLp::transform(std::vector<double>& vals,
     double lb = getLb(col);
     double ub = getUb(col);
 
+    double myvub_lb = -kHighsInf;
+    double myvub_ub = kHighsInf;
+    if (boundTypes[col] == BoundType::kVariableUb) {
+        HighsCDouble mylb = bestVub[col].second.constant - ub;
+        HighsCDouble myub = bestVub[col].second.constant - lb;
+        if (bestVub[col].second.coef > 0)
+            myub += bestVub[col].second.coef;
+        else
+            mylb += bestVub[col].second.coef;
+        myvub_lb = double(mylb);
+        myvub_ub = double(myub);
+    }
+
     upper[j] = ub - lb;
 
     switch (boundTypes[col]) {
@@ -368,7 +381,7 @@ bool HighsTransformedLp::transform(std::vector<double>& vals,
         // shift (lower bound)
         assert(lb != -kHighsInf);
         tmpRhs -= lb * vals[j];
-        solval[j] = lbDist[col];
+        solval[j] = simpleLbDist[col];
         break;
       }
       case BoundType::kSimpleUb: {
@@ -376,7 +389,7 @@ bool HighsTransformedLp::transform(std::vector<double>& vals,
         assert(ub != kHighsInf);
         tmpRhs -= ub * vals[j];
         vals[j] = -vals[j];
-        solval[j] = ubDist[col];
+        solval[j] = simpleUbDist[col];
         break;
       }
       case BoundType::kVariableLb: {

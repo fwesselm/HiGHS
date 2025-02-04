@@ -187,8 +187,8 @@ void HighsSearch::addBoundExceedingConflict() {
                                 mipsolver.mipdata_->conflictPool);
 
       HighsCutGeneration cutGen(*lp, mipsolver.mipdata_->cutpool);
-      mipsolver.mipdata_->debugSolution.checkCut(inds.data(), vals.data(),
-                                                 inds.size(), rhs);
+      if (!mipsolver.mipdata_->debugSolution.checkCut(inds.data(), vals.data(),
+                                                 inds.size(), rhs));
       cutGen.generateConflict(localdom, inds, vals, rhs);
     }
   }
@@ -217,8 +217,8 @@ void HighsSearch::addInfeasibleConflict() {
                               mipsolver.mipdata_->conflictPool);
 
     HighsCutGeneration cutGen(*lp, mipsolver.mipdata_->cutpool);
-    mipsolver.mipdata_->debugSolution.checkCut(inds.data(), vals.data(),
-                                               inds.size(), rhs);
+    if (!mipsolver.mipdata_->debugSolution.checkCut(inds.data(), vals.data(),
+                                               inds.size(), rhs));
     cutGen.generateConflict(localdom, inds, vals, rhs);
 
     // if (cutpool.getNumCuts() > oldnumcuts) {

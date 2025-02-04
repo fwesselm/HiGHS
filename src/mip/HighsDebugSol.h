@@ -55,7 +55,7 @@ struct HighsDebugSol {
 
   void nodePruned(const HighsDomain& localdomain);
 
-  void checkCut(const HighsInt* Rindex, const double* Rvalue, HighsInt Rlen,
+  bool checkCut(const HighsInt* Rindex, const double* Rvalue, HighsInt Rlen,
                 double rhs);
 
   void checkRow(const HighsInt* Rindex, const double* Rvalue, HighsInt Rlen,

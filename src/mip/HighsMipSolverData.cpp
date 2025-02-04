@@ -1943,10 +1943,10 @@ restart:
     mipsolver.analysis_.mipTimerStop(kMipClockSeparateLpCuts);
 #ifdef HIGHS_DEBUGSOL
     for (HighsInt i = 0; i < cutset.numCuts(); ++i) {
-      debugSolution.checkCut(cutset.ARindex_.data() + cutset.ARstart_[i],
+      if (!debugSolution.checkCut(cutset.ARindex_.data() + cutset.ARstart_[i],
                              cutset.ARvalue_.data() + cutset.ARstart_[i],
                              cutset.ARstart_[i + 1] - cutset.ARstart_[i],
-                             cutset.upper_[i]);
+                             cutset.upper_[i]));
     }
 #endif
     lp.addCuts(cutset);

@@ -406,7 +406,7 @@ HighsInt HighsCutPool::addCut(const HighsMipSolver& mipsolver, HighsInt* Rindex,
                               double* Rvalue, HighsInt Rlen, double rhs,
                               bool integral, bool propagate,
                               bool extractCliques, bool isConflict) {
-  mipsolver.mipdata_->debugSolution.checkCut(Rindex, Rvalue, Rlen, rhs);
+  if (!mipsolver.mipdata_->debugSolution.checkCut(Rindex, Rvalue, Rlen, rhs));
 
   sortBuffer.resize(Rlen);
 
