@@ -382,14 +382,20 @@ bool HighsTransformedLp::transform(std::vector<double>& vals,
       }
       case BoundType::kVariableLb: {
         assert(col < lprelaxation.numCols());
+        double lowertest = bestVlb[col].second.constant - ub + std::min(bestVlb[col].second.coef, 0.0);
         solval[j] = lbDist[col];
         upper[j] = lpSolution.col_value[col] - lbDist[col];
+        upper[j] = ub - lb;
+        //upper[j] = kHighsInf;
         break;
       }
       case BoundType::kVariableUb: {
         assert(col < lprelaxation.numCols());
+        double uppertest = bestVub[col].second.constant - lb + std::max(bestVub[col].second.coef, 0.0);
         solval[j] = ubDist[col];
         upper[j] = lpSolution.col_value[col] + ubDist[col];
+        upper[j] = ub - lb;
+        //upper[j] = kHighsInf;
         break;
       }
     }
