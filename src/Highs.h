@@ -1431,7 +1431,7 @@ class Highs {
                           const std::string& alt_method_name) const;
 
   // End of deprecated methods
- private:
+ public:
   HighsSolution solution_;
   HighsBasis basis_;
   ICrashInfo icrash_info_;

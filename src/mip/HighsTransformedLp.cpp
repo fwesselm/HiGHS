@@ -176,6 +176,30 @@ bool HighsTransformedLp::transform(std::vector<double>& vals,
       return false;
     }
 
+    // update best variable upper bound (this is done to take into account any
+    // new bound changes derived during cut generation)
+    if (bestVub[col].first != -1) {
+      bool redundant = false;
+      bool infeasible = false;
+      mip.mipdata_->implications.cleanupVub(col, bestVub[col].first,
+                                            bestVub[col].second, lb, ub,
+                                            redundant, infeasible, false);
+      if (redundant)
+        bestVub[col] = std::make_pair(-1, HighsImplications::VarBound());
+    }
+
+    // update best variable lower bound (this is done to take into account any
+    // new bound changes derived during cut generation)
+    if (bestVlb[col].first != -1) {
+      bool redundant = false;
+      bool infeasible = false;
+      mip.mipdata_->implications.cleanupVlb(col, bestVlb[col].first,
+                                            bestVlb[col].second, lb, ub,
+                                            redundant, infeasible, false);
+      if (redundant)
+        bestVlb[col] = std::make_pair(-1, HighsImplications::VarBound());
+    }
+
     // store the old bound type so that we can restore it if the continuous
     // column is relaxed out anyways. This allows to correctly transform and
     // then untransform multiple base rows which is useful to compute cuts based
@@ -356,6 +380,8 @@ bool HighsTransformedLp::transform(std::vector<double>& vals,
   upper.resize(numNz);
   solval.resize(numNz);
 
+  bool debug = false;
+
   for (HighsInt j = 0; j != numNz; ++j) {
     HighsInt col = inds[j];
 
@@ -382,20 +408,28 @@ bool HighsTransformedLp::transform(std::vector<double>& vals,
       }
       case BoundType::kVariableLb: {
         assert(col < lprelaxation.numCols());
-        double lowertest = bestVlb[col].second.constant - ub + std::min(bestVlb[col].second.coef, 0.0);
+        double lowertest = bestVlb[col].second.constant - ub +
+                           std::min(bestVlb[col].second.coef, 0.0);
+        double lowertest2 = bestVlb[col].second.constant +
+                            std::min(bestVlb[col].second.coef, 0.0);
         solval[j] = lbDist[col];
         upper[j] = lpSolution.col_value[col] - lbDist[col];
         upper[j] = ub - lb;
-        //upper[j] = kHighsInf;
+        if (debug) upper[j] = lowertest2;
+        // upper[j] = kHighsInf;
         break;
       }
       case BoundType::kVariableUb: {
         assert(col < lprelaxation.numCols());
-        double uppertest = bestVub[col].second.constant - lb + std::max(bestVub[col].second.coef, 0.0);
+        double uppertest = bestVub[col].second.constant - lb +
+                           std::max(bestVub[col].second.coef, 0.0);
+        double uppertest2 = bestVub[col].second.constant +
+                            std::max(bestVub[col].second.coef, 0.0);
         solval[j] = ubDist[col];
         upper[j] = lpSolution.col_value[col] + ubDist[col];
         upper[j] = ub - lb;
-        //upper[j] = kHighsInf;
+        if (debug) upper[j] = uppertest2;
+        // upper[j] = kHighsInf;
         break;
       }
     }

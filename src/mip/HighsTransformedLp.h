@@ -27,7 +27,7 @@ class HighsLpRelaxation;
 /// Helper class to compute single-row relaxations from the current LP
 /// relaxation by substituting bounds and aggregating rows
 class HighsTransformedLp {
- private:
+ public:
   const HighsLpRelaxation& lprelaxation;
 
   std::vector<std::pair<HighsInt, HighsImplications::VarBound>> bestVub;

@@ -1047,6 +1047,16 @@ bool HighsCutGeneration::generateCut(HighsTransformedLp& transLp,
                                      bool onlyInitialCMIRScale) {
   // #if 0
   if (vals_.size() > 1) {
+    bool mydebug = false;
+    if (mydebug) {
+      transLp.lprelaxation.mipsolver.mipdata_->implications.cleanupVarbounds(
+          24);
+      double bestub;
+      auto& bestvub =
+          transLp.lprelaxation.mipsolver.mipdata_->implications.getBestVub(
+              24, transLp.lprelaxation.lpsolver.solution_, bestub);
+    }
+
     std::vector<HighsInt> indsCheck_ = inds_;
     std::vector<double> valsCheck_ = vals_;
     double tmprhs_ = rhs_;
@@ -1099,9 +1109,9 @@ bool HighsCutGeneration::generateCut(HighsTransformedLp& transLp,
     checkNumerics(vals, rowlen, double(rhs));
     bool preprocess = true;
     if (preprocess) {
-        if (!preprocessBaseInequality(hasUnboundedInts, hasGeneralInts,
-            hasContinuous))
-            return false;
+      if (!preprocessBaseInequality(hasUnboundedInts, hasGeneralInts,
+                                    hasContinuous))
+        return false;
     }
 
     // printf("after preprocessing of base inequality:\n");

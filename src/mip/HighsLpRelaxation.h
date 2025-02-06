@@ -31,7 +31,7 @@ class HighsLpRelaxation {
     kError,
   };
 
- private:
+ public:
   struct LpRow {
     enum Origin {
       kModel,
