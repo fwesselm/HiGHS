@@ -3368,6 +3368,7 @@ HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
                                 rowCoefs[i] - Avalue[rowpositions[i]]);
                   }
                 } else if (rhs - roundRhs < minRhsTightening - primal_feastol) {
+                  assert(false);
                   // printf(
                   //     "tightening right hand side from %g to %g due to "
                   //     "rounding with integral scale %g\n",
@@ -3439,6 +3440,7 @@ HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
                   //     rounding " "with integral scale %g\n",
                   //     model->row_lower_[row], double(roundRhs / intScale),
                   //     intScale);
+                  assert(false);
                   model->row_lower_[row] = double(roundRhs / intScale);
                   for (HighsInt i = 0; i < numRowCoefs; ++i) {
                     double delta = double(HighsCDouble(rowCoefs[i]) / intScale -
