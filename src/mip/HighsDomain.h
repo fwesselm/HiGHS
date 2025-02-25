@@ -334,6 +334,10 @@ class HighsDomain {
   std::vector<double> col_lower_;
   std::vector<double> col_upper_;
 
+  void checkActivityBounds();
+  void checkActivityBoundsCol(HighsInt col);
+  void checkActivityBoundsRow(HighsInt row);
+
   HighsDomain(HighsMipSolver& mipsolver);
 
   HighsDomain(const HighsDomain& other)

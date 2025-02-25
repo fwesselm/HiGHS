@@ -365,6 +365,7 @@ retry:
   // printf("fixingrate before loop is %g\n", fixingrate);
   assert(heur.hasNode());
   while (true) {
+     mipsolver.mipdata_->domain.checkActivityBounds();
     // printf("evaluating node\n");
     heur.evaluateNode();
     // printf("done evaluating node\n");

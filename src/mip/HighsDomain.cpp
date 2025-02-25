@@ -17,29 +17,29 @@
 #include "mip/HighsCutPool.h"
 #include "mip/HighsMipSolverData.h"
 
-static double activityContributionMin(double coef, const double& lb,
-                                      const double& ub) {
+static HighsCDouble activityContributionMin(double coef, const double& lb,
+                                            const double& ub) {
   if (coef < 0) {
     if (ub == kHighsInf) return -kHighsInf;
 
-    return coef * ub;
+    return coef * static_cast<HighsCDouble>(ub);
   } else {
     if (lb == -kHighsInf) return -kHighsInf;
 
-    return coef * lb;
+    return coef * static_cast<HighsCDouble>(lb);
   }
 }
 
-static double activityContributionMax(double coef, const double& lb,
-                                      const double& ub) {
+static HighsCDouble activityContributionMax(double coef, const double& lb,
+                                            const double& ub) {
   if (coef < 0) {
     if (lb == -kHighsInf) return kHighsInf;
 
-    return coef * lb;
+    return coef * static_cast<HighsCDouble>(lb);
   } else {
     if (ub == kHighsInf) return kHighsInf;
 
-    return coef * ub;
+    return coef * static_cast<HighsCDouble>(ub);
   }
 }
 
@@ -1069,6 +1069,7 @@ void HighsDomain::ObjectivePropagation::propagate() {
   if (!shouldBePropagated()) return;
 
   debugCheckObjectiveLower();
+  //domain->checkActivityBounds();
 
   const double upperLimit = domain->mipsolver->mipdata_->upper_limit;
   if (numInfObjLower == 0 && objectiveLower > upperLimit) {
@@ -1196,6 +1197,7 @@ void HighsDomain::ObjectivePropagation::propagate() {
       for (HighsInt i = objFunc->getCliquePartitionStarts()[numPartitions];
            i < numObjNzs; ++i) {
         HighsInt col = objNonzeros[i];
+        //domain->checkActivityBoundsCol(col);
 
         if (cost[col] > 0) {
           bool accept;
@@ -1226,6 +1228,7 @@ void HighsDomain::ObjectivePropagation::propagate() {
             if (domain->infeasible_) break;
           }
         }
+        //domain->checkActivityBoundsCol(col);
       }
       if (domain->infeasible_) break;
 
@@ -1256,7 +1259,7 @@ void HighsDomain::computeMinActivity(HighsInt start, HighsInt end,
       HighsInt tmp;
       double lb = getColLowerPos(col, infeasible_pos - 1, tmp);
       double ub = getColUpperPos(col, infeasible_pos - 1, tmp);
-      double contributionmin = activityContributionMin(val, lb, ub);
+      HighsCDouble contributionmin = activityContributionMin(val, lb, ub);
 
       if (contributionmin == -kHighsInf)
         ++ninfmin;
@@ -1273,7 +1276,7 @@ void HighsDomain::computeMinActivity(HighsInt start, HighsInt end,
 
       assert(col < int(col_lower_.size()));
 
-      double contributionmin =
+      HighsCDouble contributionmin =
           activityContributionMin(val, col_lower_[col], col_upper_[col]);
 
       if (contributionmin == -kHighsInf)
@@ -1301,7 +1304,7 @@ void HighsDomain::computeMaxActivity(HighsInt start, HighsInt end,
       HighsInt tmp;
       double lb = getColLowerPos(col, infeasible_pos - 1, tmp);
       double ub = getColUpperPos(col, infeasible_pos - 1, tmp);
-      double contributionmin = activityContributionMax(val, lb, ub);
+      HighsCDouble contributionmin = activityContributionMax(val, lb, ub);
 
       if (contributionmin == kHighsInf)
         ++ninfmax;
@@ -1317,7 +1320,7 @@ void HighsDomain::computeMaxActivity(HighsInt start, HighsInt end,
 
       assert(col < int(col_lower_.size()));
 
-      double contributionmin =
+      HighsCDouble contributionmin =
           activityContributionMax(val, col_lower_[col], col_upper_[col]);
 
       if (contributionmin == kHighsInf)
@@ -1404,7 +1407,7 @@ HighsInt HighsDomain::propagateRowUpper(const HighsInt* Rindex,
   HighsInt numchgs = 0;
   for (HighsInt i = 0; i != Rlen; ++i) {
     HighsCDouble minresact;
-    double actcontribution = activityContributionMin(
+    HighsCDouble actcontribution = activityContributionMin(
         Rvalue[i], col_lower_[Rindex[i]], col_upper_[Rindex[i]]);
     if (ninfmin == 1) {
       if (actcontribution != -kHighsInf) continue;
@@ -1448,7 +1451,7 @@ HighsInt HighsDomain::propagateRowLower(const HighsInt* Rindex,
   HighsInt numchgs = 0;
   for (HighsInt i = 0; i != Rlen; ++i) {
     HighsCDouble maxresact;
-    double actcontribution = activityContributionMax(
+    HighsCDouble actcontribution = activityContributionMax(
         Rvalue[i], col_lower_[Rindex[i]], col_upper_[Rindex[i]]);
     if (ninfmax == 1) {
       if (actcontribution != kHighsInf) continue;
@@ -1510,6 +1513,44 @@ void HighsDomain::updateThresholdUbChange(HighsInt col, double newbound,
   }
 }
 
+void HighsDomain::checkActivityBounds() {
+  auto mip = mipsolver->model_;
+  
+ for (HighsInt i = 0; i != mip->num_row_; ++i) {
+    checkActivityBoundsRow(i);
+  }
+}
+
+void HighsDomain::checkActivityBoundsCol(HighsInt col) {
+  auto mip = mipsolver->model_;
+  HighsInt start = mip->a_matrix_.start_[col];
+  HighsInt end = mip->a_matrix_.start_[col + 1];
+
+  for (HighsInt i = start; i != end; ++i) {
+    checkActivityBoundsRow(mip->a_matrix_.index_[i]);
+  }
+}
+
+void HighsDomain::checkActivityBoundsRow(HighsInt row) {
+  HighsInt tmpinf;
+  HighsCDouble tmpmact;
+  computeMinActivity(mipsolver->mipdata_->ARstart_[row],
+                     mipsolver->mipdata_->ARstart_[row + 1],
+                     mipsolver->mipdata_->ARindex_.data(),
+                     mipsolver->mipdata_->ARvalue_.data(), tmpinf, tmpmact);
+  assert(std::fabs(double(activitymin_[row] - tmpmact)) <=
+         mipsolver->mipdata_->feastol);
+  assert(tmpinf == activitymininf_[row]);
+
+  computeMaxActivity(mipsolver->mipdata_->ARstart_[row],
+                     mipsolver->mipdata_->ARstart_[row + 1],
+                     mipsolver->mipdata_->ARindex_.data(),
+                     mipsolver->mipdata_->ARvalue_.data(), tmpinf, tmpmact);
+  assert(std::fabs(double(activitymax_[row] - tmpmact)) <=
+         mipsolver->mipdata_->feastol);
+  assert(tmpinf == activitymaxinf_[row]);
+}
+
 void HighsDomain::updateActivityLbChange(HighsInt col, double oldbound,
                                          double newbound) {
   auto mip = mipsolver->model_;
@@ -1569,6 +1610,11 @@ void HighsDomain::updateActivityLbChange(HighsInt col, double oldbound,
           mip->row_upper_[mip->a_matrix_.index_[i]] != kHighsInf)
         markPropagate(mip->a_matrix_.index_[i]);
     } else {
+      bool found = false;
+      if (col == 9 && oldbound > 197.54 && oldbound < 197.55 &&
+          newbound > 198 && i == 174) {
+        found = true;
+      }
       HighsCDouble deltamax =
           computeDelta(mip->a_matrix_.value_[i], oldbound, newbound, -kHighsInf,
                        activitymaxinf_[mip->a_matrix_.index_[i]]);
@@ -1925,6 +1971,7 @@ double HighsDomain::doChangeBound(const HighsDomainChange& boundchg) {
 void HighsDomain::changeBound(HighsDomainChange boundchg, Reason reason) {
   assert(boundchg.column >= 0);
   assert(boundchg.column < (HighsInt)col_upper_.size());
+  //checkActivityBoundsCol(boundchg.column);
   // assert(infeasible_ == 0);
   // if (reason.type == Reason::kObjective) {
   //   if (!mipsolver->submip)
@@ -1995,6 +2042,8 @@ void HighsDomain::changeBound(HighsDomainChange boundchg, Reason reason) {
   prevboundval_.emplace_back(oldbound, prevPos);
   domchgstack_.push_back(boundchg);
   domchgreason_.push_back(reason);
+
+  //checkActivityBoundsCol(boundchg.column);
 
   if (binary && !infeasible_ && isFixed(boundchg.column))
     mipsolver->mipdata_->cliquetable.addImplications(
@@ -2148,6 +2197,8 @@ void HighsDomain::backtrackToGlobal() {
       doChangeBound(
           {prevbound, domchgstack_[k].column, domchgstack_[k].boundtype});
     }
+    //checkActivityBoundsCol(domchgstack_[k].column);
+
 
     if (infeasible_ && infeasible_pos == k) {
       assert(old_infeasible);
@@ -2190,6 +2241,7 @@ HighsDomainChange HighsDomain::backtrack() {
     double prevbound = prevboundval_[k].first;
     HighsInt prevpos = prevboundval_[k].second;
     assert(prevpos < k);
+    //checkActivityBoundsCol(domchgstack_[k].column);
 
     mipsolver->mipdata_->debugSolution.boundChangeRemoved(*this,
                                                           domchgstack_[k]);
@@ -2205,6 +2257,8 @@ HighsDomainChange HighsDomain::backtrack() {
     // change back to global bound
     doChangeBound(
         {prevbound, domchgstack_[k].column, domchgstack_[k].boundtype});
+
+    //checkActivityBoundsCol(domchgstack_[k].column);
 
     if (infeasible_ && infeasible_pos == k) {
       assert(old_infeasible);
@@ -2248,6 +2302,7 @@ HighsDomainChange HighsDomain::backtrack() {
 }
 
 bool HighsDomain::propagate() {
+  //checkActivityBounds();
   std::vector<HighsInt> propagateinds;
 
   auto havePropagationRows = [&]() {
@@ -2310,6 +2365,7 @@ bool HighsDomain::propagate() {
         auto propagateIndex = [&](HighsInt k) {
           // for (HighsInt k = 0; k != numproprows; ++k) {
           HighsInt i = propagateinds[k];
+          //checkActivityBoundsRow(i);
           HighsInt start = mipsolver->mipdata_->ARstart_[i];
           HighsInt end = mipsolver->mipdata_->ARstart_[i + 1];
           HighsInt Rlen = end - start;
@@ -2438,6 +2494,7 @@ bool HighsDomain::propagate() {
         propagateinds.clear();
       }
     }
+    //checkActivityBounds();
   }
 
   return true;
