@@ -870,6 +870,14 @@ bool HighsPrimalHeuristics::tryRoundedPoint(const std::vector<double>& point,
   for (HighsInt i = 0; i != numintcols; ++i) {
     HighsInt col = intcols[i];
     double intval = point[col];
+    // make sure that solution values of integer-constrained variables are not
+    // fractional. otherwise, an integer-infeasible solution may be accepted as
+    // incumbent.
+    double rounded;
+    if (fractionality(intval, &rounded) >
+        mipsolver.options_mip_->mip_feasibility_tolerance)
+      return false;
+    intval = rounded;
     intval = std::min(localdom.col_upper_[col], intval);
     intval = std::max(localdom.col_lower_[col], intval);
 
