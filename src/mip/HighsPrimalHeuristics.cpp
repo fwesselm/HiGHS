@@ -874,8 +874,7 @@ bool HighsPrimalHeuristics::tryRoundedPoint(const std::vector<double>& point,
     // fractional. otherwise, an integer-infeasible solution may be accepted as
     // incumbent.
     double rounded;
-    if (fractionality(intval, &rounded) >
-        mipsolver.options_mip_->mip_feasibility_tolerance)
+    if (fractionality(intval, &rounded) > mipsolver.mipdata_->feastol)
       return false;
     intval = rounded;
     intval = std::min(localdom.col_upper_[col], intval);
