@@ -939,20 +939,19 @@ bool HighsPrimalHeuristics::linesearchRounding(
     const std::vector<double>& point1, const std::vector<double>& point2,
     const int solution_source) {
   std::vector<double> roundedpoint;
-
-  HighsInt numintcols = intcols.size();
   roundedpoint.resize(mipsolver.numCol());
 
   double alpha = 0.0;
-  assert(int(mipsolver.mipdata_->uplocks.size()) == mipsolver.numCol());
-  assert(int(point1.size()) == mipsolver.numCol());
-  assert(int(point2.size()) == mipsolver.numCol());
+  assert(mipsolver.mipdata_->uplocks.size() ==
+         static_cast<size_t>(mipsolver.numCol()));
+  assert(point1.size() == static_cast<size_t>(mipsolver.numCol()));
+  assert(point2.size() == static_cast<size_t>(mipsolver.numCol()));
 
   while (alpha < 1.0) {
     double nextalpha = 1.0;
     bool reachedpoint2 = true;
     // printf("trying alpha = %g\n", alpha);
-    for (HighsInt i = 0; i != numintcols; ++i) {
+    for (size_t i = 0; i != intcols.size(); ++i) {
       HighsInt col = intcols[i];
       assert(col >= 0);
       assert(col < mipsolver.numCol());
