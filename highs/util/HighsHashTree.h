@@ -590,7 +590,7 @@ class HighsHashTree {
   }
 
   static NodePtr removeChildFromBranchNode(BranchNode* branch, int location,
-                                           uint64_t hash, int hashPos) {
+                                           int hashPos) {
     NodePtr newNode;
     int newNumChild = branch->occupation.num_set();
 
@@ -1044,8 +1044,7 @@ class HighsHashTree {
 
         branch->occupation.flip(get_hash_chunk(hash, hashPos));
 
-        *erase_node =
-            removeChildFromBranchNode(branch, location, hash, hashPos);
+        *erase_node = removeChildFromBranchNode(branch, location, hashPos);
         break;
       }
     }

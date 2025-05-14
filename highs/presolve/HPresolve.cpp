@@ -928,9 +928,8 @@ void HPresolve::shrinkProblem(HighsPostsolveStack& postsolve_stack) {
     mipsolver->mipdata_->domain = HighsDomain(*mipsolver);
     mipsolver->mipdata_->cliquetable.rebuild(model->num_col_, postsolve_stack,
                                              mipsolver->mipdata_->domain,
-                                             newColIndex, newRowIndex);
-    mipsolver->mipdata_->implications.rebuild(model->num_col_, newColIndex,
-                                              newRowIndex);
+                                             newColIndex);
+    mipsolver->mipdata_->implications.rebuild(model->num_col_, newColIndex);
     mipsolver->mipdata_->cutpool =
         HighsCutPool(mipsolver->model_->num_col_,
                      mipsolver->options_mip_->mip_pool_age_limit,
@@ -1473,8 +1472,9 @@ HPresolve::Result HPresolve::runProbing(HighsPostsolveStack& postsolve_stack) {
         HighsInt implicsUp = cliquetable.getNumImplications(i, 1);
         HighsInt implicsDown = cliquetable.getNumImplications(i, 0);
         binaries.emplace_back(
-            -std::min(int64_t{5000}, int64_t(implicsUp) * implicsDown) /
-                (1.0 + numProbes[i]),
+            -std::min(int64_t{5000},
+                      static_cast<int64_t>(implicsUp) * implicsDown) /
+                (1 + static_cast<int64_t>(numProbes[i])),
             -std::min(HighsInt{100}, implicsUp + implicsDown), random.integer(),
             i);
       }
@@ -4911,8 +4911,7 @@ HPresolve::Result HPresolve::removeDependentEquations(
   return Result::kOk;
 }
 
-HPresolve::Result HPresolve::removeDependentFreeCols(
-    HighsPostsolveStack& postsolve_stack) {
+HPresolve::Result HPresolve::removeDependentFreeCols(HighsPostsolveStack&) {
   return Result::kOk;
 
   // Commented out unreachable code

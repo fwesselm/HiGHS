@@ -92,11 +92,9 @@ class HighsSparseMatrix {
                          const bool transpose = false) const;
   void product(vector<double>& result, const vector<double>& x) const;
   void productTranspose(vector<double>& result, const vector<double>& x) const;
-  void productQuad(vector<double>& result, const vector<double>& x,
-                   const HighsInt debug_report = kDebugReportOff) const;
-  void productTransposeQuad(
-      vector<double>& result_value, const vector<double>& x,
-      const HighsInt debug_report = kDebugReportOff) const;
+  void productQuad(vector<double>& result, const vector<double>& x) const;
+  void productTransposeQuad(vector<double>& result_value,
+                            const vector<double>& x) const;
   void productTransposeQuad(
       vector<double>& result_value, vector<HighsInt>& result_index,
       const HVector& x, const HighsInt debug_report = kDebugReportOff) const;
@@ -132,10 +130,9 @@ class HighsSparseMatrix {
       std::vector<double>& result, const HVector& column,
       const HighsInt from_index,
       const HighsInt debug_report = kDebugReportOff) const;
-  void priceByRowDenseResult(
-      std::vector<HighsCDouble>& result, const HVector& column,
-      const HighsInt from_index,
-      const HighsInt debug_report = kDebugReportOff) const;
+  void priceByRowDenseResult(std::vector<HighsCDouble>& result,
+                             const HVector& column,
+                             const HighsInt from_index) const;
   void debugReportRowPrice(const HighsInt iRow, const double multiplier,
                            const HighsInt to_iEl,
                            const vector<double>& result) const;

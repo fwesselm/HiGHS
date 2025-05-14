@@ -29,8 +29,7 @@ class FilereaderLp : public Filereader {
                                       const std::string filename,
                                       HighsModel& model);
 
-  HighsStatus writeModelToFile(const HighsOptions& options,
-                               const std::string filename,
+  HighsStatus writeModelToFile(const HighsOptions&, const std::string filename,
                                const HighsModel& model);
 
  private:

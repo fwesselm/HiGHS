@@ -147,8 +147,7 @@ class HighsImplications {
 
   bool runProbing(HighsInt col, HighsInt& numReductions);
 
-  void rebuild(HighsInt ncols, const std::vector<HighsInt>& cIndex,
-               const std::vector<HighsInt>& rIndex);
+  void rebuild(HighsInt ncols, const std::vector<HighsInt>& cIndex);
 
   void buildFrom(const HighsImplications& init);
 

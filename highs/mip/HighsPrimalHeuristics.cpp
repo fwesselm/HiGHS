@@ -319,7 +319,7 @@ void HighsPrimalHeuristics::rootReducedCost() {
               200 + mipsolver.mipdata_->num_nodes / 20, 12);
 }
 
-void HighsPrimalHeuristics::RENS(const std::vector<double>& tmp) {
+void HighsPrimalHeuristics::RENS() {
   // return if domain is infeasible
   if (mipsolver.mipdata_->domain.infeasible()) return;
 
@@ -917,8 +917,7 @@ bool HighsPrimalHeuristics::tryRoundedPoint(const std::vector<double>& point,
       std::vector<HighsInt> inds;
       std::vector<double> vals;
       double rhs;
-      if (lprelax.computeDualInfProof(mipsolver.mipdata_->domain, inds, vals,
-                                      rhs)) {
+      if (lprelax.computeDualInfProof(inds, vals, rhs)) {
         HighsCutGeneration cutGen(lprelax, mipsolver.mipdata_->cutpool);
         cutGen.generateConflict(localdom, inds, vals, rhs);
       }
@@ -1054,8 +1053,7 @@ void HighsPrimalHeuristics::randomizedRounding(
       std::vector<HighsInt> inds;
       std::vector<double> vals;
       double rhs;
-      if (lprelax.computeDualInfProof(mipsolver.mipdata_->domain, inds, vals,
-                                      rhs)) {
+      if (lprelax.computeDualInfProof(inds, vals, rhs)) {
         HighsCutGeneration cutGen(lprelax, mipsolver.mipdata_->cutpool);
         cutGen.generateConflict(localdom, inds, vals, rhs);
       }
@@ -1107,7 +1105,7 @@ void HighsPrimalHeuristics::shifting(const std::vector<double>& relaxationsol) {
 
   while ((current_fractional_integers.size() > 0 || hasInfeasibleConstraints) &&
          iterationsWithoutReductions <= maxIterationsWithoutReductions &&
-         t <= mipsolver.mipdata_->integer_cols.size()) {
+         static_cast<size_t>(t) <= mipsolver.mipdata_->integer_cols.size()) {
     t++;
     bool fractionalIntegersReduced = false;
     iterationsWithoutReductions++;
@@ -1117,7 +1115,7 @@ void HighsPrimalHeuristics::shifting(const std::vector<double>& relaxationsol) {
       bool fractionalIntegerFound = false;
       HighsInt rIndex = 0;
       while (!fractionalIntegerFound &&
-             rIndex != current_infeasible_rows.size()) {
+             static_cast<size_t>(rIndex) != current_infeasible_rows.size()) {
         HighsInt r = std::get<0>(current_infeasible_rows[rIndex]);
         HighsInt start = mipsolver.mipdata_->ARstart_[r];
         HighsInt end = mipsolver.mipdata_->ARstart_[r + 1];
@@ -1266,7 +1264,8 @@ void HighsPrimalHeuristics::shifting(const std::vector<double>& relaxationsol) {
       HighsInt j_min = std::numeric_limits<HighsInt>::max();
       double x_j_min = kHighsInf;
       HighsInt sigma = 0;
-      for (HighsInt i = 0; i != current_fractional_integers.size(); ++i) {
+      for (HighsInt i = 0;
+           static_cast<size_t>(i) != current_fractional_integers.size(); ++i) {
         std::pair<HighsInt, double> it = current_fractional_integers[i];
         HighsInt col = it.first;
         assert(col >= 0);

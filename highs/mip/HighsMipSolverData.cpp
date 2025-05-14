@@ -862,7 +862,7 @@ void HighsMipSolverData::runSetup() {
   }
 
   // compute row activities and propagate all rows once
-  objectiveFunction.setupCliquePartition(domain, cliquetable);
+  objectiveFunction.setupCliquePartition(cliquetable);
   domain.setupObjectivePropagation();
   domain.computeRowActivities();
   domain.propagate();
@@ -2247,7 +2247,7 @@ restart:
     if (checkLimits()) return clockOff(analysis);
     if (mipsolver.options_mip_->mip_heuristic_run_rens) {
       analysis.mipTimerStart(kMipClockRootHeuristicsRens);
-      heuristics.RENS(rootlpsol);
+      heuristics.RENS();
       analysis.mipTimerStop(kMipClockRootHeuristicsRens);
       heuristics.flushStatistics();
     }

@@ -58,7 +58,7 @@ class DevexHarrisPricing : public Pricing {
         redcosts(rc),
         weights(std::vector<double>(rt.instance.num_var, 1.0)){};
 
-  HighsInt price(const QpVector& x, const QpVector& gradient) {
+  HighsInt price() {
     HighsInt minidx = chooseconstrainttodrop(redcosts.getReducedCosts());
     return minidx;
   }
@@ -67,7 +67,7 @@ class DevexHarrisPricing : public Pricing {
     // do nothing
   }
 
-  void update_weights(const QpVector& aq, const QpVector& ep, HighsInt p,
+  void update_weights(const QpVector& aq, const QpVector&, HighsInt p,
                       HighsInt q) {
     HighsInt rowindex_p = basis.getindexinfactor()[p];
     double weight_p = weights[rowindex_p];

@@ -49,7 +49,7 @@ struct QpVector {
     return *this;
   }
 
-  static QpVector& unit(HighsInt dim, HighsInt u, QpVector& target) {
+  static QpVector& unit(HighsInt u, QpVector& target) {
     target.reset();
     target.index[0] = u;
     target.value[u] = 1.0;

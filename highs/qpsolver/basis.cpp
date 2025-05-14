@@ -280,8 +280,7 @@ void Basis::updatebasis(const Settings& settings, HighsInt newactivecon,
     basisfactor.btranCall(row_ep, 1.0);
   }
 
-  pricing->update_weights(hvec2vec(col_aq), hvec2vec(row_ep), droppedcon,
-                          newactivecon);
+  pricing->update_weights(hvec2vec(col_aq), hvec2vec(row_ep), droppedcon);
   HighsInt row_out = droppedcon_rowindex;
 
   basisfactor.update(&col_aq, &row_ep, &row_out, &hint);

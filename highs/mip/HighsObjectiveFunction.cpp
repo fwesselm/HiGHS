@@ -65,7 +65,7 @@ HighsObjectiveFunction::HighsObjectiveFunction(const HighsMipSolver& mipsolver)
 }
 
 void HighsObjectiveFunction::setupCliquePartition(
-    const HighsDomain& globaldom, HighsCliqueTable& cliqueTable) {
+    HighsCliqueTable& cliqueTable) {
   // skip if not more than 1 binary column is present
   if (numBinary <= 1) return;
 

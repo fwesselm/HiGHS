@@ -107,8 +107,8 @@ class HEkk {
 
   void addCols(const HighsLp& lp, const HighsSparseMatrix& scaled_a_matrix);
   void addRows(const HighsLp& lp, const HighsSparseMatrix& scaled_ar_matrix);
-  void deleteCols(const HighsIndexCollection& index_collection);
-  void deleteRows(const HighsIndexCollection& index_collection);
+  void deleteCols();
+  void deleteRows();
   void unscaleSimplex(const HighsLp& incumbent_lp);
   double factorSolveError();
 

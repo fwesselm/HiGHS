@@ -1407,7 +1407,7 @@ class Highs {
    * @brief Set up for simplex using the supplied hot start
    * data. Advanced method: for HiGHS MIP solver
    */
-  HighsStatus setHotStart(const HotStart& hot_start) {
+  HighsStatus setHotStart(const HotStart&) {
     this->deprecationMessage("setHotStart", "None");
     return HighsStatus::kError;
   }
@@ -1418,7 +1418,7 @@ class Highs {
    * and standard NLA at minimal cost. Advanced method: for HiGHS MIP
    * solver
    */
-  HighsStatus freezeBasis(HighsInt& frozen_basis_id) {
+  HighsStatus freezeBasis(HighsInt&) {
     this->deprecationMessage("freezeBasis", "None");
     return HighsStatus::kError;
   }
@@ -1427,7 +1427,7 @@ class Highs {
    * @brief Unfreeze a frozen HighsBasis instance and standard NLA (if
    * possible). Advanced method: for HiGHS MIP solver
    */
-  HighsStatus unfreezeBasis(const HighsInt frozen_basis_id) {
+  HighsStatus unfreezeBasis(const HighsInt) {
     this->deprecationMessage("unfreezeBasis", "None");
     return HighsStatus::kError;
   }

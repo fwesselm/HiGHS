@@ -57,7 +57,7 @@ void HighsPostsolveStack::compressIndexMaps(
   origColIndex.resize(numCol);
 }
 
-void HighsPostsolveStack::LinearTransform::undo(const HighsOptions& options,
+void HighsPostsolveStack::LinearTransform::undo(const HighsOptions&,
                                                 HighsSolution& solution) const {
   solution.col_value[col] *= scale;
   solution.col_value[col] += constant;
@@ -82,7 +82,7 @@ static HighsBasisStatus computeRowStatus(double dual,
 }
 
 void HighsPostsolveStack::FreeColSubstitution::undo(
-    const HighsOptions& options, const std::vector<Nonzero>& rowValues,
+    const HighsOptions&, const std::vector<Nonzero>& rowValues,
     const std::vector<Nonzero>& colValues, HighsSolution& solution,
     HighsBasis& basis) {
   // a (removed) cut may have been used in this reduction.
@@ -230,7 +230,7 @@ void HighsPostsolveStack::DoubletonEquation::undo(
 }
 
 void HighsPostsolveStack::EqualityRowAddition::undo(
-    const HighsOptions& options, const std::vector<Nonzero>& eqRowValues,
+    const HighsOptions&, const std::vector<Nonzero>& eqRowValues,
     HighsSolution& solution, HighsBasis& basis) const {
   // (removed) cuts may have been used in this reduction.
   if (static_cast<size_t>(row) >= solution.row_value.size() ||
@@ -251,7 +251,7 @@ void HighsPostsolveStack::EqualityRowAddition::undo(
 }
 
 void HighsPostsolveStack::EqualityRowAdditions::undo(
-    const HighsOptions& options, const std::vector<Nonzero>& eqRowValues,
+    const HighsOptions&, const std::vector<Nonzero>& eqRowValues,
     const std::vector<Nonzero>& targetRows, HighsSolution& solution,
     HighsBasis& basis) const {
   // a (removed) cut may have been used in this reduction.
@@ -340,7 +340,7 @@ void HighsPostsolveStack::ForcingColumn::undo(
 }
 
 void HighsPostsolveStack::ForcingColumnRemovedRow::undo(
-    const HighsOptions& options, const std::vector<Nonzero>& rowValues,
+    const HighsOptions&, const std::vector<Nonzero>& rowValues,
     HighsSolution& solution, HighsBasis& basis) const {
   // a (removed) cut may have been used in this reduction.
   if (static_cast<size_t>(row) >= solution.row_value.size()) return;
@@ -423,7 +423,7 @@ void HighsPostsolveStack::SingletonRow::undo(const HighsOptions& options,
 }
 
 // column fixed to lower or upper bound
-void HighsPostsolveStack::FixedCol::undo(const HighsOptions& options,
+void HighsPostsolveStack::FixedCol::undo(const HighsOptions&,
                                          const std::vector<Nonzero>& colValues,
                                          HighsSolution& solution,
                                          HighsBasis& basis) const {
@@ -452,7 +452,7 @@ void HighsPostsolveStack::FixedCol::undo(const HighsOptions& options,
   }
 }
 
-void HighsPostsolveStack::RedundantRow::undo(const HighsOptions& options,
+void HighsPostsolveStack::RedundantRow::undo(const HighsOptions&,
                                              HighsSolution& solution,
                                              HighsBasis& basis) const {
   // a (removed) cut may have been used in this reduction.
@@ -467,7 +467,7 @@ void HighsPostsolveStack::RedundantRow::undo(const HighsOptions& options,
 }
 
 void HighsPostsolveStack::ForcingRow::undo(
-    const HighsOptions& options, const std::vector<Nonzero>& rowValues,
+    const HighsOptions&, const std::vector<Nonzero>& rowValues,
     HighsSolution& solution, HighsBasis& basis) const {
   if (!solution.dual_valid) return;
 
@@ -1072,7 +1072,6 @@ void HighsPostsolveStack::DuplicateColumn::undoFix(
       if (z_delta > 0 && z_value + z_delta >= z_1 + eps) return false;
       if (z_delta < 0 && z_value + z_delta <= z_1 - eps) return false;
     }
-    return false;
   };
 
   auto setXValue = [&](double value) {

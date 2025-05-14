@@ -332,7 +332,7 @@ bool HighsTransformedLp::transform(std::vector<double>& vals,
     }
 
     double maxError = 0.0;
-    auto IsZero = [&](HighsInt col, double val) {
+    auto IsZero = [&](HighsInt, double val) {
       if (std::abs(val) <= mip.options_mip_->small_matrix_value) return true;
       return false;
     };

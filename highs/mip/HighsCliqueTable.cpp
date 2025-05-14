@@ -1793,9 +1793,8 @@ void HighsCliqueTable::separateCliques(const HighsMipSolver& mipsolver,
 }
 
 std::vector<std::vector<HighsCliqueTable::CliqueVar>>
-HighsCliqueTable::separateCliques(const std::vector<double>& sol,
-                                  const HighsDomain& globaldom,
-                                  double feastol) {
+HighsCliqueTable::separateCliques(const std::vector<double>&,
+                                  const HighsDomain&, double) {
   exit(0);
 #if 0
   BronKerboschData data(sol);
@@ -2276,8 +2275,7 @@ void HighsCliqueTable::runCliqueMerging(HighsDomain& globaldomain) {
 void HighsCliqueTable::rebuild(
     HighsInt ncols, const presolve::HighsPostsolveStack& postSolveStack,
     const HighsDomain& globaldomain,
-    const std::vector<HighsInt>& orig2reducedcol,
-    const std::vector<HighsInt>& orig2reducedrow) {
+    const std::vector<HighsInt>& orig2reducedcol) {
   HighsCliqueTable newCliqueTable(ncols);
   newCliqueTable.setPresolveFlag(inPresolve);
   newCliqueTable.setMinEntriesForParallelism(minEntriesForParallelism);

@@ -283,8 +283,7 @@ restart:
           if (mipdata_->incumbent.empty()) {
             if (options_mip_->mip_heuristic_run_rens) {
               analysis_.mipTimerStart(kMipClockDiveRens);
-              mipdata_->heuristics.RENS(
-                  mipdata_->lp.getLpSolver().getSolution().col_value);
+              mipdata_->heuristics.RENS();
               analysis_.mipTimerStop(kMipClockDiveRens);
             }
           } else {

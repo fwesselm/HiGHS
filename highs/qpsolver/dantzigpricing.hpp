@@ -55,7 +55,7 @@ class DantzigPricing : public Pricing {
       // clang-format off
       : runtime(rt), basis(bas), redcosts(rc) {};
   // clang-format on
-  HighsInt price(const QpVector& x, const QpVector& gradient) {
+  HighsInt price() {
     HighsInt minidx = chooseconstrainttodrop(redcosts.getReducedCosts());
     return minidx;
   }
@@ -64,8 +64,7 @@ class DantzigPricing : public Pricing {
     // do nothing
   }
 
-  void update_weights(const QpVector& aq, const QpVector& ep, HighsInt p,
-                      HighsInt q) {
+  void update_weights(const QpVector&, const QpVector&, HighsInt) {
     // does nothing
   }
 };

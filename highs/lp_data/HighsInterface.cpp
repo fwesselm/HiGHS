@@ -775,7 +775,7 @@ void Highs::deleteColsInterface(HighsIndexCollection& index_collection) {
   invalidateModelStatusSolutionAndInfo();
 
   // Determine any implications for simplex data
-  ekk_instance_.deleteCols(index_collection);
+  ekk_instance_.deleteCols();
 
   if (index_collection.is_mask_) {
     // Set the mask values to indicate the new index value of the
@@ -831,7 +831,7 @@ void Highs::deleteRowsInterface(HighsIndexCollection& index_collection) {
   invalidateModelStatusSolutionAndInfo();
 
   // Determine any implications for simplex data
-  ekk_instance_.deleteRows(index_collection);
+  ekk_instance_.deleteRows();
   if (index_collection.is_mask_) {
     HighsInt new_row = 0;
     for (HighsInt row = 0; row < original_num_row; row++) {
@@ -3738,8 +3738,7 @@ HighsStatus Highs::multiobjectiveSolve() {
                                                    original_lp_num_row);
       }
       bool valid, integral, feasible;
-      HighsStatus assess_primal_solution =
-          assessPrimalSolution(valid, integral, feasible);
+      assessPrimalSolution(valid, integral, feasible);
       if (!valid || !integral || !feasible) {
         highsLogUser(options_.log_options, HighsLogType::kWarning,
                      "Failure to use one MIP to provide an integer feasible "

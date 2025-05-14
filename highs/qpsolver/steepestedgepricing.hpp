@@ -60,7 +60,7 @@ class SteepestEdgePricing : public Pricing {
     compute_exact_weights();
   };
 
-  HighsInt price(const QpVector& x, const QpVector& gradient) {
+  HighsInt price() {
     HighsInt minidx = chooseconstrainttodrop(redcosts.getReducedCosts());
     return minidx;
   }
@@ -116,8 +116,7 @@ class SteepestEdgePricing : public Pricing {
 
   void recompute() { compute_exact_weights(); }
 
-  void update_weights(const QpVector& aq, const QpVector& ep, HighsInt p,
-                      HighsInt q) {
+  void update_weights(const QpVector& aq, const QpVector& ep, HighsInt p) {
     HighsInt rowindex_p = basis.getindexinfactor()[p];
     // printf("Update weights, p = %d, rowindex = %d, q = %d\n", p, rowindex_p,
     // q);

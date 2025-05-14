@@ -1288,12 +1288,8 @@ void HEkk::addRows(const HighsLp& lp,
   this->updateStatus(LpAction::kNewRows);
 }
 
-void HEkk::deleteCols(const HighsIndexCollection& index_collection) {
-  this->updateStatus(LpAction::kDelCols);
-}
-void HEkk::deleteRows(const HighsIndexCollection& index_collection) {
-  this->updateStatus(LpAction::kDelRows);
-}
+void HEkk::deleteCols() { this->updateStatus(LpAction::kDelCols); }
+void HEkk::deleteRows() { this->updateStatus(LpAction::kDelRows); }
 
 void HEkk::unscaleSimplex(const HighsLp& incumbent_lp) {
   if (!this->simplex_in_scaled_space_) return;

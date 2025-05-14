@@ -214,8 +214,8 @@ class CholeskyFactor {
     rhs.resparsify();
   }
 
-  void eliminate(std::vector<double>& m, HighsInt i, HighsInt j, HighsInt kmax,
-                 HighsInt currentk) {
+  void eliminate(std::vector<double>& m, HighsInt i, HighsInt j,
+                 HighsInt kmax) {
     // i = col, j = row
     if (m[j * kmax + i] == 0.0) {
       return;
@@ -334,7 +334,7 @@ class CholeskyFactor {
       //         |xx  x|       |xxxx| |  xxx|
       // next: remove nonzero entries in last column except for diagonal element
       for (HighsInt r = (HighsInt)p - 1; r >= 0; r--) {  // to current_k-1
-        eliminate(L, current_k - 1, r, current_k_max, current_k);
+        eliminate(L, current_k - 1, r, current_k_max);
       }
 
       // situation now:
@@ -366,7 +366,7 @@ class CholeskyFactor {
     }
     // next: eliminate last row
     for (HighsInt i = 0; i < current_k - 1; i++) {
-      eliminate(L, i, current_k - 1, current_k_max, current_k);
+      eliminate(L, i, current_k - 1, current_k_max);
     }
     current_k--;
   }

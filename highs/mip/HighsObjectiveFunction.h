@@ -32,8 +32,7 @@ class HighsObjectiveFunction {
  public:
   HighsObjectiveFunction(const HighsMipSolver& mipsolver);
 
-  void setupCliquePartition(const HighsDomain& globaldom,
-                            HighsCliqueTable& cliqueTable);
+  void setupCliquePartition(HighsCliqueTable& cliqueTable);
 
   void checkIntegrality(double epsilon);
 

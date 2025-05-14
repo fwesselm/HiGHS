@@ -374,7 +374,7 @@ HighsStatus HighsIis::compute(const HighsLp& lp, const HighsOptions& options,
       // being kept
       if (lower > -kHighsInf) {
         // Drop the lower bound temporarily
-        bool drop_lower = true;
+        // bool drop_lower = true;
         run_status = row_deletion
                          ? highs.changeRowBounds(iX, -kHighsInf, upper)
                          : highs.changeColBounds(iX, -kHighsInf, upper);

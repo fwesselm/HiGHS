@@ -502,7 +502,7 @@ HighsInt HighsCutPool::addCut(const HighsMipSolver& mipsolver, HighsInt* Rindex,
 
   // set the right hand side and reset the age
   rhs_[rowindex] = rhs;
-  ages_[rowindex] = std::max(HighsInt{0}, agelim_ - 5);
+  ages_[rowindex] = static_cast<int16_t>(std::max(HighsInt{0}, agelim_ - 5));
   ++ageDistribution[ages_[rowindex]];
   rowintegral[rowindex] = integral;
   if (propagate) propRows.emplace(ages_[rowindex], rowindex);

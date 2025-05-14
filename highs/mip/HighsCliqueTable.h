@@ -301,8 +301,7 @@ class HighsCliqueTable {
   void rebuild(HighsInt ncols,
                const presolve::HighsPostsolveStack& postSolveStack,
                const HighsDomain& globaldomain,
-               const std::vector<HighsInt>& cIndex,
-               const std::vector<HighsInt>& rIndex);
+               const std::vector<HighsInt>& cIndex);
 
   void buildFrom(const HighsLp* origModel, const HighsCliqueTable& init);
 

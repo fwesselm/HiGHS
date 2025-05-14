@@ -202,7 +202,7 @@ void HighsSearch::addInfeasibleConflict() {
   if (lp->getLpSolver().getModelStatus() == HighsModelStatus::kObjectiveBound)
     lp->performAging();
 
-  if (lp->computeDualInfProof(mipsolver.mipdata_->domain, inds, vals, rhs)) {
+  if (lp->computeDualInfProof(inds, vals, rhs)) {
     if (mipsolver.mipdata_->domain.infeasible()) return;
     // double minactlocal = 0.0;
     // double minactglobal = 0.0;

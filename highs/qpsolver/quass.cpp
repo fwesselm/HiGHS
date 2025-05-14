@@ -51,8 +51,7 @@ static void tidyup(QpVector& p, QpVector& rowmove, Basis& basis,
   }
 }
 
-static void computerowmove(Runtime& runtime, Basis& basis, QpVector& p,
-                           QpVector& rowmove) {
+static void computerowmove(Runtime& runtime, QpVector& p, QpVector& rowmove) {
   runtime.instance.A.mat_vec(p, rowmove);
   return;
   // rowmove.reset();
@@ -144,7 +143,7 @@ static QpSolverStatus reduce(Runtime& rt, Basis& basis,
   if (idx != -1) {
     maxabsd = idx;
     constrainttodrop = newactivecon;
-    QpVector::unit(basis.getinactive().size(), idx, buffer_d);
+    QpVector::unit(idx, buffer_d);
     return QpSolverStatus::OK;
     // return NullspaceReductionResult(true);
   }
@@ -278,7 +277,7 @@ static bool check_reinvert_due(Basis& basis) {
 
 static void reinvert(Basis& basis, CholeskyFactor& factor, Gradient& grad,
                      ReducedCosts& rc, ReducedGradient& rg,
-                     std::unique_ptr<Pricing>& pricing) {
+                     std::unique_ptr<Pricing>&) {
   basis.rebuild();
   factor.recompute();
   grad.recompute();
@@ -383,7 +382,7 @@ void Quass::solve(const QpVector& x0, const QpVector& ra, Basis& b0,
     if (atfsep) {
       // Determine a variable to relax from being active. If there is
       // none, then basis is optimal
-      HighsInt minidx = pricing->price(runtime.primal, gradient.getGradient());
+      HighsInt minidx = pricing->price();
       if (minidx == -1) {
         runtime.status = QpModelStatus::kOptimal;
         break;
@@ -392,7 +391,7 @@ void Quass::solve(const QpVector& x0, const QpVector& ra, Basis& b0,
       runtime.statistics.num_iterations++;
 
       HighsInt unit = basis.getindexinfactor()[minidx];
-      QpVector::unit(runtime.instance.num_var, unit, buffer_yp);
+      QpVector::unit(unit, buffer_yp);
       basis.btran(buffer_yp, buffer_yp, true, minidx);
 
       buffer_l.dim = basis.getnuminactive();
@@ -400,7 +399,7 @@ void Quass::solve(const QpVector& x0, const QpVector& ra, Basis& b0,
       computesearchdirection_major(runtime, basis, factor, buffer_yp, gradient,
                                    buffer_gyp, buffer_l, buffer_m, p);
       basis.deactivate(minidx);
-      computerowmove(runtime, basis, p, rowmove);
+      computerowmove(runtime, p, rowmove);
       tidyup(p, rowmove, basis, runtime);
       maxsteplength = std::numeric_limits<double>::infinity();
       // if (runtime.instance.Q.mat.value.size() > 0) {
@@ -420,7 +419,7 @@ void Quass::solve(const QpVector& x0, const QpVector& ra, Basis& b0,
       // condition. In particular, this happens when the current basis
       // is optimal
       computesearchdirection_minor(runtime, basis, factor, redgrad, p);
-      computerowmove(runtime, basis, p, rowmove);
+      computerowmove(runtime, p, rowmove);
       tidyup(p, rowmove, basis, runtime);
       runtime.instance.Q.mat_vec(p, buffer_Qp);
     }
