@@ -604,9 +604,7 @@ bool HighsCutGeneration::cmirCutGenerationHeuristic(double minEfficacy,
     for (HighsInt j : integerinds) {
       updateViolationAndNorm(j,
                              static_cast<double>(computeIntegralCoef(
-                                 vals[j], static_cast<double>(f0),
-                                 static_cast<double>(oneoveroneminusf0),
-                                 static_cast<double>(scale))),
+                                 vals[j], f0, oneoveroneminusf0, scale)),
                              viol, sqrnorm);
     }
 
