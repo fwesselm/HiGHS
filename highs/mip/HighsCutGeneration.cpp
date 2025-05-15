@@ -589,7 +589,7 @@ bool HighsCutGeneration::cmirCutGenerationHeuristic(double minEfficacy,
   };
 
   auto isCutBetter = [&](double scale, double& efficacy) {
-    double scalrhs = static_cast<double>(rhs) * scale;
+    double scalrhs = static_cast<double>(rhs * scale);
     double downrhs = fast_floor(scalrhs);
 
     double f0 = scalrhs - downrhs;
