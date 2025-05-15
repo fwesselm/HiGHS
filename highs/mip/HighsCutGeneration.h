@@ -65,6 +65,8 @@ class HighsCutGeneration {
   bool cmirCutGenerationHeuristic(double minEfficacy,
                                   bool onlyInitialCMIRScale = false);
 
+  double scaleRow(double val);
+
   bool postprocessCut();
 
   bool preprocessBaseInequality(bool& hasUnboundedInts, bool& hasGeneralInts,
