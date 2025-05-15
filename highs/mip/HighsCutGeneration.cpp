@@ -690,10 +690,9 @@ bool HighsCutGeneration::cmirCutGenerationHeuristic(double minEfficacy,
       if (vals[j] == 0.0) continue;
       updateViolationAndNorm(j, vals[j], checkviol, checknorm);
     }
-    if (checknorm > 0.0) {
-      double checkefficacy = checkviol / sqrt(checknorm);
-      assert(fabs(checkefficacy - bestefficacy) < 0.001);
-    }
+    assert(checknorm != 0.0);
+    double checkefficacy = checkviol / sqrt(checknorm);
+    assert(fabs(checkefficacy - bestefficacy) < 0.001);
   }
 #endif
 
