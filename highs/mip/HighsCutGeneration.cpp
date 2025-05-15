@@ -589,6 +589,8 @@ bool HighsCutGeneration::cmirCutGenerationHeuristic(double minEfficacy,
   };
 
   auto isCutBetter = [&](double scale, double& efficacy) {
+    efficacy = -kHighsInf;
+
     double scalrhs = static_cast<double>(rhs * scale);
     double downrhs = fast_floor(scalrhs);
 
@@ -608,13 +610,14 @@ bool HighsCutGeneration::cmirCutGenerationHeuristic(double minEfficacy,
                              viol, sqrnorm);
     }
 
+    if (sqrnorm == 0.0) return false;
+
     efficacy = viol / sqrt(sqrnorm);
     return efficacy > bestefficacy;
   };
 
   for (double delta : deltas) {
-    double efficacy = -kHighsInf;
-
+    double efficacy;
     if (isCutBetter(1.0 / delta, efficacy)) {
       bestdelta = delta;
       bestefficacy = efficacy;
@@ -626,7 +629,7 @@ bool HighsCutGeneration::cmirCutGenerationHeuristic(double minEfficacy,
   /* try if multiplying best delta by 2 4 or 8 gives a better efficacy */
   for (HighsInt k = 1; !onlyInitialCMIRScale && k <= 3; ++k) {
     double delta = bestdelta * (1 << k);
-    double efficacy = -kHighsInf;
+    double efficacy;
 
     if (isCutBetter(1.0 / delta, efficacy)) {
       bestdelta = delta;
@@ -643,7 +646,7 @@ bool HighsCutGeneration::cmirCutGenerationHeuristic(double minEfficacy,
 
     flipComplementation(k);
 
-    double efficacy = -kHighsInf;
+    double efficacy;
 
     if (isCutBetter(1.0 / bestdelta, efficacy)) {
       bestefficacy = efficacy;
@@ -687,10 +690,10 @@ bool HighsCutGeneration::cmirCutGenerationHeuristic(double minEfficacy,
       if (vals[j] == 0.0) continue;
       updateViolationAndNorm(j, vals[j], checkviol, checknorm);
     }
-    double checkefficacy = checkviol / sqrt(checknorm);
-    // the efficacy can become infinite if the cut 0 <= -1 is derived
-    assert(fabs(checkefficacy - bestefficacy) < 0.001 ||
-           fabs(checkefficacy) >= 1e30);
+    if (checknorm > 0.0) {
+      double checkefficacy = checkviol / sqrt(checknorm);
+      assert(fabs(checkefficacy - bestefficacy) < 0.001);
+    }
   }
 #endif
 
