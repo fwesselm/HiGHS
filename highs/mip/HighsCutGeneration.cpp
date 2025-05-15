@@ -717,7 +717,7 @@ bool HighsCutGeneration::cmirCutGenerationHeuristic(double minEfficacy,
   return true;
 }
 
-double HighsCutGeneration::scaleRow(double val) {
+double HighsCutGeneration::scale(double val) {
   int expshift = 0;
   std::frexp(val, &expshift);
   expshift = -expshift;
@@ -865,12 +865,12 @@ bool HighsCutGeneration::postprocessCut() {
       for (HighsInt i = 0; i != rowlen; ++i)
         minAbsValue = std::min(std::abs(vals[i]), minAbsValue);
 
-      scaleRow(minAbsValue - epsilon);
+      scale(minAbsValue - epsilon);
     }
   } else {
     // the support is not integral, scale cut to have the largest coefficient
     // around 1.0
-    scaleRow(maxAbsValue - epsilon);
+    scale(maxAbsValue - epsilon);
   }
 
   return true;
@@ -899,7 +899,7 @@ bool HighsCutGeneration::preprocessBaseInequality(bool& hasUnboundedInts,
     maxAbsVal = std::max(std::abs(vals[i]), maxAbsVal);
 
   // scale row
-  initialScale = scaleRow(maxAbsVal);
+  initialScale = scale(maxAbsVal);
 
   isintegral.resize(rowlen);
   for (HighsInt i = 0; i != rowlen; ++i) {

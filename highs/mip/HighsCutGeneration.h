@@ -65,7 +65,7 @@ class HighsCutGeneration {
   bool cmirCutGenerationHeuristic(double minEfficacy,
                                   bool onlyInitialCMIRScale = false);
 
-  double scaleRow(double val);
+  double scale(double val);
 
   bool postprocessCut();
 
