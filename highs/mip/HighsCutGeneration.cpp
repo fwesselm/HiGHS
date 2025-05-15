@@ -726,7 +726,7 @@ double HighsCutGeneration::scale(double val) {
   expshift = std::min(10, expshift);
 
   // Scale rhs
-  rhs = std::ldexp((double)rhs, expshift);
+  rhs = std::ldexp(static_cast<double>(rhs), expshift);
 
   // Scale row
   for (HighsInt i = 0; i != rowlen; ++i)
