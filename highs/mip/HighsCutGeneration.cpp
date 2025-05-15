@@ -579,30 +579,45 @@ bool HighsCutGeneration::cmirCutGenerationHeuristic(double minEfficacy,
   double bestdelta = -1;
   double bestefficacy = minEfficacy;
 
-  for (double delta : deltas) {
-    double scale = 1.0 / delta;
-    double scalrhs = double(rhs) * scale;
+  auto computeIntegralCoef = [&](double val, HighsCDouble f0,
+                                 HighsCDouble oneoveroneminusf0,
+                                 HighsCDouble scale) {
+    HighsCDouble scalaj = val * scale;
+    HighsCDouble downaj = floor(scalaj + kHighsTiny);
+    HighsCDouble fj = scalaj - downaj;
+    return downaj + max(HighsCDouble{0.0}, fj - f0) * oneoveroneminusf0;
+  };
+
+  auto isCutBetter = [&](double scale, double& efficacy) {
+    double scalrhs = static_cast<double>(rhs) * scale;
     double downrhs = fast_floor(scalrhs);
 
     double f0 = scalrhs - downrhs;
-    if (f0 < f0min || f0 > f0max) continue;
+    if (f0 < f0min || f0 > f0max) return false;
     double oneoveroneminusf0 = 1.0 / (1.0 - f0);
-    if (oneoveroneminusf0 > maxCMirScale) continue;
+    if (oneoveroneminusf0 > maxCMirScale) return false;
 
     double contscale = scale * oneoveroneminusf0;
     double sqrnorm = contscale * contscale * continuoussqrnorm;
     double viol = contscale * continuouscontribution - downrhs;
 
     for (HighsInt j : integerinds) {
-      double scalaj = vals[j] * scale;
-      double downaj = fast_floor(scalaj + kHighsTiny);
-      double fj = scalaj - downaj;
-      double aj = downaj + std::max(0.0, (fj - f0) * oneoveroneminusf0);
-      updateViolationAndNorm(j, aj, viol, sqrnorm);
+      updateViolationAndNorm(j,
+                             static_cast<double>(computeIntegralCoef(
+                                 vals[j], static_cast<double>(f0),
+                                 static_cast<double>(oneoveroneminusf0),
+                                 static_cast<double>(scale))),
+                             viol, sqrnorm);
     }
 
-    double efficacy = viol / sqrt(sqrnorm);
-    if (efficacy > bestefficacy) {
+    efficacy = viol / sqrt(sqrnorm);
+    return efficacy > bestefficacy;
+  };
+
+  for (double delta : deltas) {
+    double efficacy = -kHighsInf;
+
+    if (isCutBetter(1.0 / delta, efficacy)) {
       bestdelta = delta;
       bestefficacy = efficacy;
     }
@@ -613,29 +628,9 @@ bool HighsCutGeneration::cmirCutGenerationHeuristic(double minEfficacy,
   /* try if multiplying best delta by 2 4 or 8 gives a better efficacy */
   for (HighsInt k = 1; !onlyInitialCMIRScale && k <= 3; ++k) {
     double delta = bestdelta * (1 << k);
-    double scale = 1.0 / delta;
-    double scalrhs = double(rhs) * scale;
-    double downrhs = fast_floor(scalrhs);
-    double f0 = scalrhs - downrhs;
-    if (f0 < f0min || f0 > f0max) continue;
+    double efficacy = -kHighsInf;
 
-    double oneoveroneminusf0 = 1.0 / (1.0 - f0);
-    if (oneoveroneminusf0 > maxCMirScale) continue;
-
-    double contscale = scale * oneoveroneminusf0;
-    double sqrnorm = contscale * contscale * continuoussqrnorm;
-    double viol = contscale * continuouscontribution - downrhs;
-
-    for (HighsInt j : integerinds) {
-      double scalaj = vals[j] * scale;
-      double downaj = fast_floor(scalaj + kHighsTiny);
-      double fj = scalaj - downaj;
-      double aj = downaj + std::max(0.0, (fj - f0) * oneoveroneminusf0);
-      updateViolationAndNorm(j, aj, viol, sqrnorm);
-    }
-
-    double efficacy = viol / sqrt(sqrnorm);
-    if (efficacy > bestefficacy) {
+    if (isCutBetter(1.0 / delta, efficacy)) {
       bestdelta = delta;
       bestefficacy = efficacy;
     }
@@ -650,46 +645,18 @@ bool HighsCutGeneration::cmirCutGenerationHeuristic(double minEfficacy,
 
     flipComplementation(k);
 
-    double delta = bestdelta;
-    double scale = 1.0 / delta;
-    double scalrhs = double(rhs) * scale;
-    double downrhs = fast_floor(scalrhs);
+    double efficacy = -kHighsInf;
 
-    double f0 = scalrhs - downrhs;
-    if (f0 < f0min || f0 > f0max) {
-      flipComplementation(k);
-      continue;
-    }
-
-    double oneoveroneminusf0 = 1.0 / (1.0 - f0);
-    if (oneoveroneminusf0 > maxCMirScale) {
-      flipComplementation(k);
-      continue;
-    }
-
-    double contscale = scale * oneoveroneminusf0;
-    double sqrnorm = contscale * contscale * continuoussqrnorm;
-    double viol = contscale * continuouscontribution - downrhs;
-
-    for (HighsInt j : integerinds) {
-      double scalaj = vals[j] * scale;
-      double downaj = fast_floor(scalaj + kHighsTiny);
-      double fj = scalaj - downaj;
-      double aj = downaj + std::max(0.0, (fj - f0) * oneoveroneminusf0);
-      updateViolationAndNorm(j, aj, viol, sqrnorm);
-    }
-
-    double efficacy = viol / sqrt(sqrnorm);
-    if (efficacy > bestefficacy) {
+    if (isCutBetter(1.0 / bestdelta, efficacy)) {
       bestefficacy = efficacy;
     } else {
       flipComplementation(k);
     }
   }
 
-  HighsCDouble scale = 1.0 / HighsCDouble(bestdelta);
+  HighsCDouble scale = 1.0 / static_cast<HighsCDouble>(bestdelta);
   HighsCDouble scalrhs = rhs * scale;
-  double downrhs = floor(double(scalrhs));
+  HighsCDouble downrhs = floor(scalrhs);
 
   HighsCDouble f0 = scalrhs - downrhs;
   HighsCDouble oneoveroneminusf0 = 1.0 / (1.0 - f0);
@@ -703,24 +670,20 @@ bool HighsCutGeneration::cmirCutGenerationHeuristic(double minEfficacy,
       if (vals[j] > 0.0)
         vals[j] = 0.0;
       else {
-        vals[j] = double(vals[j] * oneoveroneminusf0);
+        vals[j] = static_cast<double>(vals[j] * oneoveroneminusf0);
         integralSupport = false;
       }
     } else {
-      HighsCDouble scalaj = scale * vals[j];
-      double downaj = floor(double(scalaj + kHighsTiny));
-      HighsCDouble fj = scalaj - downaj;
-      HighsCDouble aj = downaj;
-      if (fj > f0) aj += (fj - f0) * oneoveroneminusf0;
-
-      vals[j] = double(aj * bestdelta);
+      vals[j] = static_cast<double>(
+          computeIntegralCoef(vals[j], f0, oneoveroneminusf0, scale) *
+          bestdelta);
     }
   }
 
 #ifndef NDEBUG
   // Check if the computed cut has the correct efficacy
   {
-    double checkviol = -downrhs * bestdelta;
+    double checkviol = -static_cast<double>(downrhs * bestdelta);
     double checknorm = 0.0;
     for (HighsInt j = 0; j != rowlen; ++j) {
       if (vals[j] == 0.0) continue;
