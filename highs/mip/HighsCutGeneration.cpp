@@ -502,8 +502,8 @@ bool HighsCutGeneration::separateLiftedMixedIntegerCover() {
 
 static double fast_floor(double x) { return (int64_t)x - (x < (int64_t)x); }
 
-bool HighsCutGeneration::cmirCutGenerationHeuristic(double minEfficacy,
-                                                    bool onlyInitialCMIRScale) {
+bool HighsCutGeneration::cmirCutGenerationHeuristic(
+    const HighsCDouble& minEfficacy, bool onlyInitialCMIRScale) {
   using std::abs;
   using std::floor;
   using std::max;
@@ -513,8 +513,8 @@ bool HighsCutGeneration::cmirCutGenerationHeuristic(double minEfficacy,
   integralSupport = false;
   integralCoefficients = false;
 
-  double continuouscontribution = 0.0;
-  double continuoussqrnorm = 0.0;
+  HighsCDouble continuouscontribution = 0.0;
+  HighsCDouble continuoussqrnorm = 0.0;
 
   deltas.clear();
   deltas.reserve(rowlen + 3);
@@ -576,32 +576,37 @@ bool HighsCutGeneration::cmirCutGenerationHeuristic(double minEfficacy,
   }
 
   deltas.erase(std::remove(deltas.begin(), deltas.end(), 0.0), deltas.end());
-  double bestdelta = -1;
-  double bestefficacy = minEfficacy;
 
-  auto computeIntegralCoef = [&](double val, HighsCDouble f0,
-                                 HighsCDouble oneoveroneminusf0,
-                                 HighsCDouble scale) {
+  // initialize best delta and efficacy
+  double bestdelta = -1;
+  HighsCDouble bestefficacy = minEfficacy;
+
+  // lambda for computing the coefficient of an integer variable
+  auto computeIntegralCoef = [&](double val, const HighsCDouble& f0,
+                                 const HighsCDouble& oneoveroneminusf0,
+                                 const HighsCDouble& scale) {
     HighsCDouble scalaj = val * scale;
     HighsCDouble downaj = floor(scalaj + kHighsTiny);
     HighsCDouble fj = scalaj - downaj;
     return downaj + max(HighsCDouble{0.0}, fj - f0) * oneoveroneminusf0;
   };
 
-  auto isCutBetter = [&](double scale, double& efficacy) {
+  // lambda for trying out a particular delta and/or complementation
+  auto isCutBetter = [&](double delta, HighsCDouble& efficacy) {
     efficacy = -kHighsInf;
 
-    double scalrhs = static_cast<double>(rhs * scale);
-    double downrhs = fast_floor(scalrhs);
+    HighsCDouble scale = 1.0 / static_cast<HighsCDouble>(delta);
+    HighsCDouble scalrhs = rhs * scale;
+    HighsCDouble downrhs = floor(scalrhs);
 
-    double f0 = scalrhs - downrhs;
+    HighsCDouble f0 = scalrhs - downrhs;
     if (f0 < f0min || f0 > f0max) return false;
-    double oneoveroneminusf0 = 1.0 / (1.0 - f0);
+    HighsCDouble oneoveroneminusf0 = 1.0 / (1.0 - f0);
     if (oneoveroneminusf0 > maxCMirScale) return false;
 
-    double contscale = scale * oneoveroneminusf0;
-    double sqrnorm = contscale * contscale * continuoussqrnorm;
-    double viol = contscale * continuouscontribution - downrhs;
+    HighsCDouble contscale = scale * oneoveroneminusf0;
+    HighsCDouble sqrnorm = contscale * contscale * continuoussqrnorm;
+    HighsCDouble viol = contscale * continuouscontribution - downrhs;
 
     for (HighsInt j : integerinds) {
       updateViolationAndNorm(j,
@@ -617,8 +622,8 @@ bool HighsCutGeneration::cmirCutGenerationHeuristic(double minEfficacy,
   };
 
   for (double delta : deltas) {
-    double efficacy;
-    if (isCutBetter(1.0 / delta, efficacy)) {
+    HighsCDouble efficacy;
+    if (isCutBetter(delta, efficacy)) {
       bestdelta = delta;
       bestefficacy = efficacy;
     }
@@ -629,9 +634,9 @@ bool HighsCutGeneration::cmirCutGenerationHeuristic(double minEfficacy,
   /* try if multiplying best delta by 2 4 or 8 gives a better efficacy */
   for (HighsInt k = 1; !onlyInitialCMIRScale && k <= 3; ++k) {
     double delta = bestdelta * (1 << k);
-    double efficacy;
+    HighsCDouble efficacy;
 
-    if (isCutBetter(1.0 / delta, efficacy)) {
+    if (isCutBetter(delta, efficacy)) {
       bestdelta = delta;
       bestefficacy = efficacy;
     }
@@ -646,9 +651,9 @@ bool HighsCutGeneration::cmirCutGenerationHeuristic(double minEfficacy,
 
     flipComplementation(k);
 
-    double efficacy;
+    HighsCDouble efficacy;
 
-    if (isCutBetter(1.0 / bestdelta, efficacy)) {
+    if (isCutBetter(bestdelta, efficacy)) {
       bestefficacy = efficacy;
     } else {
       flipComplementation(k);
@@ -658,7 +663,6 @@ bool HighsCutGeneration::cmirCutGenerationHeuristic(double minEfficacy,
   HighsCDouble scale = 1.0 / static_cast<HighsCDouble>(bestdelta);
   HighsCDouble scalrhs = rhs * scale;
   HighsCDouble downrhs = floor(scalrhs);
-
   HighsCDouble f0 = scalrhs - downrhs;
   HighsCDouble oneoveroneminusf0 = 1.0 / (1.0 - f0);
 
@@ -684,15 +688,15 @@ bool HighsCutGeneration::cmirCutGenerationHeuristic(double minEfficacy,
 #ifndef NDEBUG
   // Check if the computed cut has the correct efficacy
   {
-    double checkviol = -static_cast<double>(downrhs * bestdelta);
-    double checknorm = 0.0;
+    HighsCDouble checkviol = -rhs;
+    HighsCDouble checknorm = 0.0;
     for (HighsInt j = 0; j != rowlen; ++j) {
       if (vals[j] == 0.0) continue;
       updateViolationAndNorm(j, vals[j], checkviol, checknorm);
     }
     assert(checknorm != 0.0);
-    double checkefficacy = checkviol / sqrt(checknorm);
-    assert(fabs(checkefficacy - bestefficacy) < 0.001);
+    HighsCDouble checkefficacy = checkviol / sqrt(checknorm);
+    assert(abs(checkefficacy - bestefficacy) < 0.001);
   }
 #endif
 
@@ -1337,15 +1341,18 @@ void HighsCutGeneration::removeComplementation() {
 }
 
 void HighsCutGeneration::updateViolationAndNorm(HighsInt index, double aj,
-                                                double& violation,
-                                                double& norm) const {
+                                                HighsCDouble& violation,
+                                                HighsCDouble& norm) const {
+  // use quad precision
+  const HighsCDouble quad_aj = static_cast<HighsCDouble>(aj);
+
   // update violation
-  violation += aj * solval[index];
+  violation += quad_aj * solval[index];
 
   // update norm
-  if (aj > 0 && solval[index] <= feastol) return;
-  if (aj < 0 && solval[index] >= upper[index] - feastol) return;
-  norm += aj * aj;
+  if (quad_aj > 0 && solval[index] <= feastol) return;
+  if (quad_aj < 0 && solval[index] >= upper[index] - feastol) return;
+  norm += quad_aj * quad_aj;
 }
 
 bool HighsCutGeneration::tryGenerateCut(std::vector<HighsInt>& inds_,
@@ -1391,7 +1398,7 @@ bool HighsCutGeneration::tryGenerateCut(std::vector<HighsInt>& inds_,
     }
   } while (false);
 
-  double minMirEfficacy = minEfficacy;
+  HighsCDouble minMirEfficacy = minEfficacy;
   if (success) {
     // save data that might otherwise be overwritten when calling the cmir
     // separator
@@ -1399,14 +1406,14 @@ bool HighsCutGeneration::tryGenerateCut(std::vector<HighsInt>& inds_,
     saveIntegralCoefficients = integralCoefficients;
 
     // compute violation and squared norm
-    double violation = -double(rhs);
-    double sqrnorm = 0.0;
+    HighsCDouble violation = -rhs;
+    HighsCDouble sqrnorm = 0.0;
     for (HighsInt i = 0; i < rowlen; ++i) {
       updateViolationAndNorm(i, vals[i], violation, sqrnorm);
     }
 
     // compute efficacy (distance cut off)
-    double efficacy = violation / std::sqrt(sqrnorm);
+    HighsCDouble efficacy = violation / sqrt(sqrnorm);
     if (allowRejectCut && efficacy <= minEfficacy) {
       // reject cut
       success = false;

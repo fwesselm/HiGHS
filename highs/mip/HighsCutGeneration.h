@@ -62,7 +62,7 @@ class HighsCutGeneration {
 
   bool separateLiftedMixedIntegerCover();
 
-  bool cmirCutGenerationHeuristic(double minEfficacy,
+  bool cmirCutGenerationHeuristic(const HighsCDouble& minEfficacy,
                                   bool onlyInitialCMIRScale = false);
 
   bool postprocessCut();
@@ -74,8 +74,9 @@ class HighsCutGeneration {
 
   void removeComplementation();
 
-  void updateViolationAndNorm(HighsInt index, double aj, double& violation,
-                              double& norm) const;
+  void updateViolationAndNorm(HighsInt index, double aj,
+                              HighsCDouble& violation,
+                              HighsCDouble& norm) const;
 
   bool tryGenerateCut(std::vector<HighsInt>& inds, std::vector<double>& vals,
                       bool hasUnboundedInts, bool hasGeneralInts,
