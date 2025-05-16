@@ -591,18 +591,24 @@ bool HighsCutGeneration::cmirCutGenerationHeuristic(
     return downaj + max(HighsCDouble{0.0}, fj - f0) * oneoveroneminusf0;
   };
 
+  // lambda for computing rhs and fractional part
+  auto computeRhs = [&](const HighsCDouble& scale, HighsCDouble& downrhs,
+                        HighsCDouble& f0, HighsCDouble& oneoveroneminusf0) {
+    HighsCDouble scalrhs = rhs * scale;
+    downrhs = floor(scalrhs);
+    f0 = scalrhs - downrhs;
+    oneoveroneminusf0 = 1.0 / (1.0 - f0);
+  };
+
   // lambda for trying out a particular delta and/or complementation
   auto isCutBetter = [&](double delta, HighsCDouble& efficacy) {
     efficacy = -kHighsInf;
 
     HighsCDouble scale = 1.0 / static_cast<HighsCDouble>(delta);
-    HighsCDouble scalrhs = rhs * scale;
-    HighsCDouble downrhs = floor(scalrhs);
-
-    HighsCDouble f0 = scalrhs - downrhs;
-    if (f0 < f0min || f0 > f0max) return false;
-    HighsCDouble oneoveroneminusf0 = 1.0 / (1.0 - f0);
-    if (oneoveroneminusf0 > maxCMirScale) return false;
+    HighsCDouble downrhs, f0, oneoveroneminusf0;
+    computeRhs(scale, downrhs, f0, oneoveroneminusf0);
+    if (f0 < f0min || f0 > f0max || oneoveroneminusf0 > maxCMirScale)
+      return false;
 
     HighsCDouble contscale = scale * oneoveroneminusf0;
     HighsCDouble sqrnorm = contscale * contscale * continuoussqrnorm;
@@ -661,10 +667,8 @@ bool HighsCutGeneration::cmirCutGenerationHeuristic(
   }
 
   HighsCDouble scale = 1.0 / static_cast<HighsCDouble>(bestdelta);
-  HighsCDouble scalrhs = rhs * scale;
-  HighsCDouble downrhs = floor(scalrhs);
-  HighsCDouble f0 = scalrhs - downrhs;
-  HighsCDouble oneoveroneminusf0 = 1.0 / (1.0 - f0);
+  HighsCDouble downrhs, f0, oneoveroneminusf0;
+  computeRhs(scale, downrhs, f0, oneoveroneminusf0);
 
   rhs = downrhs * bestdelta;
   integralSupport = true;
