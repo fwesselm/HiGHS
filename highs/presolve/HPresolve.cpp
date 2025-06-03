@@ -3315,6 +3315,35 @@ HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
     return doubletonEq(postsolve_stack, row, rowType);
   }
 
+    
+  for (const HighsSliceNonzero& nonzero : getRowVector(row)) {
+      // get column index and coefficient
+      HighsInt col = nonzero.index();
+      double val = nonzero.value();
+      
+      // skip continuous variables and integer-constrained variables that do not have finite bounds
+      if (model->integrality_[col] == HighsVarType::kContinuous || model->col_lower_[col] == -kHighsInf || model->col_upper_[col] == kHighsInf) continue;
+      
+      auto degree1Tests = [&](HighsInt col, double val, HighsInt direction, const HighsCDouble& rowActivityBound, double rowBound){
+          if (direction * rowActivityBound >= direction * rowBound - primal_feastol) return;
+          if (direction * val > 0)
+              changeColLower(col, model->col_lower_[col] + 1.0);
+          else changeColUpper(col, model->col_upper_[col] - 1.0);
+      };
+      
+      // perform tests
+      degree1Tests(col, val, HighsInt{1}, impliedRowBounds.getSumUpperOrig(row, std::abs(val) * (static_cast<HighsCDouble>(model->col_upper_[col]) - static_cast<HighsCDouble>(model->col_lower_[col]))), model->row_lower_[row]);
+      degree1Tests(col, val, HighsInt{-1}, impliedRowBounds.getSumLowerOrig(row, std::abs(val) * (static_cast<HighsCDouble>(model->col_upper_[col]) - static_cast<HighsCDouble>(model->col_lower_[col]))), model->row_upper_[row]);
+      
+      // remove fixed variables
+      if (model->col_lower_[col] == model->col_upper_[col]) {
+          postsolve_stack.removedFixedCol(col,
+                                          model->col_lower_[col],
+                                          0.0, HighsEmptySlice());
+          removeFixedCol(col);
+      }
+  }
+    
   // todo: do additional single row presolve for mip here. It may assume a
   // non-redundant and non-infeasible row when considering variable and implied
   // bounds
