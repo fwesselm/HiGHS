@@ -3320,7 +3320,8 @@ HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
     return doubletonEq(postsolve_stack, row, rowType);
   }
 
-  /*for (const HighsSliceNonzero& nonzero : getRowVector(row)) {
+  storeRow(row);
+  for (const HighsSliceNonzero& nonzero : getStoredRow()) {
       // get column index and coefficient
       HighsInt col = nonzero.index();
       double val = nonzero.value();
@@ -3346,7 +3347,7 @@ HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
                                           0.0, HighsEmptySlice());
           removeFixedCol(col);
       }
-  }*/
+  }
     
     // check if row is now infeasible or redundant
     HPRESOLVE_CHECKED_CALL(isRowInfeasibleOrRedundant(row));
