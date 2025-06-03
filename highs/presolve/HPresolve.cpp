@@ -3315,7 +3315,7 @@ HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
     return doubletonEq(postsolve_stack, row, rowType);
   }
 
-    
+  HighsInt numModifiedBounds = 0;
   for (const HighsSliceNonzero& nonzero : getRowVector(row)) {
       // get column index and coefficient
       HighsInt col = nonzero.index();
@@ -3326,6 +3326,7 @@ HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
       
       auto degree1Tests = [&](HighsInt col, double val, HighsInt direction, const HighsCDouble& rowActivityBound, double rowBound){
           if (direction * rowActivityBound >= direction * rowBound - primal_feastol) return;
+          numModifiedBounds++;
           if (direction * val > 0)
               changeColLower(col, model->col_lower_[col] + 1.0);
           else changeColUpper(col, model->col_upper_[col] - 1.0);
@@ -3342,6 +3343,14 @@ HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
                                           0.0, HighsEmptySlice());
           removeFixedCol(col);
       }
+  }
+    
+  // Get row bounds and implied row bounds after bound modifications
+  if (numModifiedBounds > 0) {
+      rowUpper = model->row_upper_[row];
+      rowLower = model->row_lower_[row];
+      impliedRowUpper = impliedRowBounds.getSumUpper(row);
+      impliedRowLower = impliedRowBounds.getSumLower(row);
   }
     
   // todo: do additional single row presolve for mip here. It may assume a
