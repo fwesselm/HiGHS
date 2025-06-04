@@ -294,7 +294,11 @@ class HPresolve {
 
   void storeCurrentProblemSize();
 
-  double problemSizeReduction();
+  double problemSizeReduction() const;
+
+  bool isRowInfeasible(HighsInt row) const;
+
+  bool isRowRedundant(HighsInt row, bool useOriginalBounds = false) const;
 
  public:
   // for LP presolve

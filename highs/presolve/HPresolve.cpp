@@ -3012,26 +3012,11 @@ HPresolve::Result HPresolve::singletonRow(HighsPostsolveStack& postsolve_stack,
   unlink(nzPos);
 
   // check for simple
-  if (val > 0) {
-    if (model->col_upper_[col] * val <=
-            model->row_upper_[row] + primal_feastol &&
-        model->col_lower_[col] * val >=
-            model->row_lower_[row] - primal_feastol) {
-      postsolve_stack.redundantRow(row);
-      analysis_.logging_on_ = logging_on;
-      if (logging_on) analysis_.stopPresolveRuleLog(kPresolveRuleSingletonRow);
-      return checkLimits(postsolve_stack);
-    }
-  } else {
-    if (model->col_lower_[col] * val <=
-            model->row_upper_[row] + primal_feastol &&
-        model->col_upper_[col] * val >=
-            model->row_lower_[row] - primal_feastol) {
-      postsolve_stack.redundantRow(row);
-      analysis_.logging_on_ = logging_on;
-      if (logging_on) analysis_.stopPresolveRuleLog(kPresolveRuleSingletonRow);
-      return checkLimits(postsolve_stack);
-    }
+  if (isRowRedundant(row, true)) {
+    postsolve_stack.redundantRow(row);
+    analysis_.logging_on_ = logging_on;
+    if (logging_on) analysis_.stopPresolveRuleLog(kPresolveRuleSingletonRow);
+    return checkLimits(postsolve_stack);
   }
 
   // zeros should not be linked in the matrix
@@ -3211,15 +3196,15 @@ HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
   assert(!rowDeleted[row]);
 
   const bool logging_on = analysis_.logging_on_;
+
+  // check for infeasibility
+  if (isRowInfeasible(row)) return Result::kPrimalInfeasible;
+
   // handle special cases directly via a call to the specialized procedure
   switch (rowsize[row]) {
     default:
       break;
     case 0:
-      if (model->row_upper_[row] < -primal_feastol ||
-          model->row_lower_[row] > primal_feastol)
-        // model infeasible
-        return Result::kPrimalInfeasible;
       if (logging_on) analysis_.startPresolveRuleLog(kPresolveRuleEmptyRow);
       postsolve_stack.redundantRow(row);
       markRowDeleted(row);
@@ -3233,34 +3218,65 @@ HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
   // printf("row presolve: ");
   // debugPrintRow(row);
 
-  auto isRowInfeasibleOrRedundant = [&](HighsInt row) {
-    double impliedRowUpper = impliedRowBounds.getSumUpper(row);
-    double impliedRowLower = impliedRowBounds.getSumLower(row);
+  if (isRowRedundant(row)) {
+    // row is redundant
+    if (logging_on) analysis_.startPresolveRuleLog(kPresolveRuleRedundantRow);
+    postsolve_stack.redundantRow(row);
+    removeRow(row);
+    analysis_.logging_on_ = logging_on;
+    if (logging_on) analysis_.stopPresolveRuleLog(kPresolveRuleRedundantRow);
+    return checkLimits(postsolve_stack);
+  }
 
-    // Allow removal of redundant rows
-    if (impliedRowLower > model->row_upper_[row] + primal_feastol ||
-        impliedRowUpper < model->row_lower_[row] - primal_feastol) {
-      // model infeasible
-      return Result::kPrimalInfeasible;
+  if (rowsizeInteger[row] != 0 || rowsizeImplInt[row] != 0) {
+    // check if setting variable to opposite bound (with respect to bound used
+    // in calculation of bounds on row activity) makes row infeasible.
+    // this is a special case of bound tightening, but only performed once for
+    // integer-constrained variables here.
+    for (const HighsSliceNonzero& nonzero : getRowVector(row)) {
+      // get column index and coefficient
+      HighsInt col = nonzero.index();
+      double val = nonzero.value();
+
+      // skip continuous variables and integer-constrained variables that do not
+      // have finite bounds
+      if (model->integrality_[col] == HighsVarType::kContinuous ||
+          model->col_lower_[col] == -kHighsInf ||
+          model->col_upper_[col] == kHighsInf)
+        continue;
+
+      auto degree1Tests = [&](HighsInt col, double val, HighsInt direction,
+                              double rowActivityBound, double rowBound) {
+        // return if row is still feasible
+        if (direction * rowActivityBound >=
+            direction * rowBound - primal_feastol)
+          return;
+
+        // tighten bound
+        if (direction * val > 0)
+          changeColLower(col, model->col_lower_[col] + 1.0);
+        else
+          changeColUpper(col, model->col_upper_[col] - 1.0);
+      };
+
+      // lambda for computing offset
+      auto computeOffset = [&](HighsInt col, double val) {
+        return std::abs(val) *
+               (static_cast<HighsCDouble>(model->col_upper_[col]) -
+                static_cast<HighsCDouble>(model->col_lower_[col]));
+      };
+
+      // perform tests
+      degree1Tests(
+          col, val, HighsInt{1},
+          impliedRowBounds.getSumUpperOrig(row, -computeOffset(col, val)),
+          model->row_lower_[row]);
+      degree1Tests(
+          col, val, HighsInt{-1},
+          impliedRowBounds.getSumLowerOrig(row, computeOffset(col, val)),
+          model->row_upper_[row]);
     }
-
-    if (impliedRowLower >= model->row_lower_[row] - primal_feastol &&
-        impliedRowUpper <= model->row_upper_[row] + primal_feastol) {
-      // row is redundant
-      if (logging_on) analysis_.startPresolveRuleLog(kPresolveRuleRedundantRow);
-      postsolve_stack.redundantRow(row);
-      removeRow(row);
-      analysis_.logging_on_ = logging_on;
-      if (logging_on) analysis_.stopPresolveRuleLog(kPresolveRuleRedundantRow);
-      return checkLimits(postsolve_stack);
-    }
-
-    return Result::kOk;
-  };
-
-  // check if row is infeasible or redundant
-  HPRESOLVE_CHECKED_CALL(isRowInfeasibleOrRedundant(row));
-  if (rowDeleted[row]) return Result::kOk;
+  }
 
   auto checkRedundantBounds = [&](HighsInt col, HighsInt row) {
     // check if column singleton has redundant bounds
@@ -3324,69 +3340,6 @@ HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
   // non-redundant and non-infeasible row when considering variable and implied
   // bounds
   if (rowsizeInteger[row] != 0 || rowsizeImplInt[row] != 0) {
-    for (const HighsSliceNonzero& nonzero : getRowVector(row)) {
-      // get column index and coefficient
-      HighsInt col = nonzero.index();
-      double val = nonzero.value();
-
-      // skip continuous variables and integer-constrained variables that do not
-      // have finite bounds
-      if (model->integrality_[col] == HighsVarType::kContinuous ||
-          model->col_lower_[col] == -kHighsInf ||
-          model->col_upper_[col] == kHighsInf)
-        continue;
-
-      auto degree1Tests = [&](HighsInt col, double val, HighsInt direction,
-                              double rowActivityBound, double rowBound) {
-        // check if infeasibility is obtained when variable is set to opposite
-        // bound
-        if (direction * rowActivityBound >=
-            direction * rowBound - primal_feastol)
-          return false;
-
-        // tighten bound
-        if (direction * val > 0)
-          changeColLower(col, model->col_lower_[col] + 1.0);
-        else
-          changeColUpper(col, model->col_upper_[col] - 1.0);
-
-        // remove fixed variables
-        if (model->col_lower_[col] == model->col_upper_[col]) {
-          postsolve_stack.removedFixedCol(col, model->col_lower_[col], 0.0,
-                                          HighsEmptySlice());
-          removeFixedCol(col);
-          return false;
-        }
-
-        return true;
-      };
-
-      // lambda for computing offset
-      auto computeOffset = [&](HighsInt col, double val) {
-        return std::abs(val) *
-               (static_cast<HighsCDouble>(model->col_upper_[col]) -
-                static_cast<HighsCDouble>(model->col_lower_[col]));
-      };
-
-      // perform tests
-      while (degree1Tests(
-          col, val, HighsInt{1},
-          impliedRowBounds.getSumUpperOrig(row, -computeOffset(col, val)),
-          model->row_lower_[row]));
-      if (!colDeleted[col])
-        while (degree1Tests(
-            col, val, HighsInt{-1},
-            impliedRowBounds.getSumLowerOrig(row, computeOffset(col, val)),
-            model->row_upper_[row]));
-    }
-
-    // check if row became infeasible or redundant by bound modifications
-    // subsequent code (e.g. coefficient strengthening) assumes that the row is
-    // feasible and non-redundant (with respect to bounds on constraint
-    // activities)
-    HPRESOLVE_CHECKED_CALL(isRowInfeasibleOrRedundant(row));
-    if (rowDeleted[row]) return Result::kOk;
-
     if (model->row_lower_[row] == model->row_upper_[row]) {
       // equation
       double impliedRowUpper = impliedRowBounds.getSumUpper(row);
@@ -3842,7 +3795,7 @@ HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
       }
 
       auto strengthenCoefs = [&](HighsCDouble& rhs, HighsInt direction,
-                                 HighsCDouble maxAbsCoefValue) {
+                                 const HighsCDouble& maxAbsCoefValue) {
         // iterate over non-zero positions instead of iterating over the
         // HighsMatrixSlice (provided by HPresolve::getStoredRow) because the
         // latter contains pointers to Acol and Avalue that may be invalidated
@@ -3881,26 +3834,32 @@ HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
         }
       };
 
-      double impliedRowUpper = impliedRowBounds.getSumUpper(row);
-      double impliedRowLower = impliedRowBounds.getSumLower(row);
-      if (model->row_lower_[row] == -kHighsInf &&
-          impliedRowUpper != kHighsInf) {
-        // <= constraint: try to strengthen coefficients
-        HighsCDouble rhs = model->row_upper_[row];
-        strengthenCoefs(rhs, HighsInt{1},
-                        static_cast<HighsCDouble>(impliedRowUpper) -
-                            model->row_upper_[row]);
-        model->row_upper_[row] = static_cast<double>(rhs);
-      }
+      if (!isRowRedundant(row)) {
+        double impliedRowUpper = impliedRowBounds.getSumUpper(row);
+        double impliedRowLower = impliedRowBounds.getSumLower(row);
+        if (model->row_lower_[row] == -kHighsInf &&
+            impliedRowUpper != kHighsInf) {
+          // <= constraint: try to strengthen coefficients
+          HighsCDouble rhs = model->row_upper_[row];
+          // max. absolute coefficient should be non-negative; otherwise, the
+          // row would be redundant.
+          HighsCDouble maxAbsCoefValue =
+              static_cast<HighsCDouble>(impliedRowUpper) - rhs;
+          strengthenCoefs(rhs, HighsInt{1}, maxAbsCoefValue);
+          model->row_upper_[row] = static_cast<double>(rhs);
+        }
 
-      if (model->row_upper_[row] == kHighsInf &&
-          impliedRowLower != -kHighsInf) {
-        // >= constraint: try to strengthen coefficients
-        HighsCDouble rhs = model->row_lower_[row];
-        strengthenCoefs(rhs, HighsInt{-1},
-                        model->row_lower_[row] -
-                            static_cast<HighsCDouble>(impliedRowLower));
-        model->row_lower_[row] = static_cast<double>(rhs);
+        if (model->row_upper_[row] == kHighsInf &&
+            impliedRowLower != -kHighsInf) {
+          // >= constraint: try to strengthen coefficients
+          HighsCDouble rhs = model->row_lower_[row];
+          // max. absolute coefficient should be non-negative; otherwise, the
+          // row would be redundant.
+          HighsCDouble maxAbsCoefValue =
+              rhs - static_cast<HighsCDouble>(impliedRowLower);
+          strengthenCoefs(rhs, HighsInt{-1}, maxAbsCoefValue);
+          model->row_lower_[row] = static_cast<double>(rhs);
+        }
       }
     }
   }  // if (rowsizeInteger[row] != 0 || rowsizeImplInt[row] != 0) {
@@ -4711,7 +4670,7 @@ void HPresolve::storeCurrentProblemSize() {
   oldNumRow = model->num_row_ - numDeletedRows;
 }
 
-double HPresolve::problemSizeReduction() {
+double HPresolve::problemSizeReduction() const {
   double colReduction =
       100.0 *
       static_cast<double>(oldNumCol - (model->num_col_ - numDeletedCols)) /
@@ -4722,6 +4681,22 @@ double HPresolve::problemSizeReduction() {
       oldNumRow;
 
   return std::max(rowReduction, colReduction);
+}
+
+bool HPresolve::isRowInfeasible(HighsInt row) const {
+  return (impliedRowBounds.getSumLower(row) >
+              model->row_upper_[row] + primal_feastol ||
+          impliedRowBounds.getSumUpper(row) <
+              model->row_lower_[row] - primal_feastol);
+}
+
+bool HPresolve::isRowRedundant(HighsInt row, bool useOriginalBounds) const {
+  return ((useOriginalBounds ? impliedRowBounds.getSumLowerOrig(row)
+                             : impliedRowBounds.getSumLower(row)) >=
+              model->row_lower_[row] - primal_feastol &&
+          (useOriginalBounds ? impliedRowBounds.getSumUpperOrig(row)
+                             : impliedRowBounds.getSumUpper(row)) <=
+              model->row_upper_[row] + primal_feastol);
 }
 
 HighsModelStatus HPresolve::run(HighsPostsolveStack& postsolve_stack) {
