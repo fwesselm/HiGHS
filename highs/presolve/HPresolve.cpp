@@ -3342,7 +3342,7 @@ HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
         // bound
         if (direction * rowActivityBound >=
             direction * rowBound - primal_feastol)
-          return;
+          return false;
 
         // tighten bound
         if (direction * val > 0)
@@ -3355,25 +3355,28 @@ HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
           postsolve_stack.removedFixedCol(col, model->col_lower_[col], 0.0,
                                           HighsEmptySlice());
           removeFixedCol(col);
+          return false;
         }
+
+        return true;
       };
 
       // perform tests
-      degree1Tests(
+      while (degree1Tests(
           col, val, HighsInt{1},
           impliedRowBounds.getSumUpperOrig(
               row, -std::abs(val) *
                        (static_cast<HighsCDouble>(model->col_upper_[col]) -
                         static_cast<HighsCDouble>(model->col_lower_[col]))),
-          model->row_lower_[row]);
+          model->row_lower_[row]));
       if (!colDeleted[col])
-        degree1Tests(
+        while (degree1Tests(
             col, val, HighsInt{-1},
             impliedRowBounds.getSumLowerOrig(
                 row, std::abs(val) *
                          (static_cast<HighsCDouble>(model->col_upper_[col]) -
                           static_cast<HighsCDouble>(model->col_lower_[col]))),
-            model->row_upper_[row]);
+            model->row_upper_[row]));
     }
 
     // check if row became infeasible or redundant by bound modifications
