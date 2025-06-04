@@ -3232,36 +3232,36 @@ HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
 
   // printf("row presolve: ");
   // debugPrintRow(row);
-    
-    auto isRowInfeasibleOrRedundant = [&](HighsInt row){
-        double impliedRowUpper = impliedRowBounds.getSumUpper(row);
-        double impliedRowLower = impliedRowBounds.getSumLower(row);
 
-        // Allow removal of redundant rows
-        if (impliedRowLower > model->row_upper_[row] + primal_feastol ||
-            impliedRowUpper < model->row_lower_[row] - primal_feastol) {
-          // model infeasible
-          return Result::kPrimalInfeasible;
-        }
+  auto isRowInfeasibleOrRedundant = [&](HighsInt row) {
+    double impliedRowUpper = impliedRowBounds.getSumUpper(row);
+    double impliedRowLower = impliedRowBounds.getSumLower(row);
 
-        if (impliedRowLower >= model->row_lower_[row] - primal_feastol &&
-            impliedRowUpper <= model->row_upper_[row] + primal_feastol) {
-          // row is redundant
-          if (logging_on) analysis_.startPresolveRuleLog(kPresolveRuleRedundantRow);
-          postsolve_stack.redundantRow(row);
-          removeRow(row);
-          analysis_.logging_on_ = logging_on;
-          if (logging_on) analysis_.stopPresolveRuleLog(kPresolveRuleRedundantRow);
-          return checkLimits(postsolve_stack);
-        }
-        
-        return Result::kOk;
-    };
-    
-    // check if row is infeasible or redundant
-    HPRESOLVE_CHECKED_CALL(isRowInfeasibleOrRedundant(row));
-    if (rowDeleted[row]) return Result::kOk;
-      
+    // Allow removal of redundant rows
+    if (impliedRowLower > model->row_upper_[row] + primal_feastol ||
+        impliedRowUpper < model->row_lower_[row] - primal_feastol) {
+      // model infeasible
+      return Result::kPrimalInfeasible;
+    }
+
+    if (impliedRowLower >= model->row_lower_[row] - primal_feastol &&
+        impliedRowUpper <= model->row_upper_[row] + primal_feastol) {
+      // row is redundant
+      if (logging_on) analysis_.startPresolveRuleLog(kPresolveRuleRedundantRow);
+      postsolve_stack.redundantRow(row);
+      removeRow(row);
+      analysis_.logging_on_ = logging_on;
+      if (logging_on) analysis_.stopPresolveRuleLog(kPresolveRuleRedundantRow);
+      return checkLimits(postsolve_stack);
+    }
+
+    return Result::kOk;
+  };
+
+  // check if row is infeasible or redundant
+  HPRESOLVE_CHECKED_CALL(isRowInfeasibleOrRedundant(row));
+  if (rowDeleted[row]) return Result::kOk;
+
   auto checkRedundantBounds = [&](HighsInt col, HighsInt row) {
     // check if column singleton has redundant bounds
     assert(model->col_cost_[col] != 0.0);
@@ -3319,56 +3319,77 @@ HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
     }
     return doubletonEq(postsolve_stack, row, rowType);
   }
-    
+
   // todo: do additional single row presolve for mip here. It may assume a
   // non-redundant and non-infeasible row when considering variable and implied
   // bounds
   if (rowsizeInteger[row] != 0 || rowsizeImplInt[row] != 0) {
-      
     for (const HighsSliceNonzero& nonzero : getRowVector(row)) {
-        // get column index and coefficient
-        HighsInt col = nonzero.index();
-        double val = nonzero.value();
-          
-        // skip continuous variables and integer-constrained variables that do not have finite bounds
-        if (model->integrality_[col] == HighsVarType::kContinuous || model->col_lower_[col] == -kHighsInf || model->col_upper_[col] == kHighsInf) continue;
-         
-        auto degree1Tests = [&](HighsInt col, double val, HighsInt direction, double rowActivityBound, double rowBound){
-            // check if infeasibility is obtained when variable is set to opposite bound
-            if (direction * rowActivityBound >= direction * rowBound - primal_feastol) return;
-            
-            // tighten bound
-            if (direction * val > 0)
-                changeColLower(col, model->col_lower_[col] + 1.0);
-            else changeColUpper(col, model->col_upper_[col] - 1.0);
-            
-            // remove fixed variables
-            if (model->col_lower_[col] == model->col_upper_[col]) {
-                postsolve_stack.removedFixedCol(col,
-                                                model->col_lower_[col],
-                                                0.0, HighsEmptySlice());
-                removeFixedCol(col);
-            }
-        };
-          
-        // perform tests
-        degree1Tests(col, val, HighsInt{1}, impliedRowBounds.getSumUpperOrig(row, -std::abs(val) * (static_cast<HighsCDouble>(model->col_upper_[col]) - static_cast<HighsCDouble>(model->col_lower_[col]))), model->row_lower_[row]);
-        if (!colDeleted[col])
-            degree1Tests(col, val, HighsInt{-1}, impliedRowBounds.getSumLowerOrig(row, std::abs(val) * (static_cast<HighsCDouble>(model->col_upper_[col]) - static_cast<HighsCDouble>(model->col_lower_[col]))), model->row_upper_[row]);
+      // get column index and coefficient
+      HighsInt col = nonzero.index();
+      double val = nonzero.value();
+
+      // skip continuous variables and integer-constrained variables that do not
+      // have finite bounds
+      if (model->integrality_[col] == HighsVarType::kContinuous ||
+          model->col_lower_[col] == -kHighsInf ||
+          model->col_upper_[col] == kHighsInf)
+        continue;
+
+      auto degree1Tests = [&](HighsInt col, double val, HighsInt direction,
+                              double rowActivityBound, double rowBound) {
+        // check if infeasibility is obtained when variable is set to opposite
+        // bound
+        if (direction * rowActivityBound >=
+            direction * rowBound - primal_feastol)
+          return;
+
+        // tighten bound
+        if (direction * val > 0)
+          changeColLower(col, model->col_lower_[col] + 1.0);
+        else
+          changeColUpper(col, model->col_upper_[col] - 1.0);
+
+        // remove fixed variables
+        if (model->col_lower_[col] == model->col_upper_[col]) {
+          postsolve_stack.removedFixedCol(col, model->col_lower_[col], 0.0,
+                                          HighsEmptySlice());
+          removeFixedCol(col);
+        }
+      };
+
+      // perform tests
+      degree1Tests(
+          col, val, HighsInt{1},
+          impliedRowBounds.getSumUpperOrig(
+              row, -std::abs(val) *
+                       (static_cast<HighsCDouble>(model->col_upper_[col]) -
+                        static_cast<HighsCDouble>(model->col_lower_[col]))),
+          model->row_lower_[row]);
+      if (!colDeleted[col])
+        degree1Tests(
+            col, val, HighsInt{-1},
+            impliedRowBounds.getSumLowerOrig(
+                row, std::abs(val) *
+                         (static_cast<HighsCDouble>(model->col_upper_[col]) -
+                          static_cast<HighsCDouble>(model->col_lower_[col]))),
+            model->row_upper_[row]);
     }
-        
+
     // check if row became infeasible or redundant by bound modifications
-    // subsequent code (e.g. coefficient strengthening) assumes that the row is feasible and non-redundant (with respect to bounds on constraint activities)
+    // subsequent code (e.g. coefficient strengthening) assumes that the row is
+    // feasible and non-redundant (with respect to bounds on constraint
+    // activities)
     HPRESOLVE_CHECKED_CALL(isRowInfeasibleOrRedundant(row));
     if (rowDeleted[row]) return Result::kOk;
-      
+
     if (model->row_lower_[row] == model->row_upper_[row]) {
       // equation
       double impliedRowUpper = impliedRowBounds.getSumUpper(row);
       double impliedRowLower = impliedRowBounds.getSumLower(row);
       if (impliedRowLower != -kHighsInf && impliedRowUpper != kHighsInf &&
-          std::abs(impliedRowLower + impliedRowUpper - 2 * model->row_upper_[row]) <=
-              options->small_matrix_value) {
+          std::abs(impliedRowLower + impliedRowUpper -
+                   2 * model->row_upper_[row]) <= options->small_matrix_value) {
         double binCoef = std::abs(impliedRowUpper - model->row_upper_[row]);
         // simple probing on equation case
         HighsInt binCol = -1;
@@ -3981,15 +4002,17 @@ HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
     }
 
     // >= inequality
-    HPRESOLVE_CHECKED_CALL(checkForcingRow(
-        row, HighsInt{1}, model->row_lower_[row], impliedRowBounds.getSumUpperOrig(row), minAbsCoef,
-        HighsPostsolveStack::RowType::kGeq));
+    HPRESOLVE_CHECKED_CALL(
+        checkForcingRow(row, HighsInt{1}, model->row_lower_[row],
+                        impliedRowBounds.getSumUpperOrig(row), minAbsCoef,
+                        HighsPostsolveStack::RowType::kGeq));
     if (rowDeleted[row]) return Result::kOk;
 
     // <= inequality
-    HPRESOLVE_CHECKED_CALL(checkForcingRow(
-        row, HighsInt{-1}, model->row_upper_[row], impliedRowBounds.getSumLowerOrig(row), minAbsCoef,
-        HighsPostsolveStack::RowType::kLeq));
+    HPRESOLVE_CHECKED_CALL(
+        checkForcingRow(row, HighsInt{-1}, model->row_upper_[row],
+                        impliedRowBounds.getSumLowerOrig(row), minAbsCoef,
+                        HighsPostsolveStack::RowType::kLeq));
     if (rowDeleted[row]) return Result::kOk;
   }
 
