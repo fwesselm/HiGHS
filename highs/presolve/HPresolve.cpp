@@ -3325,8 +3325,7 @@ HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
   // bounds
   if (rowsizeInteger[row] != 0 || rowsizeImplInt[row] != 0) {
       
-    storeRow(row);
-    for (const HighsSliceNonzero& nonzero : getStoredRow()) {
+    for (const HighsSliceNonzero& nonzero : getRowVector(row)) {
         // get column index and coefficient
         HighsInt col = nonzero.index();
         double val = nonzero.value();
@@ -3334,27 +3333,32 @@ HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
         // skip continuous variables and integer-constrained variables that do not have finite bounds
         if (model->integrality_[col] == HighsVarType::kContinuous || model->col_lower_[col] == -kHighsInf || model->col_upper_[col] == kHighsInf) continue;
          
-        auto degree1Tests = [&](HighsInt col, double val, HighsInt direction, const HighsCDouble& rowActivityBound, double rowBound){
+        auto degree1Tests = [&](HighsInt col, double val, HighsInt direction, double rowActivityBound, double rowBound){
+            // check if infeasibility is obtained when variable is set to opposite bound
             if (direction * rowActivityBound >= direction * rowBound - primal_feastol) return;
+            
+            // tighten bound
             if (direction * val > 0)
                 changeColLower(col, model->col_lower_[col] + 1.0);
             else changeColUpper(col, model->col_upper_[col] - 1.0);
+            
+            // remove fixed variables
+            if (model->col_lower_[col] == model->col_upper_[col]) {
+                postsolve_stack.removedFixedCol(col,
+                                                model->col_lower_[col],
+                                                0.0, HighsEmptySlice());
+                removeFixedCol(col);
+            }
         };
           
         // perform tests
         degree1Tests(col, val, HighsInt{1}, impliedRowBounds.getSumUpperOrig(row, -std::abs(val) * (static_cast<HighsCDouble>(model->col_upper_[col]) - static_cast<HighsCDouble>(model->col_lower_[col]))), model->row_lower_[row]);
-        //degree1Tests(col, val, HighsInt{-1}, impliedRowBounds.getSumLowerOrig(row, std::abs(val) * (static_cast<HighsCDouble>(model->col_upper_[col]) - static_cast<HighsCDouble>(model->col_lower_[col]))), model->row_upper_[row]);
-        
-        // remove fixed variables
-        if (model->col_lower_[col] == model->col_upper_[col]) {
-            postsolve_stack.removedFixedCol(col,
-                                            model->col_lower_[col],
-                                            0.0, HighsEmptySlice());
-            removeFixedCol(col);
-        }
+        if (!colDeleted[col])
+            degree1Tests(col, val, HighsInt{-1}, impliedRowBounds.getSumLowerOrig(row, std::abs(val) * (static_cast<HighsCDouble>(model->col_upper_[col]) - static_cast<HighsCDouble>(model->col_lower_[col]))), model->row_upper_[row]);
     }
         
-    // check if row is now infeasible or redundant
+    // check if row became infeasible or redundant by bound modifications
+    // subsequent code (e.g. coefficient strengthening) assumes that the row is feasible and non-redundant (with respect to bounds on constraint activities)
     HPRESOLVE_CHECKED_CALL(isRowInfeasibleOrRedundant(row));
     if (rowDeleted[row]) return Result::kOk;
       
