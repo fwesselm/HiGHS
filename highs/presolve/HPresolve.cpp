@@ -3342,7 +3342,7 @@ HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
         };
           
         // perform tests
-        degree1Tests(col, val, HighsInt{1}, impliedRowBounds.getSumUpperOrig(row, std::abs(val) * (static_cast<HighsCDouble>(model->col_upper_[col]) - static_cast<HighsCDouble>(model->col_lower_[col]))), model->row_lower_[row]);
+        degree1Tests(col, val, HighsInt{1}, impliedRowBounds.getSumUpperOrig(row, -std::abs(val) * (static_cast<HighsCDouble>(model->col_upper_[col]) - static_cast<HighsCDouble>(model->col_lower_[col]))), model->row_lower_[row]);
         //degree1Tests(col, val, HighsInt{-1}, impliedRowBounds.getSumLowerOrig(row, std::abs(val) * (static_cast<HighsCDouble>(model->col_upper_[col]) - static_cast<HighsCDouble>(model->col_lower_[col]))), model->row_upper_[row]);
         
         // remove fixed variables
