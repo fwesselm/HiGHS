@@ -3361,21 +3361,22 @@ HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
         return true;
       };
 
+      // lambda for computing offset
+      auto computeOffset = [&](HighsInt col, double val) {
+        return std::abs(val) *
+               (static_cast<HighsCDouble>(model->col_upper_[col]) -
+                static_cast<HighsCDouble>(model->col_lower_[col]));
+      };
+
       // perform tests
       while (degree1Tests(
           col, val, HighsInt{1},
-          impliedRowBounds.getSumUpperOrig(
-              row, -std::abs(val) *
-                       (static_cast<HighsCDouble>(model->col_upper_[col]) -
-                        static_cast<HighsCDouble>(model->col_lower_[col]))),
+          impliedRowBounds.getSumUpperOrig(row, -computeOffset(col, val)),
           model->row_lower_[row]));
       if (!colDeleted[col])
         while (degree1Tests(
             col, val, HighsInt{-1},
-            impliedRowBounds.getSumLowerOrig(
-                row, std::abs(val) *
-                         (static_cast<HighsCDouble>(model->col_upper_[col]) -
-                          static_cast<HighsCDouble>(model->col_lower_[col]))),
+            impliedRowBounds.getSumLowerOrig(row, computeOffset(col, val)),
             model->row_upper_[row]));
     }
 
