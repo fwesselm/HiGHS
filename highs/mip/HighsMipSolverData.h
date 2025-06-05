@@ -56,11 +56,11 @@ enum MipSolutionSource : int {
   kSolutionSourceSolveLp,
   kSolutionSourceEvaluateNode,
   kSolutionSourceUnbounded,
+  kSolutionSourceUserSolution,
   kSolutionSourceTrivialZ,
   kSolutionSourceTrivialL,
   kSolutionSourceTrivialU,
   kSolutionSourceTrivialP,
-  kSolutionSourceUserSolution,
   kSolutionSourceCleanup,
   kSolutionSourceCount
 };
@@ -296,8 +296,9 @@ struct HighsMipSolverData {
   bool interruptFromCallbackWithData(const int callback_type,
                                      const double mipsolver_objective_value,
                                      const std::string message = "") const;
-  void callbackUserSolution(const double mipsolver_objective_value,
-                            const HighsInt user_solution_callback_origin);
+  void callbackUserSolution(
+      const double mipsolver_objective_value,
+      const userMipSolutionCallbackOrigin user_solution_callback_origin);
 };
 
 #endif
