@@ -3835,29 +3835,34 @@ HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
       };
 
       if (!isRowRedundant(row)) {
-        double impliedRowUpper = impliedRowBounds.getSumUpper(row);
-        double impliedRowLower = impliedRowBounds.getSumLower(row);
+        double maxAbsCoefValueUpper =
+            model->row_upper_[row] != kHighsInf
+                ? impliedRowBounds.getSumUpper(row, -model->row_upper_[row])
+                : kHighsInf;
+        double maxAbsCoefValueLower =
+            model->row_lower_[row] != -kHighsInf
+                ? -impliedRowBounds.getSumLower(row, -model->row_lower_[row])
+                : kHighsInf;
+
         if (model->row_lower_[row] == -kHighsInf &&
-            impliedRowUpper != kHighsInf) {
+            maxAbsCoefValueUpper != kHighsInf) {
           // <= constraint: try to strengthen coefficients
           HighsCDouble rhs = model->row_upper_[row];
           // max. absolute coefficient should be non-negative; otherwise, the
           // row would be redundant.
-          HighsCDouble maxAbsCoefValue =
-              static_cast<HighsCDouble>(impliedRowUpper) - rhs;
-          strengthenCoefs(rhs, HighsInt{1}, maxAbsCoefValue);
+          strengthenCoefs(rhs, HighsInt{1},
+                          static_cast<HighsCDouble>(maxAbsCoefValueUpper));
           model->row_upper_[row] = static_cast<double>(rhs);
         }
 
         if (model->row_upper_[row] == kHighsInf &&
-            impliedRowLower != -kHighsInf) {
+            maxAbsCoefValueLower != kHighsInf) {
           // >= constraint: try to strengthen coefficients
           HighsCDouble rhs = model->row_lower_[row];
           // max. absolute coefficient should be non-negative; otherwise, the
           // row would be redundant.
-          HighsCDouble maxAbsCoefValue =
-              rhs - static_cast<HighsCDouble>(impliedRowLower);
-          strengthenCoefs(rhs, HighsInt{-1}, maxAbsCoefValue);
+          strengthenCoefs(rhs, HighsInt{-1},
+                          static_cast<HighsCDouble>(maxAbsCoefValueLower));
           model->row_lower_[row] = static_cast<double>(rhs);
         }
       }
