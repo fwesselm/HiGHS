@@ -3795,16 +3795,15 @@ HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
       }
 
       auto strengthenCoefs = [&](HighsCDouble& rhs, HighsInt direction,
-                                 const HighsCDouble& maxAbsCoefValue) {
+                                 double maxAbsCoefValue) {
         // iterate over non-zero positions instead of iterating over the
         // HighsMatrixSlice (provided by HPresolve::getStoredRow) because the
         // latter contains pointers to Acol and Avalue that may be invalidated
         // if these vectors are reallocated (see std::vector::push_back
         // performed in HPresolve::addToMatrix).
+        // max. absolute coefficient should not be negative
+        assert(maxAbsCoefValue >= 0);
         for (HighsInt rowiter : rowpositions) {
-          // max. absolute coefficient should not be negative
-          assert(maxAbsCoefValue >= 0);
-
           // get column index and coefficient
           HighsInt col = Acol[rowiter];
           double val = direction * Avalue[rowiter];
@@ -3820,14 +3819,16 @@ HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
             assert(col_upper != kHighsInf);
             // new matrix coefficient is direction * maxAbsCoefValue; subtract
             // existing matrix coefficient to get delta
-            HighsCDouble delta = direction * (maxAbsCoefValue - val);
+            HighsCDouble delta =
+                direction * (static_cast<HighsCDouble>(maxAbsCoefValue) - val);
             addToMatrix(row, col, static_cast<double>(delta));
             rhs += delta * col_upper;
           } else if (val < -maxAbsCoefValue - primal_feastol) {
             assert(col_lower != -kHighsInf);
             // new matrix coefficient is (-direction) * maxAbsCoefValue;
             // subtract existing matrix coefficient to get delta
-            HighsCDouble delta = -direction * (maxAbsCoefValue + val);
+            HighsCDouble delta =
+                -direction * (static_cast<HighsCDouble>(maxAbsCoefValue) + val);
             addToMatrix(row, col, static_cast<double>(delta));
             rhs += delta * col_lower;
           }
@@ -3835,35 +3836,30 @@ HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
       };
 
       if (!isRowRedundant(row)) {
-        double maxAbsCoefValueUpper =
-            model->row_upper_[row] != kHighsInf
-                ? impliedRowBounds.getSumUpper(row, -model->row_upper_[row])
-                : kHighsInf;
-        double maxAbsCoefValueLower =
-            model->row_lower_[row] != -kHighsInf
-                ? -impliedRowBounds.getSumLower(row, -model->row_lower_[row])
-                : kHighsInf;
-
-        if (model->row_lower_[row] == -kHighsInf &&
-            maxAbsCoefValueUpper != kHighsInf) {
-          // <= constraint: try to strengthen coefficients
-          HighsCDouble rhs = model->row_upper_[row];
-          // max. absolute coefficient should be non-negative; otherwise, the
-          // row would be redundant.
-          strengthenCoefs(rhs, HighsInt{1},
-                          static_cast<HighsCDouble>(maxAbsCoefValueUpper));
-          model->row_upper_[row] = static_cast<double>(rhs);
+        if (model->row_lower_[row] == -kHighsInf) {
+          double maxAbsCoefValue =
+              impliedRowBounds.getSumUpper(row, -model->row_upper_[row]);
+          if (maxAbsCoefValue != kHighsInf) {
+            // <= constraint: try to strengthen coefficients
+            HighsCDouble rhs = model->row_upper_[row];
+            // max. absolute coefficient should be non-negative; otherwise, the
+            // row would be redundant.
+            strengthenCoefs(rhs, HighsInt{1}, maxAbsCoefValue);
+            model->row_upper_[row] = static_cast<double>(rhs);
+          }
         }
 
-        if (model->row_upper_[row] == kHighsInf &&
-            maxAbsCoefValueLower != kHighsInf) {
-          // >= constraint: try to strengthen coefficients
-          HighsCDouble rhs = model->row_lower_[row];
-          // max. absolute coefficient should be non-negative; otherwise, the
-          // row would be redundant.
-          strengthenCoefs(rhs, HighsInt{-1},
-                          static_cast<HighsCDouble>(maxAbsCoefValueLower));
-          model->row_lower_[row] = static_cast<double>(rhs);
+        if (model->row_upper_[row] == kHighsInf) {
+          double maxAbsCoefValue =
+              -impliedRowBounds.getSumLower(row, -model->row_lower_[row]);
+          if (maxAbsCoefValue != kHighsInf) {
+            // >= constraint: try to strengthen coefficients
+            HighsCDouble rhs = model->row_lower_[row];
+            // max. absolute coefficient should be non-negative; otherwise, the
+            // row would be redundant.
+            strengthenCoefs(rhs, HighsInt{-1}, maxAbsCoefValue);
+            model->row_lower_[row] = static_cast<double>(rhs);
+          }
         }
       }
     }
