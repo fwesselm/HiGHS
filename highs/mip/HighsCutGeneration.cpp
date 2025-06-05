@@ -105,10 +105,10 @@ bool HighsCutGeneration::determineCover(bool lpSol) {
   }
 
   const double minlambda =
-      std::max(10 * feastol, feastol * std::abs(double(rhs)));
+      std::max(10 * feastol, feastol * std::abs(static_cast<double>(rhs)));
 
   for (; coversize != maxCoverSize; ++coversize) {
-    double lambda = double(coverweight - rhs);
+    double lambda = static_cast<double>(coverweight - rhs);
     if (lambda > minlambda) break;
 
     HighsInt j = cover[coversize];
@@ -143,8 +143,8 @@ void HighsCutGeneration::separateLiftedKnapsackCover() {
   HighsCDouble sigma = lambda;
   for (HighsInt i = 1; i != coversize; ++i) {
     HighsCDouble delta = abartmp - vals[cover[i]];
-    HighsCDouble kdelta = double(i) * delta;
-    if (double(kdelta) < double(sigma)) {
+    HighsCDouble kdelta = static_cast<double>(i) * delta;
+    if (kdelta < sigma) {
       abartmp = vals[cover[i]];
       sigma -= kdelta;
     } else {
@@ -154,15 +154,16 @@ void HighsCutGeneration::separateLiftedKnapsackCover() {
     }
   }
 
-  if (double(sigma) > 0) abartmp = HighsCDouble(rhs) / double(coversize);
+  if (sigma > 0)
+    abartmp = static_cast<HighsCDouble>(rhs) / static_cast<double>(coversize);
 
-  double abar = double(abartmp);
+  double abar = static_cast<double>(abartmp);
 
   HighsCDouble sum = 0.0;
   HighsInt cplussize = 0;
   for (HighsInt i = 0; i != coversize; ++i) {
     sum += std::min(abar, vals[cover[i]]);
-    S[i] = double(sum);
+    S[i] = static_cast<double>(sum);
 
     if (vals[cover[i]] > abar + feastol) {
       ++cplussize;
@@ -170,7 +171,7 @@ void HighsCutGeneration::separateLiftedKnapsackCover() {
     } else
       coverflag[cover[i]] = -1;
   }
-  assert(std::abs(double(sum - rhs) / double(rhs)) <= 1e-14);
+  assert(std::abs(static_cast<double>((sum - rhs) / rhs)) <= 1e-14);
   bool halfintegral = false;
 
   /* define the lifting function */
@@ -240,18 +241,21 @@ bool HighsCutGeneration::separateLiftedMixedBinaryCover() {
       break;
     }
     sum += vals[cover[i]];
-    S[i] = double(sum);
+    S[i] = static_cast<double>(sum);
   }
   if (p == 0) return false;
   /* define the lifting function */
   auto phi = [&](double a) {
     for (HighsInt i = 0; i < p; ++i) {
-      if (a <= S[i] - lambda) return double(i * lambda);
+      if (a <= S[i] - lambda) return static_cast<double>(i * lambda);
 
-      if (a <= S[i]) return double((i + 1) * lambda + (HighsCDouble(a) - S[i]));
+      if (a <= S[i])
+        return static_cast<double>((i + 1) * lambda +
+                                   (static_cast<HighsCDouble>(a) - S[i]));
     }
 
-    return double(p * lambda + (HighsCDouble(a) - S[p - 1]));
+    return static_cast<double>(p * lambda +
+                               (static_cast<HighsCDouble>(a) - S[p - 1]));
   };
 
   rhs = -lambda;
@@ -268,7 +272,7 @@ bool HighsCutGeneration::separateLiftedMixedBinaryCover() {
     }
 
     if (coverflag[i]) {
-      vals[i] = std::min(vals[i], double(lambda));
+      vals[i] = std::min(vals[i], static_cast<double>(lambda));
       rhs += vals[i];
     } else {
       vals[i] = phi(vals[i]);
@@ -341,15 +345,16 @@ bool HighsCutGeneration::separateLiftedMixedIntegerCover() {
     if (mu <= 10 * feastol) continue;
     if (std::abs(vals[j]) < 1000 * feastol) continue;
 
-    double mudival = double(mu / vals[j]);
+    double mudival = static_cast<double>(mu / vals[j]);
     if (HighsIntegers::isIntegral(mudival, feastol)) continue;
     double eta = ceil(mudival);
 
-    HighsCDouble ulminusetaplusone = HighsCDouble(ub) - eta + 1.0;
+    HighsCDouble ulminusetaplusone = static_cast<HighsCDouble>(ub) - eta + 1.0;
     HighsCDouble cplusthreshold = ulminusetaplusone * vals[j];
 
     HighsInt cplusend =
-        std::upper_bound(cover.begin(), cover.end(), double(cplusthreshold),
+        std::upper_bound(cover.begin(), cover.end(),
+                         static_cast<double>(cplusthreshold),
                          [&](double cplusthreshold, HighsInt i) {
                            return cplusthreshold > vals[i];
                          }) -
@@ -358,7 +363,7 @@ bool HighsCutGeneration::separateLiftedMixedIntegerCover() {
     HighsCDouble mcplus = m[cplusend];
     if (i < cplusend) mcplus -= mju;
 
-    double jlVal = double(mcplus + eta * vals[j]);
+    double jlVal = static_cast<double>(mcplus + eta * vals[j]);
 
     if (jlVal > bestlVal || (!atUpper && bestlAtUpper)) {
       lpos = i;
@@ -396,14 +401,15 @@ bool HighsCutGeneration::separateLiftedMixedIntegerCover() {
 
   assert(mu > 10 * feastol);
 
-  double mudival = double(mu / al);
+  double mudival = static_cast<double>(mu / al);
   double eta = ceil(mudival);
-  HighsCDouble r = mu - floor(mudival) * HighsCDouble(al);
+  HighsCDouble r = mu - floor(mudival) * static_cast<HighsCDouble>(al);
   // we multiply with r and it is important that it does not flip the sign
   // so we safe guard against tiny numerical errors here
   if (r < 0) r = 0;
 
-  HighsCDouble ulminusetaplusone = HighsCDouble(upperl) - eta + 1.0;
+  HighsCDouble ulminusetaplusone =
+      static_cast<HighsCDouble>(upperl) - eta + 1.0;
   HighsCDouble cplusthreshold = ulminusetaplusone * al;
 
   HighsInt kmin = floor(eta - upperl - 0.5);
@@ -411,22 +417,22 @@ bool HighsCutGeneration::separateLiftedMixedIntegerCover() {
   auto phi_l = [&](double a) {
     assert(a < 0);
 
-    int64_t k = std::min(int64_t(a / double(al)), int64_t(-1));
+    int64_t k = std::min(int64_t(a / static_cast<double>(al)), int64_t(-1));
 
     for (; k >= kmin; --k) {
       if (a >= k * al + r) {
         assert(a < (k + 1) * al);
-        return double(a - (k + 1) * r);
+        return static_cast<double>(a - (k + 1) * r);
       }
 
       if (a >= k * al) {
         assert(a < k * al + r);
-        return double(k * (al - r));
+        return static_cast<double>(k * (al - r));
       }
     }
 
     assert(a <= -lambda + epsilon);
-    return double(kmin * (al - r));
+    return static_cast<double>(kmin * (al - r));
   };
 
   int64_t kmax = floor(upperl - eta + 0.5);
@@ -442,20 +448,24 @@ bool HighsCutGeneration::separateLiftedMixedIntegerCover() {
         HighsCDouble mihplusdeltai = mih + a[i] - cplusthreshold;
         if (z <= mihplusdeltai) {
           assert(mih <= z + epsilon);
-          return double(uih * ulminusetaplusone * (al - r));
+          return static_cast<double>(uih * ulminusetaplusone * (al - r));
         }
 
-        int64_t k = ((int64_t)(double)((z - mihplusdeltai) / al)) - 1;
+        int64_t k = static_cast<int64_t>(
+                        static_cast<double>((z - mihplusdeltai) / al)) -
+                    1;
         for (; k <= kmax; ++k) {
           if (z <= mihplusdeltai + k * al + r) {
             assert(mihplusdeltai + k * al <= z);
-            return double((uih * ulminusetaplusone + k) * (al - r));
+            return static_cast<double>((uih * ulminusetaplusone + k) *
+                                       (al - r));
           }
 
           if (z <= mihplusdeltai + (k + 1) * al) {
             assert(mihplusdeltai + k * al + r <= z);
-            return double((uih * ulminusetaplusone) * (al - r) + z - mih -
-                          a[i] + cplusthreshold - (k + 1) * r);
+            return static_cast<double>((uih * ulminusetaplusone) * (al - r) +
+                                       z - mih - a[i] + cplusthreshold -
+                                       (k + 1) * r);
           }
         }
       }
@@ -465,18 +475,20 @@ bool HighsCutGeneration::separateLiftedMixedIntegerCover() {
     for (;; ++p) {
       if (z <= m[cplussize] + p * al + r) {
         assert(m[cplussize] + p * al <= z);
-        return double((u[cplussize] * ulminusetaplusone + p) * (al - r));
+        return static_cast<double>((u[cplussize] * ulminusetaplusone + p) *
+                                   (al - r));
       }
 
       if (z <= m[cplussize] + (p + 1) * al) {
         assert(m[cplussize] + p * al + r <= z);
-        return double((u[cplussize] * ulminusetaplusone) * (al - r) + z -
-                      m[cplussize] - (p + 1) * r);
+        return static_cast<double>((u[cplussize] * ulminusetaplusone) *
+                                       (al - r) +
+                                   z - m[cplussize] - (p + 1) * r);
       }
     }
   };
 
-  rhs = (HighsCDouble(upperl) - eta) * r - lambda;
+  rhs = (static_cast<HighsCDouble>(upperl) - eta) * r - lambda;
   integralSupport = true;
   integralCoefficients = false;
   for (HighsInt i = 0; i != rowlen; ++i) {
@@ -502,8 +514,8 @@ bool HighsCutGeneration::separateLiftedMixedIntegerCover() {
 
 static double fast_floor(double x) { return (int64_t)x - (x < (int64_t)x); }
 
-bool HighsCutGeneration::cmirCutGenerationHeuristic(
-    const HighsCDouble& minEfficacy, bool onlyInitialCMIRScale) {
+bool HighsCutGeneration::cmirCutGenerationHeuristic(double minEfficacy,
+                                                    bool onlyInitialCMIRScale) {
   using std::abs;
   using std::floor;
   using std::max;
@@ -552,7 +564,7 @@ bool HighsCutGeneration::cmirCutGenerationHeuristic(
     double intScale = HighsIntegers::integralScale(deltas, feastol, kHighsTiny);
 
     if (intScale != 0.0 && intScale <= 1e4) {
-      double scalrhs = double(rhs) * intScale;
+      double scalrhs = static_cast<double>(rhs) * intScale;
       double downrhs = fast_floor(scalrhs);
 
       double f0 = scalrhs - downrhs;
@@ -579,7 +591,7 @@ bool HighsCutGeneration::cmirCutGenerationHeuristic(
 
   // initialize best delta and efficacy
   double bestdelta = -1;
-  HighsCDouble bestefficacy = minEfficacy;
+  double bestefficacy = minEfficacy;
 
   // lambda for computing the coefficient of an integer variable
   auto computeIntegralCoef = [&](double val, const HighsCDouble& f0,
@@ -601,7 +613,7 @@ bool HighsCutGeneration::cmirCutGenerationHeuristic(
   };
 
   // lambda for trying out a particular delta and/or complementation
-  auto isCutBetter = [&](double delta, HighsCDouble& efficacy) {
+  auto isCutBetter = [&](double delta, double& efficacy) {
     efficacy = -kHighsInf;
 
     HighsCDouble scale = 1.0 / static_cast<HighsCDouble>(delta);
@@ -615,20 +627,19 @@ bool HighsCutGeneration::cmirCutGenerationHeuristic(
     HighsCDouble viol = contscale * continuouscontribution - downrhs;
 
     for (HighsInt j : integerinds) {
-      updateViolationAndNorm(j,
-                             static_cast<double>(computeIntegralCoef(
-                                 vals[j], f0, oneoveroneminusf0, scale)),
-                             viol, sqrnorm);
+      updateViolationAndNorm(
+          j, computeIntegralCoef(vals[j], f0, oneoveroneminusf0, scale), viol,
+          sqrnorm);
     }
 
     if (sqrnorm == 0.0) return false;
 
-    efficacy = viol / sqrt(sqrnorm);
+    efficacy = static_cast<double>(viol / sqrt(sqrnorm));
     return efficacy > bestefficacy;
   };
 
   for (double delta : deltas) {
-    HighsCDouble efficacy;
+    double efficacy;
     if (isCutBetter(delta, efficacy)) {
       bestdelta = delta;
       bestefficacy = efficacy;
@@ -640,7 +651,7 @@ bool HighsCutGeneration::cmirCutGenerationHeuristic(
   /* try if multiplying best delta by 2 4 or 8 gives a better efficacy */
   for (HighsInt k = 1; !onlyInitialCMIRScale && k <= 3; ++k) {
     double delta = bestdelta * (1 << k);
-    HighsCDouble efficacy;
+    double efficacy;
 
     if (isCutBetter(delta, efficacy)) {
       bestdelta = delta;
@@ -657,7 +668,7 @@ bool HighsCutGeneration::cmirCutGenerationHeuristic(
 
     flipComplementation(k);
 
-    HighsCDouble efficacy;
+    double efficacy;
 
     if (isCutBetter(bestdelta, efficacy)) {
       bestefficacy = efficacy;
@@ -699,7 +710,7 @@ bool HighsCutGeneration::cmirCutGenerationHeuristic(
       updateViolationAndNorm(j, vals[j], checkviol, checknorm);
     }
     assert(checknorm != 0.0);
-    HighsCDouble checkefficacy = checkviol / sqrt(checknorm);
+    double checkefficacy = static_cast<double>(checkviol / sqrt(checknorm));
     assert(abs(checkefficacy - bestefficacy) < 0.001);
   }
 #endif
@@ -815,9 +826,10 @@ bool HighsCutGeneration::postprocessCut() {
       rhs *= intscale;
       maxAbsValue = HighsIntegers::nearestInteger(maxAbsValue * intscale);
       for (HighsInt i = 0; i != rowlen; ++i) {
-        HighsCDouble scaleval = intscale * HighsCDouble(vals[i]);
-        double intval = HighsIntegers::nearestInteger(double(scaleval));
-        double delta = double(scaleval - intval);
+        HighsCDouble scaleval = intscale * static_cast<HighsCDouble>(vals[i]);
+        double intval =
+            HighsIntegers::nearestInteger(static_cast<double>(scaleval));
+        double delta = static_cast<double>(scaleval - intval);
 
         vals[i] = intval;
 
@@ -1026,7 +1038,7 @@ static void checkNumerics(const double* vals, HighsInt len, double rhs) {
     minAbsCoef = std::min(std::abs(vals[i]), minAbsCoef);
   }
 
-  double norm = double(sqrt(sqrnorm));
+  double norm = static_cast<double>(sqrt(sqrnorm));
 
   // printf("length: %" HIGHSINT_FORMAT
   //       ", minCoef: %g, maxCoef, %g, norm %g, rhs: %g, dynamism=%g\n",
@@ -1057,12 +1069,12 @@ bool HighsCutGeneration::generateCut(HighsTransformedLp& transLp,
     bool hasGeneralInts = false;
     bool hasContinuous = false;
     // printf("before preprocessing of base inequality:\n");
-    checkNumerics(vals, rowlen, double(rhs));
+    checkNumerics(vals, rowlen, static_cast<double>(rhs));
     if (!preprocessBaseInequality(hasUnboundedInts, hasGeneralInts,
                                   hasContinuous))
       return false;
     // printf("after preprocessing of base inequality:\n");
-    checkNumerics(vals, rowlen, double(rhs));
+    checkNumerics(vals, rowlen, static_cast<double>(rhs));
 
     tmprhs_ = (double)rhs;
     valsCheck_.resize(rowlen);
@@ -1070,7 +1082,7 @@ bool HighsCutGeneration::generateCut(HighsTransformedLp& transLp,
     if (!transLp.untransform(valsCheck_, indsCheck_, tmprhs_)) return false;
 
     // printf("after untransform of base inequality:\n");
-    checkNumerics(vals, rowlen, double(rhs));
+    checkNumerics(vals, rowlen, static_cast<double>(rhs));
 
     // finally check whether the cut is violated
     rowlen = indsCheck_.size();
@@ -1220,7 +1232,7 @@ bool HighsCutGeneration::generateConflict(HighsDomain& localdomain,
   }
 
   if (activity > rhs) {
-    double solScale = double(rhs) / activity;
+    double solScale = static_cast<double>(rhs / activity);
     for (HighsInt i = 0; i != rowlen; ++i) solval[i] *= solScale;
   }
 
@@ -1347,19 +1359,17 @@ void HighsCutGeneration::removeComplementation() {
   }
 }
 
-void HighsCutGeneration::updateViolationAndNorm(HighsInt index, double aj,
+template <typename T>
+void HighsCutGeneration::updateViolationAndNorm(HighsInt index, T aj,
                                                 HighsCDouble& violation,
                                                 HighsCDouble& norm) const {
-  // use quad precision
-  const HighsCDouble quad_aj = static_cast<HighsCDouble>(aj);
-
   // update violation
-  violation += quad_aj * solval[index];
+  violation += static_cast<HighsCDouble>(aj) * solval[index];
 
   // update norm
-  if (quad_aj > 0 && solval[index] <= feastol) return;
-  if (quad_aj < 0 && solval[index] >= upper[index] - feastol) return;
-  norm += quad_aj * quad_aj;
+  if (aj > 0 && solval[index] <= feastol) return;
+  if (aj < 0 && solval[index] >= upper[index] - feastol) return;
+  norm += static_cast<HighsCDouble>(aj) * static_cast<HighsCDouble>(aj);
 }
 
 bool HighsCutGeneration::tryGenerateCut(std::vector<HighsInt>& inds_,
@@ -1405,7 +1415,7 @@ bool HighsCutGeneration::tryGenerateCut(std::vector<HighsInt>& inds_,
     }
   } while (false);
 
-  HighsCDouble minMirEfficacy = minEfficacy;
+  double minMirEfficacy = minEfficacy;
   if (success) {
     // save data that might otherwise be overwritten when calling the cmir
     // separator
@@ -1420,7 +1430,7 @@ bool HighsCutGeneration::tryGenerateCut(std::vector<HighsInt>& inds_,
     }
 
     // compute efficacy (distance cut off)
-    HighsCDouble efficacy = violation / sqrt(sqrnorm);
+    double efficacy = static_cast<double>(violation / sqrt(sqrnorm));
     if (allowRejectCut && efficacy <= minEfficacy) {
       // reject cut
       success = false;
