@@ -3837,26 +3837,26 @@ HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
 
       if (!isRowRedundant(row)) {
         if (model->row_lower_[row] == -kHighsInf) {
+          // <= constraint: try to strengthen coefficients
+          // max. absolute coefficient should be non-negative; otherwise, the
+          // row would be redundant.
           double maxAbsCoefValue =
               impliedRowBounds.getSumUpper(row, -model->row_upper_[row]);
           if (maxAbsCoefValue != kHighsInf) {
-            // <= constraint: try to strengthen coefficients
             HighsCDouble rhs = model->row_upper_[row];
-            // max. absolute coefficient should be non-negative; otherwise, the
-            // row would be redundant.
             strengthenCoefs(rhs, HighsInt{1}, maxAbsCoefValue);
             model->row_upper_[row] = static_cast<double>(rhs);
           }
         }
 
         if (model->row_upper_[row] == kHighsInf) {
+          // >= constraint: try to strengthen coefficients
+          // max. absolute coefficient should be non-negative; otherwise, the
+          // row would be redundant.
           double maxAbsCoefValue =
               -impliedRowBounds.getSumLower(row, -model->row_lower_[row]);
           if (maxAbsCoefValue != kHighsInf) {
-            // >= constraint: try to strengthen coefficients
             HighsCDouble rhs = model->row_lower_[row];
-            // max. absolute coefficient should be non-negative; otherwise, the
-            // row would be redundant.
             strengthenCoefs(rhs, HighsInt{-1}, maxAbsCoefValue);
             model->row_lower_[row] = static_cast<double>(rhs);
           }
