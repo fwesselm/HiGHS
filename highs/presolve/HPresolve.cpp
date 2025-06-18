@@ -122,6 +122,8 @@ bool HPresolve::okSetInput(HighsLp& model_, const HighsOptions& options_,
   if (!okResize(changedColFlag, model->num_col_, uint8_t{1})) return false;
   if (!okResize(colDeleted, model->num_col_)) return false;
   if (!okReserve(changedColIndices, model->num_col_)) return false;
+  if (!okReserve(singletonRows, model->num_row_)) return false;
+  if (!okReserve(singletonColumns, model->num_col_)) return false;
   if (!okReserve(liftingOpportunities, model->num_row_)) return false;
   numDeletedCols = 0;
   numDeletedRows = 0;
@@ -5339,24 +5341,37 @@ void HPresolve::removeFixedCol(HighsInt col) {
 
 HPresolve::Result HPresolve::removeRowSingletons(
     HighsPostsolveStack& postsolve_stack) {
-  for (HighsInt row : singletonRows) {
+  std::vector<HighsInt> singletons;
+  singletons.reserve(model->num_row_ - numDeletedRows);
+  singletons.swap(singletonRows);
+
+  for (HighsInt row : singletons) {
     if (rowDeleted[row] || rowsize[row] > 1) continue;
     // row presolve will delegate to rowSingleton() if the row size is 1
     // if the singleton row has become empty it will also remove the row
     HPRESOLVE_CHECKED_CALL(rowPresolve(postsolve_stack, row));
   }
 
-  singletonRows.clear();
+  singletonRows.erase(
+      std::remove_if(
+          singletonRows.begin(), singletonRows.end(),
+          [&](HighsInt row) { return rowDeleted[row] || rowsize[row] > 1; }),
+      singletonRows.end());
 
   return Result::kOk;
 }
 
 HPresolve::Result HPresolve::presolveColSingletons(
     HighsPostsolveStack& postsolve_stack) {
-  for (HighsInt col : singletonColumns) {
-    if (colDeleted[col]) continue;
+  std::vector<HighsInt> singletons;
+  singletons.reserve(model->num_col_ - numDeletedCols);
+  singletons.swap(singletonColumns);
+
+  for (HighsInt col : singletons) {
+    if (colDeleted[col] || colsize[col] > 1) continue;
     HPRESOLVE_CHECKED_CALL(colPresolve(postsolve_stack, col));
   }
+
   singletonColumns.erase(
       std::remove_if(
           singletonColumns.begin(), singletonColumns.end(),
@@ -6644,22 +6659,26 @@ HPresolve::Result HPresolve::sparsify(HighsPostsolveStack& postsolve_stack) {
 
     storeRow(eqrow);
 
-    HighsInt secondSparsestColumn = -1;
     HighsInt sparsestCol = -1;
+    HighsInt secondSparsestCol = -1;
     HighsInt sparsestColLen = kHighsIInf;
+    HighsInt secondSparsestColLen = kHighsIInf;
     for (HighsInt nzPos : rowpositions) {
       HighsInt col = Acol[nzPos];
       if (colsize[col] < sparsestColLen) {
+        secondSparsestCol = sparsestCol;
+        secondSparsestColLen = sparsestColLen;
         sparsestColLen = colsize[col];
-        secondSparsestColumn = sparsestCol;
         sparsestCol = col;
+      } else if (colsize[col] < secondSparsestColLen) {
+        secondSparsestColLen = colsize[col];
+        secondSparsestCol = col;
       }
     }
 
-    if (colsize[secondSparsestColumn] < colsize[sparsestCol])
-      std::swap(sparsestCol, secondSparsestColumn);
+    assert(sparsestCol != -1 && secondSparsestCol != -1);
 
-    assert(sparsestCol != -1 && secondSparsestColumn != -1);
+    assert(colsize[sparsestCol] <= colsize[secondSparsestCol]);
 
     std::map<double, HighsInt> possibleScales;
     sparsifyRows.clear();
@@ -6755,7 +6774,7 @@ HPresolve::Result HPresolve::sparsify(HighsPostsolveStack& postsolve_stack) {
       // now check for rows which do not contain the sparsest column but all
       // other columns by scanning the second sparsest column
       for (const HighsSliceNonzero& colNz :
-           getColumnVector(secondSparsestColumn)) {
+           getColumnVector(secondSparsestCol)) {
         HighsInt candRow = colNz.index();
         if (candRow == eqrow) continue;
 
@@ -6772,7 +6791,7 @@ HPresolve::Result HPresolve::sparsify(HighsPostsolveStack& postsolve_stack) {
         bool skip = false;
         for (const HighsSliceNonzero& nonzero : getStoredRow()) {
           double candRowVal;
-          if (nonzero.index() == secondSparsestColumn) {
+          if (nonzero.index() == secondSparsestCol) {
             candRowVal = colNz.value();
           } else {
             HighsInt nzPos = findNonzero(candRow, nonzero.index());
