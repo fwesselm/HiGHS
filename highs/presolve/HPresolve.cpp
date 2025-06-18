@@ -6645,7 +6645,7 @@ HPresolve::Result HPresolve::sparsify(HighsPostsolveStack& postsolve_stack) {
     storeRow(eqrow);
 
     HighsInt secondSparsestColumn = -1;
-    HighsInt sparsestCol = Acol[rowpositions[0]];
+    HighsInt sparsestCol = -1;
     HighsInt sparsestColLen = kHighsIInf;
     for (HighsInt nzPos : rowpositions) {
       HighsInt col = Acol[nzPos];
