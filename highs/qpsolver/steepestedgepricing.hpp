@@ -20,9 +20,8 @@ class SteepestEdgePricing : public Pricing {
 
     HighsInt minidx = -1;
     double maxval = 0.0;
-    for (size_t i = 0; i < active_constraint_index.size(); i++) {
-      HighsInt indexinbasis =
-          constraintindexinbasisfactor[active_constraint_index[i]];
+    for (HighsInt idx : active_constraint_index) {
+      HighsInt indexinbasis = constraintindexinbasisfactor[idx];
       if (indexinbasis == -1) {
         printf("error\n");
       }
@@ -32,15 +31,13 @@ class SteepestEdgePricing : public Pricing {
                    weights[indexinbasis];
       if (val > maxval && fabs(lambda.value[indexinbasis]) >
                               runtime.settings.lambda_zero_threshold) {
-        if (basis.getstatus(active_constraint_index[i]) ==
-                BasisStatus::kActiveAtLower &&
+        if (basis.getstatus(idx) == BasisStatus::kActiveAtLower &&
             -lambda.value[indexinbasis] > 0) {
-          minidx = active_constraint_index[i];
+          minidx = idx;
           maxval = val;
-        } else if (basis.getstatus(active_constraint_index[i]) ==
-                       BasisStatus::kActiveAtUpper &&
+        } else if (basis.getstatus(idx) == BasisStatus::kActiveAtUpper &&
                    lambda.value[indexinbasis] > 0) {
-          minidx = active_constraint_index[i];
+          minidx = idx;
           maxval = val;
         } else {
           // TODO

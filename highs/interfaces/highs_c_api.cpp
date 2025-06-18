@@ -527,42 +527,32 @@ HighsInt Highs_getSolution(const void* highs, double* col_value,
                            double* row_dual) {
   const HighsSolution& solution = ((Highs*)highs)->getSolution();
 
-  if (col_value != nullptr) {
-    for (size_t i = 0; i < solution.col_value.size(); i++) {
-      col_value[i] = solution.col_value[i];
-    }
-  }
+  if (col_value != nullptr)
+    std::copy(solution.col_value.cbegin(), solution.col_value.cend(),
+              col_value);
 
-  if (col_dual != nullptr) {
-    for (size_t i = 0; i < solution.col_dual.size(); i++) {
-      col_dual[i] = solution.col_dual[i];
-    }
-  }
+  if (col_dual != nullptr)
+    std::copy(solution.col_dual.cbegin(), solution.col_dual.cend(), col_dual);
 
-  if (row_value != nullptr) {
-    for (size_t i = 0; i < solution.row_value.size(); i++) {
-      row_value[i] = solution.row_value[i];
-    }
-  }
+  if (row_value != nullptr)
+    std::copy(solution.row_value.cbegin(), solution.row_value.cend(),
+              row_value);
 
-  if (row_dual != nullptr) {
-    for (size_t i = 0; i < solution.row_dual.size(); i++) {
-      row_dual[i] = solution.row_dual[i];
-    }
-  }
+  if (row_dual != nullptr)
+    std::copy(solution.row_dual.cbegin(), solution.row_dual.cend(), row_dual);
+
   return kHighsStatusOk;
 }
 
 HighsInt Highs_getBasis(const void* highs, HighsInt* col_status,
                         HighsInt* row_status) {
   const HighsBasis& basis = ((Highs*)highs)->getBasis();
-  for (size_t i = 0; i < basis.col_status.size(); i++) {
-    col_status[i] = static_cast<HighsInt>(basis.col_status[i]);
-  }
 
-  for (size_t i = 0; i < basis.row_status.size(); i++) {
-    row_status[i] = static_cast<HighsInt>(basis.row_status[i]);
-  }
+  std::transform(basis.col_status.cbegin(), basis.col_status.cend(), col_status,
+                 [](HighsBasisStatus s) { return static_cast<HighsInt>(s); });
+  std::transform(basis.row_status.cbegin(), basis.row_status.cend(), row_status,
+                 [](HighsBasisStatus s) { return static_cast<HighsInt>(s); });
+
   return kHighsStatusOk;
 }
 
