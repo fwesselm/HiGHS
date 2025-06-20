@@ -6668,16 +6668,15 @@ HPresolve::Result HPresolve::sparsify(HighsPostsolveStack& postsolve_stack) {
       if (colsize[col] < sparsestColLen) {
         secondSparsestCol = sparsestCol;
         secondSparsestColLen = sparsestColLen;
-        sparsestColLen = colsize[col];
         sparsestCol = col;
+        sparsestColLen = colsize[col];
       } else if (colsize[col] < secondSparsestColLen) {
-        secondSparsestColLen = colsize[col];
         secondSparsestCol = col;
+        secondSparsestColLen = colsize[col];
       }
     }
 
     assert(sparsestCol != -1 && secondSparsestCol != -1);
-
     assert(colsize[sparsestCol] <= colsize[secondSparsestCol]);
 
     std::map<double, HighsInt> possibleScales;
@@ -6726,7 +6725,7 @@ HPresolve::Result HPresolve::sparsify(HighsPostsolveStack& postsolve_stack) {
         auto it = possibleScales.lower_bound(scale - scaleTolerance);
         if (it != possibleScales.end() &&
             std::abs(it->first - scale) <= scaleTolerance) {
-          // there already is a scale that is very close and could produces
+          // there already is a scale that is very close and could produce
           // a matrix value for this nonzero that is below the allowed
           // threshold. Therefore we check if the matrix value is small enough
           // for this nonzero to be deleted, in which case the number of
@@ -6810,7 +6809,7 @@ HPresolve::Result HPresolve::sparsify(HighsPostsolveStack& postsolve_stack) {
           auto it = possibleScales.lower_bound(scale - scaleTolerance);
           if (it != possibleScales.end() &&
               std::abs(it->first - scale) <= scaleTolerance) {
-            // there already is a scale that is very close and could produces
+            // there already is a scale that is very close and could produce
             // a matrix value for this nonzero that is below the allowed
             // threshold. Therefore we check if the matrix value is small enough
             // for this nonzero to be deleted, in which case the number of
