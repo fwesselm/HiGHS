@@ -26,6 +26,7 @@ if(NOT FAST_BUILD)
   if(${BUILD_SHARED_LIBS})
     # put version information into shared library file
     set_target_properties(libhighs PROPERTIES
+      PDB_NAME libhighs	
       VERSION
       ${HIGHS_VERSION_MAJOR}.${HIGHS_VERSION_MINOR}.${HIGHS_VERSION_PATCH}
       SOVERSION ${HIGHS_VERSION_MAJOR}.${HIGHS_VERSION_MINOR})
@@ -135,6 +136,7 @@ else()
   if(${BUILD_SHARED_LIBS})
     # put version information into shared library file
     set_target_properties(highs PROPERTIES
+      PDB_NAME libhighs	
       VERSION
       ${HIGHS_VERSION_MAJOR}.${HIGHS_VERSION_MINOR}.${HIGHS_VERSION_PATCH}
       SOVERSION ${HIGHS_VERSION_MAJOR}.${HIGHS_VERSION_MINOR})
@@ -264,6 +266,23 @@ else()
   check_cxx_compiler_flag("-Wno-invalid-offsetof" COMPILER_SUPPORTS_INVALID_OFFSET)
   if(COMPILER_SUPPORTS_INVALID_OFFSET)
       target_compile_options(highs PUBLIC "$<$<COMPILE_LANGUAGE:CXX>:-Wno-invalid-offsetof>")
+  endif()
+
+  if (MSVC)
+    # Generate PDB files in Release mode
+    set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /Zi /Od /Ob0 /Oy-")
+    # Ensure the PDB files are placed in the correct directory
+    set(CMAKE_PDB_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/pdb_files")
+
+    # Add linker flags to include debug info in the PDB files for Release mode
+    # This ensures that the debug information is not stripped from the binary
+    set(CMAKE_EXE_LINKER_FLAGS_RELEASE "${CMAKE_EXE_LINKER_FLAGS_RELEASE} /DEBUG /OPT:REF /OPT:ICF")
+    set(CMAKE_SHARED_LINKER_FLAGS_RELEASE "${CMAKE_SHARED_LINKER_FLAGS_RELEASE} /DEBUG /OPT:REF /OPT:ICF")
+    set(CMAKE_STATIC_LINKER_FLAGS_RELEASE "${CMAKE_STATIC_LINKER_FLAGS_RELEASE} /DEBUG /OPT:REF /OPT:ICF")
+
+    # Turn off optimization in Release mode
+    # Note: This is not generally recommended as it negates the benefits of a Release build
+    string(REPLACE "/O2" "/Od" CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}")
   endif()
 
   if (BUILD_DOTNET)
