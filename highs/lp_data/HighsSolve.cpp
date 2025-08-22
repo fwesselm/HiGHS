@@ -399,6 +399,30 @@ void assessExcessiveBoundCost(const HighsLogOptions log_options,
     highsLogUser(log_options, HighsLogType::kInfo, "  RHS    [%5.0e, %5.0e]\n",
                  min_finite_row_bound, max_finite_row_bound);
 
+  auto logMessage = [&](std::string vector, HighsInt direction,
+                        bool suggest_option_change, std::string option_name,
+                        HighsInt user_scale, HighsInt suggested_scale,
+                        HighsInt suggested_scale_exponent) {
+    std::string large_or_small = direction > 0 ? "large" : "small";
+    std::string more_or_less = direction > 0 ? "less" : "more";
+    std::string message = "%s has excessively " + large_or_small + " " +
+                          vector + ": consider scaling the " + vector +
+                          " by 1e%+1d or " + more_or_less;
+    if (suggest_option_change) {
+      highsLogUser(log_options, HighsLogType::kWarning,
+                   message.append("\n").c_str(),
+                   user_scale ? "User-scaled problem" : "Problem",
+                   static_cast<int>(suggested_scale_exponent));
+    } else {
+      message.append(", or setting option " + option_name + " to %d or " +
+                     more_or_less + "\n");
+      highsLogUser(log_options, HighsLogType::kWarning, message.c_str(),
+                   user_scale ? "User-scaled problem" : "Problem",
+                   static_cast<int>(suggested_scale_exponent),
+                   static_cast<int>(suggested_scale));
+    }
+  };
+
   // LPs with no columns or no finite nonzero costs will have
   // max_finite_col_cost = 0
   assert(max_finite_col_cost >= 0);
@@ -409,13 +433,9 @@ void assessExcessiveBoundCost(const HighsLogOptions log_options,
                    (max_finite_col_cost / user_cost_scale_value);
     HighsInt suggested_user_cost_scale_setting = std::floor(std::log2(ratio));
     HighsInt suggested_cost_scale_exponent = std::floor(std::log10(ratio));
-    highsLogUser(
-        log_options, HighsLogType::kWarning,
-        "%s has excessively large costs: consider scaling the costs "
-        "by 1e%+1d or less, or setting option user_cost_scale to %d or less\n",
-        lp.user_cost_scale_ ? "User-scaled problem" : "Problem",
-        int(-suggested_cost_scale_exponent),
-        int(suggested_user_cost_scale_setting));
+    logMessage("costs", HighsInt{1}, true, "user_cost_scale",
+               lp.user_cost_scale_, suggested_user_cost_scale_setting,
+               -suggested_cost_scale_exponent);
   }
   // LPs with no columns or no finite nonzero bounds will have
   // max_finite_col_bound = 0
@@ -427,21 +447,9 @@ void assessExcessiveBoundCost(const HighsLogOptions log_options,
                    (max_finite_col_bound / user_bound_scale_value);
     HighsInt suggested_user_bound_scale = std::floor(std::log2(ratio));
     HighsInt suggested_bound_scale_exponent = std::floor(std::log10(ratio));
-    if (lp.isMip()) {
-      highsLogUser(log_options, HighsLogType::kWarning,
-                   "%s has excessively large column bounds: consider scaling "
-                   "the column bounds by 1e%+1d or less\n",
-                   lp.user_bound_scale_ ? "User-scaled problem" : "Problem",
-                   int(-suggested_bound_scale_exponent));
-    } else {
-      highsLogUser(log_options, HighsLogType::kWarning,
-                   "%s has excessively large column bounds: consider scaling "
-                   "the column bounds by 1e%+1d or less, or setting option "
-                   "user_bound_scale to %d or less\n",
-                   lp.user_bound_scale_ ? "User-scaled problem" : "Problem",
-                   int(-suggested_bound_scale_exponent),
-                   int(suggested_user_bound_scale));
-    }
+    logMessage("column bounds", HighsInt{1}, lp.isMip(), "user_bound_scale",
+               lp.user_bound_scale_, suggested_user_bound_scale,
+               -suggested_bound_scale_exponent);
   }
   // LPs with no rows or no finite nonzero bounds will have
   // max_finite_row_bound = 0
@@ -453,21 +461,9 @@ void assessExcessiveBoundCost(const HighsLogOptions log_options,
                    (max_finite_row_bound / user_bound_scale_value);
     HighsInt suggested_user_bound_scale = std::floor(std::log2(ratio));
     HighsInt suggested_bound_scale_exponent = std::floor(std::log10(ratio));
-    if (lp.isMip()) {
-      highsLogUser(log_options, HighsLogType::kWarning,
-                   "%s has excessively large row bounds: consider scaling the "
-                   "row bounds by 1e%+1d or less\n",
-                   lp.user_bound_scale_ ? "User-scaled problem" : "Problem",
-                   int(-suggested_bound_scale_exponent));
-    } else {
-      highsLogUser(log_options, HighsLogType::kWarning,
-                   "%s has excessively large row bounds: consider scaling the "
-                   "row bounds by 1e%+1d or less, or setting option "
-                   "user_bound_scale to %d or less\n",
-                   lp.user_bound_scale_ ? "User-scaled problem" : "Problem",
-                   int(-suggested_bound_scale_exponent),
-                   int(suggested_user_bound_scale));
-    }
+    logMessage("row bounds", HighsInt{1}, lp.isMip(), "user_bound_scale",
+               lp.user_bound_scale_, suggested_user_bound_scale,
+               -suggested_bound_scale_exponent);
   }
   // Now consider warning relating to small maximum costs and bounds
   if (max_finite_col_cost > 0 &&
@@ -478,13 +474,9 @@ void assessExcessiveBoundCost(const HighsLogOptions log_options,
                    (max_finite_col_cost / user_cost_scale_value);
     HighsInt suggested_user_cost_scale_setting = std::ceil(std::log2(ratio));
     HighsInt suggested_cost_scale_exponent = std::ceil(std::log10(ratio));
-    highsLogUser(
-        log_options, HighsLogType::kWarning,
-        "%s has excessively small costs: consider scaling the costs up "
-        "by 1e%+1d or more, or setting option user_cost_scale to %d or more\n",
-        lp.user_cost_scale_ ? "User-scaled problem" : "Problem",
-        int(suggested_cost_scale_exponent),
-        int(suggested_user_cost_scale_setting));
+    logMessage("costs", HighsInt{-1}, true, "user_cost_scale",
+               lp.user_cost_scale_, suggested_user_cost_scale_setting,
+               suggested_cost_scale_exponent);
   }
   if (max_finite_col_bound > 0 &&
       max_finite_col_bound < kExcessivelySmallBoundValue) {
@@ -494,21 +486,9 @@ void assessExcessiveBoundCost(const HighsLogOptions log_options,
                    (max_finite_col_bound / user_bound_scale_value);
     HighsInt suggested_user_bound_scale = std::ceil(std::log2(ratio));
     HighsInt suggested_bound_scale_exponent = std::ceil(std::log10(ratio));
-    if (lp.isMip()) {
-      highsLogUser(log_options, HighsLogType::kWarning,
-                   "%s has excessively small column bounds: consider scaling "
-                   "the column bounds by 1e%+1d or more\n",
-                   lp.user_bound_scale_ ? "User-scaled problem" : "Problem",
-                   int(suggested_bound_scale_exponent));
-    } else {
-      highsLogUser(log_options, HighsLogType::kWarning,
-                   "%s has excessively small column bounds: consider scaling "
-                   "the column bounds by 1e%+1d or more, "
-                   "or setting option user_bound_scale to %d or more\n",
-                   lp.user_bound_scale_ ? "User-scaled problem" : "Problem",
-                   int(suggested_bound_scale_exponent),
-                   int(suggested_user_bound_scale));
-    }
+    logMessage("column bounds", HighsInt{-1}, lp.isMip(), "user_bound_scale",
+               lp.user_bound_scale_, suggested_user_bound_scale,
+               suggested_bound_scale_exponent);
   }
   if (max_finite_row_bound > 0 &&
       max_finite_row_bound < kExcessivelySmallBoundValue) {
@@ -518,20 +498,8 @@ void assessExcessiveBoundCost(const HighsLogOptions log_options,
                    (max_finite_row_bound / user_bound_scale_value);
     HighsInt suggested_user_bound_scale = std::ceil(std::log2(ratio));
     HighsInt suggested_bound_scale_exponent = std::ceil(std::log10(ratio));
-    if (lp.isMip()) {
-      highsLogUser(log_options, HighsLogType::kWarning,
-                   "%s has excessively small row bounds: consider scaling the "
-                   "row bounds by 1e%+1d or more\n",
-                   lp.user_bound_scale_ ? "User-scaled problem" : "Problem",
-                   int(suggested_bound_scale_exponent));
-    } else {
-      highsLogUser(log_options, HighsLogType::kWarning,
-                   "%s has excessively small row bounds: consider scaling the "
-                   "row bounds by 1e%+1d or more, "
-                   "or setting option user_bound_scale to %d or more\n",
-                   lp.user_bound_scale_ ? "User-scaled problem" : "Problem",
-                   int(suggested_bound_scale_exponent),
-                   int(suggested_user_bound_scale));
-    }
+    logMessage("row bounds", HighsInt{-1}, lp.isMip(), "user_bound_scale",
+               lp.user_bound_scale_, suggested_user_bound_scale,
+               suggested_bound_scale_exponent);
   }
 }
