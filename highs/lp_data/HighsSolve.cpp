@@ -405,20 +405,20 @@ void assessExcessiveBoundCost(const HighsLogOptions log_options,
                         HighsInt suggested_scale_exponent) {
     std::string large_or_small = direction > 0 ? "large" : "small";
     std::string more_or_less = direction > 0 ? "less" : "more";
+    int exponent = static_cast<int>(direction > 0 ? -suggested_scale_exponent
+                                                  : suggested_scale_exponent);
     std::string message = "%s has excessively " + large_or_small + " " +
                           vector + ": consider scaling the " + vector +
                           " by 1e%+1d or " + more_or_less;
     if (suggest_option_change) {
       highsLogUser(log_options, HighsLogType::kWarning,
                    message.append("\n").c_str(),
-                   user_scale ? "User-scaled problem" : "Problem",
-                   static_cast<int>(suggested_scale_exponent));
+                   user_scale ? "User-scaled problem" : "Problem", exponent);
     } else {
       message.append(", or setting option " + option_name + " to %d or " +
                      more_or_less + "\n");
       highsLogUser(log_options, HighsLogType::kWarning, message.c_str(),
-                   user_scale ? "User-scaled problem" : "Problem",
-                   static_cast<int>(suggested_scale_exponent),
+                   user_scale ? "User-scaled problem" : "Problem", exponent,
                    static_cast<int>(suggested_scale));
     }
   };
@@ -435,7 +435,7 @@ void assessExcessiveBoundCost(const HighsLogOptions log_options,
     HighsInt suggested_cost_scale_exponent = std::floor(std::log10(ratio));
     logMessage("costs", HighsInt{1}, true, "user_cost_scale",
                lp.user_cost_scale_, suggested_user_cost_scale_setting,
-               -suggested_cost_scale_exponent);
+               suggested_cost_scale_exponent);
   }
   // LPs with no columns or no finite nonzero bounds will have
   // max_finite_col_bound = 0
@@ -449,7 +449,7 @@ void assessExcessiveBoundCost(const HighsLogOptions log_options,
     HighsInt suggested_bound_scale_exponent = std::floor(std::log10(ratio));
     logMessage("column bounds", HighsInt{1}, lp.isMip(), "user_bound_scale",
                lp.user_bound_scale_, suggested_user_bound_scale,
-               -suggested_bound_scale_exponent);
+               suggested_bound_scale_exponent);
   }
   // LPs with no rows or no finite nonzero bounds will have
   // max_finite_row_bound = 0
@@ -463,7 +463,7 @@ void assessExcessiveBoundCost(const HighsLogOptions log_options,
     HighsInt suggested_bound_scale_exponent = std::floor(std::log10(ratio));
     logMessage("row bounds", HighsInt{1}, lp.isMip(), "user_bound_scale",
                lp.user_bound_scale_, suggested_user_bound_scale,
-               -suggested_bound_scale_exponent);
+               suggested_bound_scale_exponent);
   }
   // Now consider warning relating to small maximum costs and bounds
   if (max_finite_col_cost > 0 &&
