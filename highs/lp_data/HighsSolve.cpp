@@ -407,21 +407,20 @@ void assessExcessiveBoundCost(const HighsLogOptions log_options,
     std::string more_or_less = direction > 0 ? "less" : "more";
     int exponent = static_cast<int>(direction > 0 ? -suggested_scale_exponent
                                                   : suggested_scale_exponent);
-    std::string message = "%s has excessively " + large_or_small + " " +
-                          vector + ": consider scaling the " + vector +
-                          " by 1e%+1d or " + more_or_less;
+    std::string message = user_scale ? "User-scaled problem" : "Problem";
+    message.append(" has excessively " + large_or_small + " " + vector +
+                   ": consider scaling the " + vector + " by 1e%+1d or " +
+                   more_or_less);
     if (!suggest_option_change) {
       highsLogUser(log_options, HighsLogType::kWarning,
-                   message.append("\n").c_str(),
-                   user_scale ? "User-scaled problem" : "Problem", exponent);
+                   message.append("\n").c_str(), exponent);
     } else {
       highsLogUser(log_options, HighsLogType::kWarning,
                    message
                        .append(", or setting option " + option_name +
                                " to %d or " + more_or_less + "\n")
                        .c_str(),
-                   user_scale ? "User-scaled problem" : "Problem", exponent,
-                   static_cast<int>(suggested_scale));
+                   exponent, static_cast<int>(suggested_scale));
     }
   };
 
