@@ -415,9 +415,11 @@ void assessExcessiveBoundCost(const HighsLogOptions log_options,
                    message.append("\n").c_str(),
                    user_scale ? "User-scaled problem" : "Problem", exponent);
     } else {
-      message.append(", or setting option " + option_name + " to %d or " +
-                     more_or_less + "\n");
-      highsLogUser(log_options, HighsLogType::kWarning, message.c_str(),
+      highsLogUser(log_options, HighsLogType::kWarning,
+                   message
+                       .append(", or setting option " + option_name +
+                               " to %d or " + more_or_less + "\n")
+                       .c_str(),
                    user_scale ? "User-scaled problem" : "Problem", exponent,
                    static_cast<int>(suggested_scale));
     }
