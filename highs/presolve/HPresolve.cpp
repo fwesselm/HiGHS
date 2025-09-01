@@ -1130,6 +1130,9 @@ HPresolve::Result HPresolve::dominatedColumns(
     bool upperImplied = isUpperImplied(j);
     bool lowerImplied = isLowerImplied(j);
     bool colIsBinary = isBinary(j);
+    bool colIsBoundedInteger =
+        model->integrality_[j] != HighsVarType::kContinuous &&
+        model->col_lower_[j] != -kHighsInf && model->col_upper_[j] != kHighsInf;
     bool hasPosCliques =
         colIsBinary && mipsolver->mipdata_->cliquetable.numCliques(j, 1) > 0;
     bool hasNegCliques =
@@ -1151,14 +1154,14 @@ HPresolve::Result HPresolve::dominatedColumns(
     double worstCaseLb = -kHighsInf;
     double worstCaseUb = kHighsInf;
 
-    bool checkPosRow = upperImplied || colIsBinary;
-    bool checkNegRow = lowerImplied || colIsBinary;
+    bool checkPosRow = upperImplied || colIsBoundedInteger;
+    bool checkNegRow = lowerImplied || colIsBoundedInteger;
 
     for (const HighsSliceNonzero& nonz : getColumnVector(j)) {
       HighsInt row = nonz.index();
       HighsInt scale = model->row_upper_[row] != kHighsInf ? 1 : -1;
 
-      if (colIsBinary) {
+      if (colIsBoundedInteger) {
         // lambda for calculating residual minimum / maximum row activity
         auto getResidual = [&](HighsInt row, HighsInt col, double val,
                                HighsInt direction) {
@@ -1234,7 +1237,7 @@ HPresolve::Result HPresolve::dominatedColumns(
       return Result::kOk;
     };
 
-    if (colIsBinary) {
+    if (colIsBoundedInteger) {
       // lambda for checking whether a binary variable can be fixed
       auto binaryCanBeFixed = [&](HighsInt col, HighsInt k, double bestVal,
                                   double val, HighsInt direction,
@@ -1283,7 +1286,8 @@ HPresolve::Result HPresolve::dominatedColumns(
 
       // see Gamrath, G., Koch, T., Martin, A. et al. Progress in presolving for
       // mixed integer programming. Math. Prog. Comp. 7, 367–398 (2015).
-      if (model->col_cost_[j] >= 0.0 && worstCaseLb <= 1 + primal_feastol) {
+      if (model->col_cost_[j] >= 0.0 &&
+          worstCaseLb <= model->col_upper_[j] + primal_feastol) {
         // cost is positive and 1 + primal_feastol >= worstCaseLb >= 0, i.e.
         // worstCaseLb agrees with the bounds: try to find dominated variable
         // that allows for fixing binary variable to zero
@@ -1296,7 +1300,8 @@ HPresolve::Result HPresolve::dominatedColumns(
         }
       }
 
-      if (model->col_cost_[j] <= 0.0 && worstCaseUb >= -primal_feastol) {
+      if (model->col_cost_[j] <= 0.0 &&
+          worstCaseUb >= model->col_lower_[j] - primal_feastol) {
         // cost is negative and 0 >= worstCaseUb >= -primal_feastol, i.e.
         // worstCaseUb agrees with the bounds: try to find dominated variable
         // that allows for fixing binary variable to one
