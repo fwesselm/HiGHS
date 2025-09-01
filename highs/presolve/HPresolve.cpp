@@ -1138,7 +1138,7 @@ HPresolve::Result HPresolve::dominatedColumns(
     bool hasNegCliques =
         colIsBinary && mipsolver->mipdata_->cliquetable.numCliques(j, 0) > 0;
 
-    if (!colIsBinary && !upperImplied && !lowerImplied) continue;
+    if (!colIsBoundedInteger && !upperImplied && !lowerImplied) continue;
 
     HighsInt oldNumFixed = numFixedCols;
 
@@ -1196,7 +1196,7 @@ HPresolve::Result HPresolve::dominatedColumns(
           }
         };
 
-        // compute worst-case bounds for binary variables
+        // compute worst-case bounds for bounded integer variables
         updateWorstCaseBounds(row, j, nonz.value(), HighsInt{1},
                               model->row_upper_[row]);
         updateWorstCaseBounds(row, j, nonz.value(), HighsInt{-1},
@@ -1238,8 +1238,8 @@ HPresolve::Result HPresolve::dominatedColumns(
     };
 
     if (colIsBoundedInteger) {
-      // lambda for checking whether a binary variable can be fixed
-      auto binaryCanBeFixed = [&](HighsInt col, HighsInt k, double bestVal,
+      // lambda for checking whether an integer variable can be fixed
+      auto intVarCanBeFixed = [&](HighsInt col, HighsInt k, double bestVal,
                                   double val, HighsInt direction,
                                   HighsInt multiplier, bool isEqOrRangedRow) {
         HighsInt mydirection = multiplier * direction;
@@ -1251,8 +1251,8 @@ HPresolve::Result HPresolve::dominatedColumns(
                checkDomination(direction, col, mydirection, k);
       };
 
-      // lambda for fixing binary variables
-      auto checkFixBinary = [&](HighsInt row, HighsInt col, HighsInt direction,
+      // lambda for fixing integer variables
+      auto checkFixIntVar = [&](HighsInt row, HighsInt col, HighsInt direction,
                                 double scale, double bestVal) {
         storeRow(row);
         bool isEqOrRangedRow = model->row_lower_[row] != -kHighsInf &&
@@ -1264,12 +1264,12 @@ HPresolve::Result HPresolve::dominatedColumns(
 
           double ak = nonz.value() * scale;
 
-          if (binaryCanBeFixed(col, k, bestVal, ak, direction, HighsInt{1},
+          if (intVarCanBeFixed(col, k, bestVal, ak, direction, HighsInt{1},
                                isEqOrRangedRow) ||
-              binaryCanBeFixed(col, k, bestVal, ak, direction, HighsInt{-1},
+              intVarCanBeFixed(col, k, bestVal, ak, direction, HighsInt{-1},
                                isEqOrRangedRow)) {
-            // direction =  1: fix binary variable to one
-            // direction = -1: fix binary variable to zero
+            // direction =  1: fix variable to its upper bound
+            // direction = -1: fix variable to its lower bound
             ++numFixedCols;
             HPRESOLVE_CHECKED_CALL(fixCol(col, direction));
             break;
@@ -1288,12 +1288,12 @@ HPresolve::Result HPresolve::dominatedColumns(
       // mixed integer programming. Math. Prog. Comp. 7, 367–398 (2015).
       if (model->col_cost_[j] >= 0.0 &&
           worstCaseLb <= model->col_upper_[j] + primal_feastol) {
-        // cost is positive and 1 + primal_feastol >= worstCaseLb >= 0, i.e.
-        // worstCaseLb agrees with the bounds: try to find dominated variable
-        // that allows for fixing binary variable to zero
+        // cost is positive and ub(x_j) + primal_feastol >= worstCaseLb >= 0,
+        // i.e. worstCaseLb agrees with the bounds: try to find dominated
+        // variable that allows for fixing integer variable to its lower bound
         upperImplied = true;
         if (!lowerImplied && bestRowMinus != -1) {
-          HPRESOLVE_CHECKED_CALL(checkFixBinary(bestRowMinus, j, HighsInt{-1},
+          HPRESOLVE_CHECKED_CALL(checkFixIntVar(bestRowMinus, j, HighsInt{-1},
                                                 bestRowMinusScale,
                                                 ajBestRowMinus));
           if (colDeleted[j]) continue;
@@ -1302,12 +1302,12 @@ HPresolve::Result HPresolve::dominatedColumns(
 
       if (model->col_cost_[j] <= 0.0 &&
           worstCaseUb >= model->col_lower_[j] - primal_feastol) {
-        // cost is negative and 0 >= worstCaseUb >= -primal_feastol, i.e.
-        // worstCaseUb agrees with the bounds: try to find dominated variable
-        // that allows for fixing binary variable to one
+        // cost is negative and 0 >= worstCaseUb >= lb(x_j) - primal_feastol,
+        // i.e. worstCaseUb agrees with the bounds: try to find dominated
+        // variable that allows for fixing integer variable to its upper bound
         lowerImplied = true;
         if (!upperImplied && bestRowPlus != -1) {
-          HPRESOLVE_CHECKED_CALL(checkFixBinary(
+          HPRESOLVE_CHECKED_CALL(checkFixIntVar(
               bestRowPlus, j, HighsInt{1}, bestRowPlusScale, ajBestRowPlus));
           if (colDeleted[j]) continue;
         }
