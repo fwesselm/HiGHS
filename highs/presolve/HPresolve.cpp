@@ -3221,6 +3221,22 @@ HPresolve::Result HPresolve::singletonCol(HighsPostsolveStack& postsolve_stack,
   if (model->integrality_[col] != HighsVarType::kInteger)
     updateRowDualImpliedBounds(row, col, colCoef);
 
+  if (model->integrality_[col] != HighsVarType::kContinuous) {
+    // tighten column domain if possible
+    double residualSumUpper =
+        impliedRowBounds.getResidualSumUpperOrig(row, col, colCoef);
+    double residualSumLower =
+        impliedRowBounds.getResidualSumLowerOrig(row, col, colCoef);
+    if (residualSumUpper < model->col_upper_[col] - primal_feastol &&
+        model->col_cost_[col] >= 0) {
+      changeColUpper(col, residualSumUpper);
+    }
+    if (residualSumLower > model->col_lower_[col] + primal_feastol &&
+        model->col_cost_[col] <= 0) {
+      changeColLower(col, residualSumLower);
+    }
+  }
+
   // now check if column is implied free within an equation and substitute the
   // column if that is the case
   if (isDualImpliedFree(row) && isImpliedFree(col) &&
