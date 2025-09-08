@@ -3231,24 +3231,25 @@ HPresolve::Result HPresolve::singletonCol(HighsPostsolveStack& postsolve_stack,
 
   // tighten column domain
   if (!isRanged(row)) {
-    double residualUbnd =
-        impliedRowBounds.getResidualSumUpperOrig(row, col, colCoef);
-    double residualLbnd =
-        impliedRowBounds.getResidualSumLowerOrig(row, col, colCoef);
-
     if (model->row_lower_[row] == -kHighsInf) {
       if (model->col_cost_[col] >= 0 &&
-          impliedRowBounds.getSumLowerOrig(row) == -kHighsInf &&
-          residualUbnd > model->row_upper_[row] + primal_feastol) {
-        model->row_lower_[row] = residualLbnd;
-        changeRowDualUpper(row, kHighsInf);
+          impliedRowBounds.getSumLowerOrig(row) == -kHighsInf) {
+        double residualLbnd =
+            impliedRowBounds.getResidualSumLowerOrig(row, col, colCoef);
+        if (residualLbnd != -kHighsInf) {
+          model->row_lower_[row] = residualLbnd;
+          changeRowDualUpper(row, kHighsInf);
+        }
       }
     } else {
       if (model->col_cost_[col] <= 0 &&
-          impliedRowBounds.getSumUpperOrig(row) == kHighsInf &&
-          residualLbnd < model->row_lower_[row] - primal_feastol) {
-        model->row_upper_[row] = residualUbnd;
-        changeRowDualLower(row, -kHighsInf);
+          impliedRowBounds.getSumUpperOrig(row) == kHighsInf) {
+        double residualUbnd =
+            impliedRowBounds.getResidualSumUpperOrig(row, col, colCoef);
+        if (residualUbnd != kHighsInf) {
+          model->row_upper_[row] = residualUbnd;
+          changeRowDualLower(row, -kHighsInf);
+        }
       }
     }
   }
