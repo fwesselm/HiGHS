@@ -3230,14 +3230,14 @@ HPresolve::Result HPresolve::singletonCol(HighsPostsolveStack& postsolve_stack,
         static_cast<Result>(convertImpliedInteger(col, row)));
 
   // tighten row bounds if possible
-  if (!isRanged(row)) {
+  if (!isRanged(row) &&
+      std::signbit(colCoef) != std::signbit(model->col_cost_[col])) {
     if (model->row_lower_[row] == -kHighsInf) {
-      if (model->col_cost_[col] >= 0 &&
-          impliedRowBounds.getSumLowerOrig(row) == -kHighsInf) {
+      if (impliedRowBounds.getSumLowerOrig(row) == -kHighsInf) {
         double residualLbnd =
             impliedRowBounds.getResidualSumLowerOrig(row, col, colCoef);
         if (residualLbnd != -kHighsInf) {
-          // the singleton column has an infinite upper bound and balances the
+          // the singleton column has an infinite bound and balances the
           // activity of the <= row; set row's lower bound to the residual lower
           // bound (which allows for computing tighter implied bounds in a
           // subsequent step).
@@ -3246,12 +3246,11 @@ HPresolve::Result HPresolve::singletonCol(HighsPostsolveStack& postsolve_stack,
         }
       }
     } else {
-      if (model->col_cost_[col] <= 0 &&
-          impliedRowBounds.getSumUpperOrig(row) == kHighsInf) {
+      if (impliedRowBounds.getSumUpperOrig(row) == kHighsInf) {
         double residualUbnd =
             impliedRowBounds.getResidualSumUpperOrig(row, col, colCoef);
         if (residualUbnd != kHighsInf) {
-          // the singleton column has an infinite upper bound and balances the
+          // the singleton column has an infinite bound and balances the
           // activity of the >= row; set row's upper bound to the residual upper
           // bound (which allows for computing tighter implied bounds in a
           // subsequent step).
