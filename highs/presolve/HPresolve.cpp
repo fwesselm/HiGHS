@@ -3237,6 +3237,10 @@ HPresolve::Result HPresolve::singletonCol(HighsPostsolveStack& postsolve_stack,
         double residualLbnd =
             impliedRowBounds.getResidualSumLowerOrig(row, col, colCoef);
         if (residualLbnd != -kHighsInf) {
+          // the singleton column has an infinite upper bound and balances the
+          // activity of the <= row; set row's lower bound to the residual lower
+          // bound (which allows for computing tighter implied bounds in a
+          // subsequent step).
           model->row_lower_[row] = residualLbnd;
           changeRowDualUpper(row, kHighsInf);
         }
@@ -3247,6 +3251,10 @@ HPresolve::Result HPresolve::singletonCol(HighsPostsolveStack& postsolve_stack,
         double residualUbnd =
             impliedRowBounds.getResidualSumUpperOrig(row, col, colCoef);
         if (residualUbnd != kHighsInf) {
+          // the singleton column has an infinite lower bound and balances the
+          // activity of the >= row; set row's upper bound to the residual upper
+          // bound (which allows for computing tighter implied bounds in a
+          // subsequent step).
           model->row_upper_[row] = residualUbnd;
           changeRowDualLower(row, -kHighsInf);
         }
@@ -3254,8 +3262,10 @@ HPresolve::Result HPresolve::singletonCol(HighsPostsolveStack& postsolve_stack,
     }
   }
 
+  // re-compute implied column bounds
   updateColImpliedBounds(row, col, colCoef);
 
+  // re-compute implied bounds on row dual
   if (model->integrality_[col] != HighsVarType::kInteger)
     updateRowDualImpliedBounds(row, col, colCoef);
 
