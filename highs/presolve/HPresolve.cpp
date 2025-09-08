@@ -3238,12 +3238,18 @@ HPresolve::Result HPresolve::singletonCol(HighsPostsolveStack& postsolve_stack,
 
     if (model->row_lower_[row] == -kHighsInf) {
       if (model->col_cost_[col] >= 0 &&
-          residualUbnd > model->row_upper_[row] + primal_feastol)
+          impliedRowBounds.getSumLowerOrig(row) == -kHighsInf &&
+          residualUbnd > model->row_upper_[row] + primal_feastol) {
         model->row_lower_[row] = residualLbnd;
+        changeRowDualUpper(row, kHighsInf);
+      }
     } else {
       if (model->col_cost_[col] <= 0 &&
-          residualLbnd < model->row_lower_[row] - primal_feastol)
+          impliedRowBounds.getSumUpperOrig(row) == kHighsInf &&
+          residualLbnd < model->row_lower_[row] - primal_feastol) {
         model->row_upper_[row] = residualUbnd;
+        changeRowDualLower(row, -kHighsInf);
+      }
     }
   }
 
