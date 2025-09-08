@@ -3229,6 +3229,24 @@ HPresolve::Result HPresolve::singletonCol(HighsPostsolveStack& postsolve_stack,
     HPRESOLVE_CHECKED_CALL(
         static_cast<Result>(convertImpliedInteger(col, row)));
 
+  // tighten column domain
+  if (!isRanged(row)) {
+    double residualUbnd =
+        impliedRowBounds.getResidualSumUpperOrig(row, col, colCoef);
+    double residualLbnd =
+        impliedRowBounds.getResidualSumLowerOrig(row, col, colCoef);
+
+    if (model->row_lower_[row] == -kHighsInf) {
+      if (model->col_cost_[col] >= 0 &&
+          residualUbnd > model->row_upper_[row] + primal_feastol)
+        model->row_lower_[row] = residualLbnd;
+    } else {
+      if (model->col_cost_[col] <= 0 &&
+          residualLbnd < model->row_lower_[row] - primal_feastol)
+        model->row_upper_[row] = residualUbnd;
+    }
+  }
+
   updateColImpliedBounds(row, col, colCoef);
 
   if (model->integrality_[col] != HighsVarType::kInteger)
