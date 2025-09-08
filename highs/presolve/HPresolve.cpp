@@ -3229,7 +3229,7 @@ HPresolve::Result HPresolve::singletonCol(HighsPostsolveStack& postsolve_stack,
     HPRESOLVE_CHECKED_CALL(
         static_cast<Result>(convertImpliedInteger(col, row)));
 
-  // tighten column domain
+  // tighten row bounds if possible
   if (!isRanged(row)) {
     if (model->row_lower_[row] == -kHighsInf) {
       if (model->col_cost_[col] >= 0 &&
