@@ -3251,7 +3251,7 @@ HPresolve::Result HPresolve::singletonCol(HighsPostsolveStack& postsolve_stack,
         double residualUbnd =
             impliedRowBounds.getResidualSumUpperOrig(row, col, colCoef);
         if (residualUbnd != kHighsInf) {
-          // the singleton column has an infinite lower bound and balances the
+          // the singleton column has an infinite upper bound and balances the
           // activity of the >= row; set row's upper bound to the residual upper
           // bound (which allows for computing tighter implied bounds in a
           // subsequent step).
