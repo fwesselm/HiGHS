@@ -1349,6 +1349,106 @@ HPresolve::Result HPresolve::dominatedColumns(
           // case (iv)  lb(x_j) = -inf, -x_j >  x_k: set x_k = lb(x_k)
           ++numFixedCols;
           HPRESOLVE_CHECKED_CALL(fixCol(k, direction));
+        } else {
+          HighsInt dominatingcol = -1;
+          HighsInt dominatedcol = -1;
+          HighsInt dominatingDirection = 1;
+          HighsInt dominatedDirection = 1;
+          if (checkDomination(1.0, col, 1.0, k)) {
+            dominatingcol = col;
+            dominatedcol = k;
+          } else if (checkDomination(-1.0, col, 1.0, k)) {
+            dominatingcol = col;
+            dominatedcol = k;
+            dominatingDirection = -1;
+          } else if (checkDomination(1.0, col, -1.0, k)) {
+            dominatingcol = col;
+            dominatedcol = k;
+            dominatedDirection = -1;
+          } else if (checkDomination(1.0, k, 1.0, col)) {
+            dominatingcol = k;
+            dominatedcol = col;
+          } else if (checkDomination(-1.0, k, 1.0, col)) {
+            dominatingcol = k;
+            dominatedcol = col;
+            dominatingDirection = -1;
+          } else if (checkDomination(1.0, k, -1.0, col)) {
+            dominatingcol = k;
+            dominatedcol = col;
+            dominatedDirection = -1;
+          }
+          if (dominatingcol != -1) {
+            double dominatingBound =
+                (dominatingDirection > 0 ? model->col_upper_[dominatingcol]
+                                         : model->col_lower_[dominatingcol]);
+            double dominatedBound =
+                (dominatedDirection > 0 ? model->col_lower_[dominatedcol]
+                                        : model->col_upper_[dominatedcol]);
+            double lowerBoundDominating = -kHighsInf;
+            double upperBoundDominating = kHighsInf;
+            double lowerBoundDominated = -kHighsInf;
+            double upperBoundDominated = kHighsInf;
+            if (std::abs(dominatedBound) != kHighsInf) {
+              lowerBoundDominating =
+                  std::min(dominatingBound,
+                           computeImpliedLowerBound(dominatingcol, dominatedcol,
+                                                    dominatedBound));
+              if (model->col_cost_[dominatingcol] <= 0) {
+                double lowerBoundDominatingCost =
+                    std::min(dominatingBound,
+                             computeWorstCaseUpperBound(
+                                 dominatingcol, dominatedcol, dominatedBound));
+                lowerBoundDominating =
+                    std::max(lowerBoundDominating, lowerBoundDominatingCost);
+              }
+              upperBoundDominating = computeImpliedUpperBound(
+                  dominatingcol, dominatedcol, dominatedBound);
+            }
+            if (std::abs(dominatingBound) != kHighsInf) {
+              lowerBoundDominated = computeImpliedLowerBound(
+                  dominatedcol, dominatingcol, dominatingBound);
+              upperBoundDominated =
+                  std::max(dominatedBound,
+                           computeImpliedUpperBound(dominatedcol, dominatingcol,
+                                                    dominatingBound));
+              if (model->col_cost_[dominatedcol] >= 0) {
+                double upperBoundDominatedCost =
+                    std::max(dominatedBound,
+                             computeWorstCaseLowerBound(
+                                 dominatedcol, dominatingcol, dominatingBound));
+                upperBoundDominated =
+                    std::min(upperBoundDominated, upperBoundDominatedCost);
+              }
+            }
+            if (upperBoundDominating <
+                model->col_upper_[dominatingcol] - primal_feastol) {
+              if (model->integrality_[dominatingcol] !=
+                      HighsVarType::kContinuous ||
+                  upperBoundDominating == model->col_lower_[dominatingcol])
+                changeColUpper(dominatingcol, upperBoundDominating);
+            }
+            if (lowerBoundDominating >
+                model->col_lower_[dominatingcol] + primal_feastol) {
+              if (model->integrality_[dominatingcol] !=
+                      HighsVarType::kContinuous ||
+                  lowerBoundDominating == model->col_upper_[dominatingcol])
+                changeColLower(dominatingcol, lowerBoundDominating);
+            }
+            if (lowerBoundDominated >
+                model->col_lower_[dominatedcol] + primal_feastol) {
+              if (model->integrality_[dominatedcol] !=
+                      HighsVarType::kContinuous ||
+                  lowerBoundDominated == model->col_upper_[dominatedcol])
+                changeColLower(dominatedcol, lowerBoundDominated);
+            }
+            if (upperBoundDominated <
+                model->col_upper_[dominatedcol] - primal_feastol) {
+              if (model->integrality_[dominatedcol] !=
+                      HighsVarType::kContinuous ||
+                  upperBoundDominated == model->col_lower_[dominatedcol])
+                changeColUpper(dominatedcol, upperBoundDominated);
+            }
+          }
         }
         if (colDeleted[k])
           HPRESOLVE_CHECKED_CALL(removeRowSingletons(postsolve_stack));
