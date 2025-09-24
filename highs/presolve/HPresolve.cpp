@@ -1420,19 +1420,19 @@ HPresolve::Result HPresolve::dominatedColumns(
                     std::min(upperBoundDominated, upperBoundDominatedCost);
               }
             }
-            if (upperBoundDominating <
-                model->col_upper_[dominatingcol] - primal_feastol) {
-              if (model->integrality_[dominatingcol] !=
-                      HighsVarType::kContinuous ||
-                  upperBoundDominating == model->col_lower_[dominatingcol])
-                changeColUpper(dominatingcol, upperBoundDominating);
-            }
             if (lowerBoundDominating >
                 model->col_lower_[dominatingcol] + primal_feastol) {
               if (model->integrality_[dominatingcol] !=
                       HighsVarType::kContinuous ||
                   lowerBoundDominating == model->col_upper_[dominatingcol])
                 changeColLower(dominatingcol, lowerBoundDominating);
+            }
+            if (upperBoundDominating <
+                model->col_upper_[dominatingcol] - primal_feastol) {
+              if (model->integrality_[dominatingcol] !=
+                      HighsVarType::kContinuous ||
+                  upperBoundDominating == model->col_lower_[dominatingcol])
+                changeColUpper(dominatingcol, upperBoundDominating);
             }
             if (lowerBoundDominated >
                 model->col_lower_[dominatedcol] + primal_feastol) {
