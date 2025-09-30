@@ -1331,7 +1331,6 @@ HPresolve::Result HPresolve::dominatedColumns(
                  checkDomination(-1.0, dominatingCol, 1.0, dominatedCol)) {
         dominatingBound = model->col_lower_[dominatingCol];
         dominatedBound = model->col_lower_[dominatedCol];
-
         return true;
       } else if ((model->col_upper_[dominatingCol] != kHighsInf ||
                   model->col_upper_[dominatedCol] != kHighsInf) &&
