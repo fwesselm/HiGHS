@@ -1360,32 +1360,40 @@ HPresolve::Result HPresolve::dominatedColumns(
 
         // lambda for determining whether there is a dominance relation
         auto isDominated = [&](HighsInt dominatingCol, HighsInt dominatedCol,
-                               HighsInt& dominatingDirection,
-                               HighsInt& dominatedDirection) {
-          dominatingDirection = 1;
-          dominatedDirection = 1;
-          if (checkDomination(1.0, dominatingCol, 1.0, dominatedCol)) {
+                               double& dominatingBound,
+                               double& dominatedBound) {
+          if ((model->col_upper_[col] != kHighsInf ||
+               model->col_lower_[k] != -kHighsInf) &&
+              checkDomination(1.0, dominatingCol, 1.0, dominatedCol)) {
+            dominatingBound = model->col_upper_[col];
+            dominatedBound = model->col_lower_[k];
+
             return true;
-          } else if (checkDomination(-1.0, dominatingCol, 1.0, dominatedCol)) {
-            dominatingDirection = -1;
-            return true;
-          } else if (checkDomination(1.0, dominatingCol, -1.0, dominatedCol)) {
-            dominatedDirection = -1;
-            return true;
-          } else
-            return false;
+          } else {
+            if ((model->col_lower_[col] != -kHighsInf ||
+                 model->col_lower_[k] != -kHighsInf) &&
+                checkDomination(-1.0, dominatingCol, 1.0, dominatedCol)) {
+              dominatingBound = model->col_lower_[col];
+              dominatedBound = model->col_lower_[k];
+
+              return true;
+            } else {
+              if ((model->col_upper_[col] != kHighsInf ||
+                   model->col_upper_[k] != kHighsInf) &&
+                  checkDomination(1.0, dominatingCol, -1.0, dominatedCol)) {
+                dominatingBound = model->col_upper_[col];
+                dominatedBound = model->col_upper_[k];
+                return true;
+              }
+            }
+          }
+          return false;
         };
 
         // try to tighten bounds, see Theorem 3 from Gamrath et al.'s paper
-        HighsInt dominatingDirection;
-        HighsInt dominatedDirection;
-        if (isDominated(col, k, dominatingDirection, dominatedDirection)) {
-          double dominatingBound =
-              (dominatingDirection > 0 ? model->col_upper_[col]
-                                       : model->col_lower_[col]);
-          double dominatedBound =
-              (dominatedDirection > 0 ? model->col_lower_[k]
-                                      : model->col_upper_[k]);
+        double dominatingBound;
+        double dominatedBound;
+        if (isDominated(col, k, dominatingBound, dominatedBound)) {
           double lowerBoundDominating = -kHighsInf;
           double upperBoundDominating = kHighsInf;
           double lowerBoundDominated = -kHighsInf;
