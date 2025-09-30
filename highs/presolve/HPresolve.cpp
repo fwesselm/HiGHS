@@ -1358,7 +1358,7 @@ HPresolve::Result HPresolve::dominatedColumns(
                                            HighsInt{-1}, boundImplied,
                                            isEqOrRangedRow));
 
-        // try to tighten bounds
+        // lambda for determining whether there is a dominance relation
         auto isDominated = [&](HighsInt dominatingCol, HighsInt dominatedCol,
                                HighsInt& dominatingDirection,
                                HighsInt& dominatedDirection) {
@@ -1376,6 +1376,7 @@ HPresolve::Result HPresolve::dominatedColumns(
             return false;
         };
 
+        // try to tighten bounds, see Theorem 3 from Gamrath et al.'s paper
         HighsInt dominatingDirection;
         HighsInt dominatedDirection;
         if (isDominated(col, k, dominatingDirection, dominatedDirection)) {
@@ -1389,34 +1390,43 @@ HPresolve::Result HPresolve::dominatedColumns(
           double upperBoundDominating = kHighsInf;
           double lowerBoundDominated = -kHighsInf;
           double upperBoundDominated = kHighsInf;
+          // check if dominated bound is finite
           if (std::abs(dominatedBound) != kHighsInf) {
+            // (i) x_j <= MINL^k_j(dominatedBound)
+            upperBoundDominating =
+                computeImpliedUpperBound(col, k, dominatedBound);
+            // (iii) x_j >= min{dominatingBound, MAXL^k_j(dominatedBound)}
             lowerBoundDominating =
                 std::min(dominatingBound,
                          computeImpliedLowerBound(col, k, dominatedBound));
             if (model->col_cost_[col] <= 0) {
-              double lowerBoundDominatingCost =
+              // (v) if c_j <= 0, then x_j >= min{dominatingBound,
+              //                                  MINU^k_j(dominatedBound)}
+              lowerBoundDominating = std::max(
+                  lowerBoundDominating,
                   std::min(dominatingBound,
-                           computeWorstCaseUpperBound(col, k, dominatedBound));
-              lowerBoundDominating =
-                  std::max(lowerBoundDominating, lowerBoundDominatingCost);
+                           computeWorstCaseUpperBound(col, k, dominatedBound)));
             }
-            upperBoundDominating =
-                computeImpliedUpperBound(col, k, dominatedBound);
           }
+          // check if dominating bound is finite
           if (std::abs(dominatingBound) != kHighsInf) {
+            // (ii) x_k >= MAXL^j_k(dominatingBound)
             lowerBoundDominated =
                 computeImpliedLowerBound(k, col, dominatingBound);
+            // (iv) x_k <= max{dominatedBound, MINL^j_k(dominatingBound)}
             upperBoundDominated =
                 std::max(dominatedBound,
                          computeImpliedUpperBound(k, col, dominatingBound));
             if (model->col_cost_[k] >= 0) {
-              double upperBoundDominatedCost =
-                  std::max(dominatedBound,
-                           computeWorstCaseLowerBound(k, col, dominatingBound));
-              upperBoundDominated =
-                  std::min(upperBoundDominated, upperBoundDominatedCost);
+              // (vi) if c_k >= 0, then x_k <= max{dominatedBound,
+              //                                   MAXU^j_k(dominatingBound)}
+              upperBoundDominated = std::min(
+                  upperBoundDominated,
+                  std::max(dominatedBound, computeWorstCaseLowerBound(
+                                               k, col, dominatingBound)));
             }
           }
+          // update bounds
           if (lowerBoundDominating > model->col_lower_[col] + primal_feastol) {
             if (model->integrality_[col] != HighsVarType::kContinuous ||
                 lowerBoundDominating == model->col_upper_[col])
