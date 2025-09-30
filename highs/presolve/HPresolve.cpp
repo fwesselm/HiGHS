@@ -1368,23 +1368,19 @@ HPresolve::Result HPresolve::dominatedColumns(
             dominatingBound = model->col_upper_[col];
             dominatedBound = model->col_lower_[k];
             return true;
-          } else {
-            if ((model->col_lower_[col] != -kHighsInf ||
-                 model->col_lower_[k] != -kHighsInf) &&
-                checkDomination(-1.0, dominatingCol, 1.0, dominatedCol)) {
-              dominatingBound = model->col_lower_[col];
-              dominatedBound = model->col_lower_[k];
+          } else if ((model->col_lower_[col] != -kHighsInf ||
+                      model->col_lower_[k] != -kHighsInf) &&
+                     checkDomination(-1.0, dominatingCol, 1.0, dominatedCol)) {
+            dominatingBound = model->col_lower_[col];
+            dominatedBound = model->col_lower_[k];
 
-              return true;
-            } else {
-              if ((model->col_upper_[col] != kHighsInf ||
-                   model->col_upper_[k] != kHighsInf) &&
-                  checkDomination(1.0, dominatingCol, -1.0, dominatedCol)) {
-                dominatingBound = model->col_upper_[col];
-                dominatedBound = model->col_upper_[k];
-                return true;
-              }
-            }
+            return true;
+          } else if ((model->col_upper_[col] != kHighsInf ||
+                      model->col_upper_[k] != kHighsInf) &&
+                     checkDomination(1.0, dominatingCol, -1.0, dominatedCol)) {
+            dominatingBound = model->col_upper_[col];
+            dominatedBound = model->col_upper_[k];
+            return true;
           }
           return false;
         };
