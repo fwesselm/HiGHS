@@ -1384,9 +1384,10 @@ HPresolve::Result HPresolve::dominatedColumns(
         if (model->col_cost_[col] >= 0) {
           // (vi) if c_k >= 0, then x_k <= max{colBound,
           //                                   MAXU^j_k(otherColBound)}
-          upperBound = std::min(
-              colBound, std::max(colBound, computeWorstCaseLowerBound(
-                                               col, otherCol, otherColBound)));
+          upperBound =
+              std::min(upperBound,
+                       std::max(colBound, computeWorstCaseLowerBound(
+                                              col, otherCol, otherColBound)));
         }
       }
       // update bounds
