@@ -1355,6 +1355,8 @@ HPresolve::Result HPresolve::dominatedColumns(
                              HighsInt otherCol, double otherColBound) {
       // return if variable is already fixed
       if (model->col_lower_[col] == model->col_upper_[col]) return;
+      // return if bound is not finite
+      if (std::abs(otherColBound) == kHighsInf) return;
       // initialise bounds
       double lowerBound = -kHighsInf;
       double upperBound = kHighsInf;
