@@ -1360,7 +1360,7 @@ HPresolve::Result HPresolve::dominatedColumns(
       // initialise bounds
       double lowerBound = -kHighsInf;
       double upperBound = kHighsInf;
-      // try to tighten bounds, see Theorem 3 from Gamrath et al.'s paper
+      // predictive bound analysis, see Theorem 3 from Gamrath et al.'s paper
       if (direction > 0) {
         // (i) x_j <= MINL^k_j(otherColBound)
         upperBound = computeImpliedUpperBound(col, otherCol, otherColBound);
@@ -1432,7 +1432,8 @@ HPresolve::Result HPresolve::dominatedColumns(
           ++numFixedCols;
           HPRESOLVE_CHECKED_CALL(fixCol(k, direction));
         } else {
-          // try to tighten bounds, see Theorem 3 from Gamrath et al.'s paper
+          // tighten bounds via predictive bound analysis, see Theorem 3 from
+          // Gamrath et al.'s paper
           double dominatingBound;
           double dominatedBound;
           HighsInt dominatingScale;
