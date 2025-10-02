@@ -1415,7 +1415,6 @@ HPresolve::Result HPresolve::dominatedColumns(
 
         double ak = nonz.value() * scale;
 
-        // try to fix
         if (colCanBeFixed(col, k, bestVal, ak, direction, HighsInt{1},
                           boundImplied, isEqOrRangedRow)) {
           // direction =  1:
