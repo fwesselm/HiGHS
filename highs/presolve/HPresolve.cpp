@@ -1319,27 +1319,85 @@ HPresolve::Result HPresolve::dominatedColumns(
 
     // lambda for determining whether there is a dominance relation
     auto isDominated = [&](HighsInt dominatingCol, HighsInt dominatedCol,
-                           double& dominatingBound, double& dominatedBound) {
+                           double& dominatingBound, double& dominatedBound,
+                           HighsInt& dominatingScale,
+                           HighsInt& dominatedScale) {
       if ((model->col_upper_[dominatingCol] != kHighsInf ||
            model->col_lower_[dominatedCol] != -kHighsInf) &&
           checkDomination(1.0, dominatingCol, 1.0, dominatedCol)) {
         dominatingBound = model->col_upper_[dominatingCol];
         dominatedBound = model->col_lower_[dominatedCol];
+        dominatingScale = 1;
+        dominatedScale = 1;
         return true;
       } else if ((model->col_lower_[dominatingCol] != -kHighsInf ||
                   model->col_lower_[dominatedCol] != -kHighsInf) &&
                  checkDomination(-1.0, dominatingCol, 1.0, dominatedCol)) {
         dominatingBound = model->col_lower_[dominatingCol];
         dominatedBound = model->col_lower_[dominatedCol];
+        dominatingScale = -1;
+        dominatedScale = 1;
         return true;
       } else if ((model->col_upper_[dominatingCol] != kHighsInf ||
                   model->col_upper_[dominatedCol] != kHighsInf) &&
                  checkDomination(1.0, dominatingCol, -1.0, dominatedCol)) {
         dominatingBound = model->col_upper_[dominatingCol];
         dominatedBound = model->col_upper_[dominatedCol];
+        dominatingScale = 1;
+        dominatedScale = -1;
         return true;
       }
       return false;
+    };
+
+    // lambda for tightening bounds
+    auto tightenBounds = [&](HighsInt col, double colBound, HighsInt direction,
+                             HighsInt otherCol, double otherColBound) {
+      // return if variable is already fixed
+      if (model->col_lower_[col] == model->col_upper_[col]) return;
+      // initialise bounds
+      double lowerBound = -kHighsInf;
+      double upperBound = kHighsInf;
+      // try to tighten bounds, see Theorem 3 from Gamrath et al.'s paper
+      if (direction > 0) {
+        // (i) x_j <= MINL^k_j(otherColBound)
+        upperBound = computeImpliedUpperBound(col, otherCol, otherColBound);
+        // (iii) x_j >= min{colBound, MAXL^k_j(otherColBound)}
+        lowerBound = std::min(
+            colBound, computeImpliedLowerBound(col, otherCol, otherColBound));
+        if (model->col_cost_[col] <= 0) {
+          // (v) if c_j <= 0, then x_j >= min{colBound,
+          //                                  MINU^k_j(otherColBound)}
+          lowerBound =
+              std::max(lowerBound,
+                       std::min(colBound, computeWorstCaseUpperBound(
+                                              col, otherCol, otherColBound)));
+        }
+      } else {
+        // (ii) x_k >= MAXL^j_k(otherColBound)
+        lowerBound = computeImpliedLowerBound(col, otherCol, otherColBound);
+        // (iv) x_k <= max{colBound, MINL^j_k(otherColBound)}
+        upperBound = std::max(
+            colBound, computeImpliedUpperBound(col, otherCol, otherColBound));
+        if (model->col_cost_[col] >= 0) {
+          // (vi) if c_k >= 0, then x_k <= max{colBound,
+          //                                   MAXU^j_k(otherColBound)}
+          upperBound = std::min(
+              colBound, std::max(colBound, computeWorstCaseLowerBound(
+                                               col, otherCol, otherColBound)));
+        }
+      }
+      // update bounds
+      if (lowerBound > model->col_lower_[col] + primal_feastol) {
+        if (model->integrality_[col] != HighsVarType::kContinuous ||
+            lowerBound == model->col_upper_[col])
+          changeColLower(col, lowerBound);
+      }
+      if (upperBound < model->col_upper_[col] - primal_feastol) {
+        if (model->integrality_[col] != HighsVarType::kContinuous ||
+            upperBound == model->col_lower_[col])
+          changeColUpper(col, upperBound);
+      }
     };
 
     // lambda for fixing variables
@@ -1375,71 +1433,15 @@ HPresolve::Result HPresolve::dominatedColumns(
           // try to tighten bounds, see Theorem 3 from Gamrath et al.'s paper
           double dominatingBound;
           double dominatedBound;
-          if (isDominated(col, k, dominatingBound, dominatedBound)) {
-            // initialise bounds
-            double lowerBoundDominating = -kHighsInf;
-            double upperBoundDominating = kHighsInf;
-            double lowerBoundDominated = -kHighsInf;
-            double upperBoundDominated = kHighsInf;
-            // check if dominated bound is finite
-            if (std::abs(dominatedBound) != kHighsInf) {
-              // (i) x_j <= MINL^k_j(dominatedBound)
-              upperBoundDominating =
-                  computeImpliedUpperBound(col, k, dominatedBound);
-              // (iii) x_j >= min{dominatingBound, MAXL^k_j(dominatedBound)}
-              lowerBoundDominating =
-                  std::min(dominatingBound,
-                           computeImpliedLowerBound(col, k, dominatedBound));
-              if (model->col_cost_[col] <= 0) {
-                // (v) if c_j <= 0, then x_j >= min{dominatingBound,
-                //                                  MINU^k_j(dominatedBound)}
-                lowerBoundDominating = std::max(
-                    lowerBoundDominating,
-                    std::min(dominatingBound, computeWorstCaseUpperBound(
-                                                  col, k, dominatedBound)));
-              }
-            }
-            // check if dominating bound is finite
-            if (std::abs(dominatingBound) != kHighsInf) {
-              // (ii) x_k >= MAXL^j_k(dominatingBound)
-              lowerBoundDominated =
-                  computeImpliedLowerBound(k, col, dominatingBound);
-              // (iv) x_k <= max{dominatedBound, MINL^j_k(dominatingBound)}
-              upperBoundDominated =
-                  std::max(dominatedBound,
-                           computeImpliedUpperBound(k, col, dominatingBound));
-              if (model->col_cost_[k] >= 0) {
-                // (vi) if c_k >= 0, then x_k <= max{dominatedBound,
-                //                                   MAXU^j_k(dominatingBound)}
-                upperBoundDominated = std::min(
-                    upperBoundDominated,
-                    std::max(dominatedBound, computeWorstCaseLowerBound(
-                                                 k, col, dominatingBound)));
-              }
-            }
-            // update bounds
-            if (lowerBoundDominating >
-                model->col_lower_[col] + primal_feastol) {
-              if (model->integrality_[col] != HighsVarType::kContinuous ||
-                  lowerBoundDominating == model->col_upper_[col])
-                changeColLower(col, lowerBoundDominating);
-            }
-            if (upperBoundDominating <
-                model->col_upper_[col] - primal_feastol) {
-              if (model->integrality_[col] != HighsVarType::kContinuous ||
-                  upperBoundDominating == model->col_lower_[col])
-                changeColUpper(col, upperBoundDominating);
-            }
-            if (lowerBoundDominated > model->col_lower_[k] + primal_feastol) {
-              if (model->integrality_[k] != HighsVarType::kContinuous ||
-                  lowerBoundDominated == model->col_upper_[k])
-                changeColLower(k, lowerBoundDominated);
-            }
-            if (upperBoundDominated < model->col_upper_[k] - primal_feastol) {
-              if (model->integrality_[k] != HighsVarType::kContinuous ||
-                  upperBoundDominated == model->col_lower_[k])
-                changeColUpper(k, upperBoundDominated);
-            }
+          HighsInt dominatingScale;
+          HighsInt dominatedScale;
+          if (isDominated(col, k, dominatingBound, dominatedBound,
+                          dominatingScale, dominatedScale)) {
+            // try to strengthen bounds
+            tightenBounds(col, dominatingBound, dominatingScale, k,
+                          dominatedBound);
+            tightenBounds(k, dominatedBound, -dominatedScale, col,
+                          dominatingBound);
           }
         }
         if (colDeleted[k])
