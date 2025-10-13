@@ -1048,10 +1048,8 @@ HPresolve::Result HPresolve::dominatedColumns(
   // non-zero signatures for comparing columns
   std::vector<std::pair<uint32_t, uint32_t>> signatures(model->num_col_);
 
-  // count overall number of domination checks and number of checks performed
-  // for predictive bound analysis
+  // count overall number of domination checks
   size_t numDomChecks = 0;
-  size_t numDomChecksPredBndAnalysis = 0;
 
   auto isBinary = [&](HighsInt i) {
     return model->integrality_[i] == HighsVarType::kInteger &&
@@ -1231,72 +1229,8 @@ HPresolve::Result HPresolve::dominatedColumns(
       return Result::kOk;
     };
 
-    // lambda for tightening bounds
-    auto tightenBounds = [&](HighsInt col, double colBound, HighsInt direction,
-                             HighsInt otherCol, double otherColBound) {
-      // bound should be finite
-      assert(std::abs(otherColBound) != kHighsInf);
-      // return if variable is already fixed
-      if (model->col_lower_[col] == model->col_upper_[col]) return Result::kOk;
-      // initialise bounds
-      double lowerBound = -kHighsInf;
-      double upperBound = kHighsInf;
-      // predictive bound analysis, see Theorem 3 from Gamrath et al.'s paper
-      if (direction > 0) {
-        // (i) x_j <= MINL^k_j(otherColBound)
-        upperBound = computeImpliedUpperBound(col, otherCol, otherColBound);
-        // (iii) x_j >= min{colBound, MAXL^k_j(otherColBound)}
-        lowerBound = std::min(
-            colBound, computeImpliedLowerBound(col, otherCol, otherColBound));
-        if (model->col_cost_[col] <= 0) {
-          // (v) if c_j <= 0, then x_j >= min{colBound,
-          //                                  MINU^k_j(otherColBound)}
-          lowerBound =
-              std::max(lowerBound,
-                       std::min(colBound, computeWorstCaseUpperBound(
-                                              col, otherCol, otherColBound)));
-        }
-      } else {
-        // (ii) x_k >= MAXL^j_k(otherColBound)
-        lowerBound = computeImpliedLowerBound(col, otherCol, otherColBound);
-        // (iv) x_k <= max{colBound, MINL^j_k(otherColBound)}
-        upperBound = std::max(
-            colBound, computeImpliedUpperBound(col, otherCol, otherColBound));
-        if (model->col_cost_[col] >= 0) {
-          // (vi) if c_k >= 0, then x_k <= max{colBound,
-          //                                   MAXU^j_k(otherColBound)}
-          upperBound =
-              std::min(upperBound,
-                       std::max(colBound, computeWorstCaseLowerBound(
-                                              col, otherCol, otherColBound)));
-        }
-      }
-      // update bounds
-      if (lowerBound > model->col_lower_[col] + primal_feastol) {
-        if (model->integrality_[col] != HighsVarType::kContinuous)
-          lowerBound = std::ceil(lowerBound - primal_feastol);
-        if (lowerBound == model->col_upper_[col])
-          HPRESOLVE_CHECKED_CALL(fixCol(col, HighsInt{1}));
-        else if (model->integrality_[col] != HighsVarType::kContinuous) {
-          numBoundsModified++;
-          changeColLower(col, lowerBound);
-        }
-      }
-      if (upperBound < model->col_upper_[col] - primal_feastol) {
-        if (model->integrality_[col] != HighsVarType::kContinuous)
-          upperBound = std::floor(upperBound + primal_feastol);
-        if (upperBound == model->col_lower_[col])
-          HPRESOLVE_CHECKED_CALL(fixCol(col, HighsInt{-1}));
-        else if (model->integrality_[col] != HighsVarType::kContinuous) {
-          numBoundsModified++;
-          changeColUpper(col, upperBound);
-        }
-      }
-      return Result::kOk;
-    };
-
-    // lambda for (1) checking whether one of the two columns is dominated by
-    // the other one and (2) fixing variables or strengthening bounds
+    // lambda for checking whether one of the two columns is dominated by
+    // the other one
     auto checkCols = [&](HighsInt row, HighsInt col, HighsInt k, double bestVal,
                          double val, HighsInt direction, HighsInt multiplier,
                          bool boundImplied, bool otherBoundImpliedByWorstCase) {
@@ -1320,19 +1254,11 @@ HPresolve::Result HPresolve::dominatedColumns(
           (boundImplied ||
            (isBinary(col) && mipsolver->mipdata_->cliquetable.numCliques(
                                  col, direction > 0 ? 1 : 0) > 0));
-      // check whether predictive bound analysis can be performed. both
-      // variables need to have the same type.
-      bool tryToStrengthenBounds =
-          (isDominatingBoundFinite || isDominatedBoundFinite) &&
-          ((model->integrality_[col] != HighsVarType::kContinuous &&
-            model->integrality_[k] != HighsVarType::kContinuous) ||
-           (model->integrality_[col] != HighsVarType::kInteger &&
-            model->integrality_[k] != HighsVarType::kInteger));
       // check whether variable 'col' dominates variable 'k'; check already
       // known non-zeros in respective columns in advance to avoid
       // (potentially slow) element-wise comparison if possible.
       bool performDominationCheck =
-          (tryToFixCol || tryToFixK || tryToStrengthenBounds) &&
+          (tryToFixCol || tryToFixK) &&
           checkDominationNonZero(row, direction * bestVal, direction_k * val);
       if (!performDominationCheck) return Result::kOk;
       // check for domination
@@ -1341,37 +1267,23 @@ HPresolve::Result HPresolve::dominatedColumns(
           // direction =  1: fix variable x_j to its upper bound
           // direction = -1: fix variable x_j to its lower bound
           HPRESOLVE_CHECKED_CALL(fixCol(col, direction));
-        } else {
-          if (tryToFixK &&
-              (boundImplied ||
-               mipsolver->mipdata_->cliquetable.haveCommonClique(
-                   HighsCliqueTable::CliqueVar(col, direction > 0 ? 1 : 0),
-                   HighsCliqueTable::CliqueVar(k, direction_k > 0 ? 1 : 0)))) {
-            // direction =  1, multiplier =  1:
-            // case (i)   ub(x_j) =  inf,  x_j >  x_k: set x_k = lb(x_k)
-            // direction =  1, multiplier = -1:
-            // case (ii)  ub(x_j) =  inf,  x_j > -x_k: set x_k = ub(x_k)
-            // direction = -1, multiplier =  1:
-            // case (iii) lb(x_j) = -inf, -x_j > -x_k: set x_k = ub(x_k)
-            // direction = -1, multiplier = -1:
-            // case (iv)  lb(x_j) = -inf, -x_j >  x_k: set x_k = lb(x_k)
-            HPRESOLVE_CHECKED_CALL(fixCol(k, -direction_k));
-          }
-          if (!colDeleted[k] && tryToStrengthenBounds) {
-            // tighten bounds via predictive bound analysis, see Theorem 3
-            // from Gamrath et al.'s paper
-            if (isDominatedBoundFinite)
-              HPRESOLVE_CHECKED_CALL(tightenBounds(
-                  col, dominatingBound, direction, k, dominatedBound));
-            if (!colDeleted[col] && isDominatingBoundFinite)
-              HPRESOLVE_CHECKED_CALL(tightenBounds(
-                  k, dominatedBound, -direction_k, col, dominatingBound));
-          }
+        } else if (tryToFixK &&
+                   (boundImplied ||
+                    mipsolver->mipdata_->cliquetable.haveCommonClique(
+                        HighsCliqueTable::CliqueVar(col, direction > 0 ? 1 : 0),
+                        HighsCliqueTable::CliqueVar(
+                            k, direction_k > 0 ? 1 : 0)))) {
+          // direction =  1, multiplier =  1:
+          // case (i)   ub(x_j) =  inf,  x_j >  x_k: set x_k = lb(x_k)
+          // direction =  1, multiplier = -1:
+          // case (ii)  ub(x_j) =  inf,  x_j > -x_k: set x_k = ub(x_k)
+          // direction = -1, multiplier =  1:
+          // case (iii) lb(x_j) = -inf, -x_j > -x_k: set x_k = ub(x_k)
+          // direction = -1, multiplier = -1:
+          // case (iv)  lb(x_j) = -inf, -x_j >  x_k: set x_k = lb(x_k)
+          HPRESOLVE_CHECKED_CALL(fixCol(k, -direction_k));
         }
       }
-      // increment counter for number of domination checks due to predictive
-      // bound analysis
-      if (!tryToFixCol && !tryToFixK) numDomChecksPredBndAnalysis++;
       return Result::kOk;
     };
 
