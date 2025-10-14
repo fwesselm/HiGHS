@@ -1153,9 +1153,8 @@ HPresolve::Result HPresolve::dominatedColumns(
       addSignature(row, col, rowUpperFinite, rowLowerFinite);
   }
 
-  // count number of fixed columns and modified bounds
+  // count number of fixed columns
   HighsInt numFixedCols = 0;
-  HighsInt numBoundsModified = 0;
 
   for (HighsInt j = 0; j < model->num_col_; ++j) {
     // skip deleted columns
@@ -1237,37 +1236,26 @@ HPresolve::Result HPresolve::dominatedColumns(
       // compute direction for dominated variable
       // (1: lower bound; -1: upper bound)
       HighsInt direction_k = multiplier * direction;
-      // get bounds
-      double dominatingBound =
-          direction > 0 ? model->col_upper_[col] : model->col_lower_[col];
       double dominatedBound =
           direction_k > 0 ? model->col_lower_[k] : model->col_upper_[k];
-      // check if bounds are finite
-      bool isDominatingBoundFinite = direction * dominatingBound != kHighsInf;
-      bool isDominatedBoundFinite = direction_k * dominatedBound != -kHighsInf;
-      // check whether variable 'col' can potentially be fixed
-      bool tryToFixCol = boundImplied && otherBoundImpliedByWorstCase;
       // check whether variable 'k' can potentially be fixed. check if there are
       // cliques in advance instead of directly searching for a common clique.
-      bool tryToFixK =
-          isDominatedBoundFinite &&
+      bool tryToFix =
+          direction_k * dominatedBound != -kHighsInf &&
           (boundImplied ||
            (isBinary(col) && mipsolver->mipdata_->cliquetable.numCliques(
                                  col, direction > 0 ? 1 : 0) > 0));
       // check whether variable 'col' dominates variable 'k'; check already
       // known non-zeros in respective columns in advance to avoid
       // (potentially slow) element-wise comparison if possible.
-      bool performDominationCheck =
-          (tryToFixCol || tryToFixK) &&
-          checkDominationNonZero(row, direction * bestVal, direction_k * val);
-      if (!performDominationCheck) return Result::kOk;
-      // check for domination
-      if (checkDomination(direction, col, direction_k, k)) {
-        if (tryToFixCol) {
+      if ((otherBoundImpliedByWorstCase || tryToFix) &&
+          checkDominationNonZero(row, direction * bestVal, direction_k * val) &&
+          checkDomination(direction, col, direction_k, k)) {
+        if (otherBoundImpliedByWorstCase) {
           // direction =  1: fix variable x_j to its upper bound
           // direction = -1: fix variable x_j to its lower bound
           HPRESOLVE_CHECKED_CALL(fixCol(col, direction));
-        } else if (tryToFixK &&
+        } else if (tryToFix &&
                    (boundImplied ||
                     mipsolver->mipdata_->cliquetable.haveCommonClique(
                         HighsCliqueTable::CliqueVar(col, direction > 0 ? 1 : 0),
@@ -5149,7 +5137,7 @@ void HPresolve::computeColBounds(HighsInt col, HighsInt boundCol,
       if (lowerBound != nullptr)
         *lowerBound =
             std::max(*lowerBound, computeBound(triplet, rhs, direction, false));
-      if (worstCaseLowerBound != nullptr)
+      if (worstCaseLowerBound != nullptr && *worstCaseLowerBound != kHighsInf)
         *worstCaseLowerBound = std::max(
             *worstCaseLowerBound, computeBound(triplet, rhs, direction, true));
     } else {
@@ -5157,7 +5145,7 @@ void HPresolve::computeColBounds(HighsInt col, HighsInt boundCol,
       if (upperBound != nullptr)
         *upperBound =
             std::min(*upperBound, computeBound(triplet, rhs, direction, false));
-      if (worstCaseUpperBound != nullptr)
+      if (worstCaseUpperBound != nullptr && *worstCaseUpperBound != -kHighsInf)
         *worstCaseUpperBound = std::min(
             *worstCaseUpperBound, computeBound(triplet, rhs, direction, true));
     }
