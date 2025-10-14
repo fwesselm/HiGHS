@@ -1223,8 +1223,9 @@ HPresolve::Result HPresolve::dominatedColumns(
       } else {
         HPRESOLVE_CHECKED_CALL(fixColToLower(postsolve_stack, col));
       }
-      // remove row singletons if variable was fixed
+      // remove row singletons and doubleton equations
       HPRESOLVE_CHECKED_CALL(removeRowSingletons(postsolve_stack));
+      HPRESOLVE_CHECKED_CALL(removeDoubletonEquations(postsolve_stack));
       return Result::kOk;
     };
 
@@ -1312,10 +1313,6 @@ HPresolve::Result HPresolve::dominatedColumns(
       HPRESOLVE_CHECKED_CALL(checkRow(bestRowPlus, j, HighsInt{1},
                                       ajBestRowPlus, upperImplied,
                                       lowerImpliedByWorstCase));
-
-    // remove doubleton equations
-    if (numFixedCols != oldNumFixed)
-      HPRESOLVE_CHECKED_CALL(removeDoubletonEquations(postsolve_stack));
   }
 
   if (numFixedCols)
