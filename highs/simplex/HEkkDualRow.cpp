@@ -160,7 +160,7 @@ HighsInt HEkkDualRow::chooseFinal() {
   bool use_heap_sort = false;
   // Use the quadratic cost sort for smaller values of workCount,
   // otherwise use the heap-based sort
-  use_quad_sort = true;  // workCount < 100;
+  use_quad_sort = workCount < 100;
   use_heap_sort = !use_quad_sort;
   assert(use_heap_sort || use_quad_sort);
   if (use_quad_sort) {
