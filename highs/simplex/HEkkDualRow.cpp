@@ -160,7 +160,7 @@ HighsInt HEkkDualRow::chooseFinal() {
   bool use_heap_sort = false;
   // Use the quadratic cost sort for smaller values of workCount,
   // otherwise use the heap-based sort
-  use_quad_sort = true;  // workCount < 100;
+  use_quad_sort = workCount < 100;
   use_heap_sort = !use_quad_sort;
   assert(use_heap_sort || use_quad_sort);
   if (use_quad_sort) {
@@ -176,7 +176,7 @@ HighsInt HEkkDualRow::chooseFinal() {
   }
 
   if (use_heap_sort) {
-    printf("CHUZC: Using heap sort\n");
+    if (report_bfrt) printf("CHUZC: Using heap sort\n");
     // Take a copy of workData and workCount for the independent
     // heap-based code
     original_workData = workData;
@@ -267,16 +267,22 @@ HighsInt HEkkDualRow::chooseFinal() {
       const HighsInt move = workMove[iCol];
       workData[workCount++] = make_pair(iCol, move * workRange[iCol]);
     }
-    for (HighsInt i = workGroup[breakGroup]; i < workGroup[breakGroup + 1]; i++)
-      if (report_bfrt) debugReportBfrtVar(i, workData);
+    if (report_bfrt) {
+      for (HighsInt i = workGroup[breakGroup]; i < workGroup[breakGroup + 1];
+           i++)
+        debugReportBfrtVar(i, workData);
+    }
   } else {
-    printf("DebugHeapSortCHUZC: Pivot = %4d; alpha = %11.4g; theta = %11.4g\n",
-           (int)workPivot, workAlpha, workTheta);
-    debugReportBfrtVar(-1, sorted_workData);
+    if (report_bfrt) {
+      printf(
+          "DebugHeapSortCHUZC: Pivot = %4d; alpha = %11.4g; theta = %11.4g\n",
+          (int)workPivot, workAlpha, workTheta);
+      debugReportBfrtVar(-1, sorted_workData);
+    }
     for (HighsInt i = 0; i < alt_workGroup[breakGroup]; i++) {
       const HighsInt iCol = sorted_workData[i].first;
       const HighsInt move = workMove[iCol];
-      debugReportBfrtVar(i, sorted_workData);
+      if (report_bfrt) debugReportBfrtVar(i, sorted_workData);
       workData[workCount++] = make_pair(iCol, move * workRange[iCol]);
     }
     // Look at all entries of final group to see what dual
@@ -287,7 +293,7 @@ HighsInt HEkkDualRow::chooseFinal() {
     //    HighsInt num_infeasibility = 0;
     const double Td = ekk_instance_.options_->dual_feasibility_tolerance;
     for (HighsInt i = alt_workGroup[breakGroup]; i < to_i; i++) {
-      debugReportBfrtVar(i, sorted_workData);
+      if (report_bfrt) debugReportBfrtVar(i, sorted_workData);
       const HighsInt iCol = sorted_workData[i].first;
       const double value = sorted_workData[i].second;
       const HighsInt move = workMove[iCol];
