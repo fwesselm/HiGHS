@@ -433,6 +433,7 @@ struct HighsOptionsStruct {
   bool less_infeasible_DSE_check;
   bool less_infeasible_DSE_choose_row;
   bool use_original_HFactor_logic;
+  bool dual_simplex_bfrt_allow_heap;
   //  bool allow_pdlp_cleanup;
   bool run_centring;
   HighsInt max_centring_steps;
@@ -595,6 +596,7 @@ struct HighsOptionsStruct {
         less_infeasible_DSE_check(false),
         less_infeasible_DSE_choose_row(false),
         use_original_HFactor_logic(false),
+        dual_simplex_bfrt_allow_heap(false),
         //        allow_pdlp_cleanup(false),
         run_centring(false),
         max_centring_steps(0),
@@ -1578,6 +1580,11 @@ class HighsOptions : public HighsOptionsStruct {
         "use_original_HFactor_logic",
         "Use original HFactor logic for sparse vs hyper-sparse TRANs", advanced,
         &use_original_HFactor_logic, true);
+    records.push_back(record_bool);
+
+    record_bool = new OptionRecordBool(
+        "dual_simplex_bfrt_allow_heap", "Allow heap-based sort in BFRT",
+        advanced, &dual_simplex_bfrt_allow_heap, false);
     records.push_back(record_bool);
 
     record_bool = new OptionRecordBool(
