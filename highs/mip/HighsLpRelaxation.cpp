@@ -1152,7 +1152,15 @@ HighsLpRelaxation::Status HighsLpRelaxation::run(bool resolve_on_error) {
     }
   }
   if (use_simplex) {
+    HighsInt bfrt_threshold;
+    lpsolver.getOptionValue("dual_simplex_bfrt_heap_threshold", bfrt_threshold);
+    lpsolver.setOptionValue(
+        "dual_simplex_bfrt_heap_threshold",
+        mipsolver.options_mip_->dual_simplex_bfrt_heap_threshold);
+
     callstatus = lpsolver.run();
+
+    lpsolver.setOptionValue("dual_simplex_bfrt_heap_threshold", bfrt_threshold);
   }
   // Revert the value of lpsolver.options_.solver
   lpsolver.setOptionValue("solver", solver);

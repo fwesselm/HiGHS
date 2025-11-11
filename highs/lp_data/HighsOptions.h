@@ -433,11 +433,11 @@ struct HighsOptionsStruct {
   bool less_infeasible_DSE_check;
   bool less_infeasible_DSE_choose_row;
   bool use_original_HFactor_logic;
-  bool dual_simplex_bfrt_allow_heap;
   //  bool allow_pdlp_cleanup;
   bool run_centring;
   HighsInt max_centring_steps;
   double centring_ratio_tolerance;
+  HighsInt dual_simplex_bfrt_heap_threshold;
 
   // Options for iCrash
   bool icrash;
@@ -596,11 +596,11 @@ struct HighsOptionsStruct {
         less_infeasible_DSE_check(false),
         less_infeasible_DSE_choose_row(false),
         use_original_HFactor_logic(false),
-        dual_simplex_bfrt_allow_heap(false),
         //        allow_pdlp_cleanup(false),
         run_centring(false),
         max_centring_steps(0),
         centring_ratio_tolerance(0.0),
+        dual_simplex_bfrt_heap_threshold(kHighsIInf),
         icrash(false),
         icrash_dualize(false),
         icrash_strategy(""),
@@ -1583,11 +1583,6 @@ class HighsOptions : public HighsOptionsStruct {
     records.push_back(record_bool);
 
     record_bool = new OptionRecordBool(
-        "dual_simplex_bfrt_allow_heap", "Allow heap-based sort in BFRT",
-        advanced, &dual_simplex_bfrt_allow_heap, false);
-    records.push_back(record_bool);
-
-    record_bool = new OptionRecordBool(
         "less_infeasible_DSE_check", "Check whether LP is candidate for LiDSE",
         advanced, &less_infeasible_DSE_check, true);
     records.push_back(record_bool);
@@ -1624,6 +1619,12 @@ class HighsOptions : public HighsOptionsStruct {
         "this tolerance (default = 100)",
         advanced, &centring_ratio_tolerance, 0, 100, kHighsInf);
     records.push_back(record_double);
+
+    record_int = new OptionRecordInt(
+        "dual_simplex_bfrt_heap_threshold",
+        "Threshold for allowing heap-based sort in BFRT", advanced,
+        &dual_simplex_bfrt_heap_threshold, 0, kHighsIInf, kHighsIInf);
+    records.push_back(record_int);
 
     // Set up the log_options aliases
     log_options.clear();
