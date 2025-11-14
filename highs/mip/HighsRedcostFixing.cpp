@@ -223,11 +223,11 @@ void HighsRedcostFixing::addRootRedcost(const HighsMipSolver& mipsolver,
 
   auto findLurkingBounds =
       [&](HighsInt col, HighsInt direction, HighsInt bound, HighsInt otherBound,
-          double lpobjective, double redcost, HighsInt maxNumSteps,
+          double lpObjective, double redCost, HighsInt maxNumSteps,
           HighsInt maxNumStepsExp,
           std::multimap<double, HighsInt>& lurkingBounds,
           std::multimap<double, HighsInt>& otherLurkingBounds) {
-        if (direction * redcost == kHighsInf) {
+        if (direction * redCost == kHighsInf) {
           lurkingBounds.clear();
           otherLurkingBounds.clear();
           lurkingBounds.emplace(-kHighsInf, otherBound);
@@ -246,18 +246,20 @@ void HighsRedcostFixing::addRootRedcost(const HighsMipSolver& mipsolver,
           step = (range + maxNumSteps - 1) >> maxNumStepsExp;
         step *= direction;
 
+        const double shift =
+            step - direction * 10 * mipsolver.mipdata_->feastol;
+
         for (HighsInt lurkingBound = otherBound;
              direction * lurkingBound <= direction * lastBound;
              lurkingBound += step) {
-          double fracbound = (lurkingBound - otherBound) -
-                             direction * 10 * mipsolver.mipdata_->feastol;
-          double requiredcutoffbound =
-              fracbound * redcost + lpobjective - mipsolver.mipdata_->feastol;
-          if (requiredcutoffbound < mipsolver.mipdata_->lower_bound) continue;
+          double fracBound = lurkingBound - otherBound + shift;
+          double requiredCutoffBound =
+              fracBound * redCost + lpObjective - mipsolver.mipdata_->feastol;
+          if (requiredCutoffBound < mipsolver.mipdata_->lower_bound) continue;
 
           // check if we already have a better lurking bound stored
           bool useful = true;
-          auto pos = lurkingBounds.lower_bound(requiredcutoffbound);
+          auto pos = lurkingBounds.lower_bound(requiredCutoffBound);
           for (auto it = pos; it != lurkingBounds.end(); ++it) {
             useful =
                 direction * it->second >= direction * (lurkingBound + step);
@@ -267,7 +269,7 @@ void HighsRedcostFixing::addRootRedcost(const HighsMipSolver& mipsolver,
 
           // we have no better lurking bound stored store this lurking bound and
           // check if it dominates one that is already stored
-          auto it = lurkingBounds.emplace_hint(pos, requiredcutoffbound,
+          auto it = lurkingBounds.emplace_hint(pos, requiredCutoffBound,
                                                lurkingBound);
 
           auto i = lurkingBounds.begin();
