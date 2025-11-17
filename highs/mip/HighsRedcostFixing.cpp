@@ -223,36 +223,34 @@ void HighsRedcostFixing::addRootRedcost(const HighsMipSolver& mipsolver,
 
   auto findLurkingBounds =
       [&](HighsInt col, HighsInt direction, HighsInt bound, HighsInt otherBound,
-          double lpObjective, double redCost, HighsInt maxNumSteps,
-          HighsInt maxNumStepsExp,
+          bool isOtherBoundFinite, double lpObjective, double redCost,
+          HighsInt maxNumSteps, HighsInt maxNumStepsExp,
           std::multimap<double, HighsInt>& lurkingBounds,
           std::multimap<double, HighsInt>& otherLurkingBounds) {
         if (direction * redCost == kHighsInf) {
           lurkingBounds.clear();
           otherLurkingBounds.clear();
-          lurkingBounds.emplace(-kHighsInf, otherBound);
+          lurkingBounds.emplace(-kHighsInf, bound);
           return;
         }
 
         HighsInt lastBound;
-        if (direction * bound == kHighsInf)
-          lastBound = otherBound + direction * maxNumSteps;
+        if (!isOtherBoundFinite)
+          lastBound = bound + direction * maxNumSteps;
         else
-          lastBound = bound - direction;
+          lastBound = otherBound - direction;
 
         HighsInt step = 1;
-        HighsInt range = direction * (lastBound - otherBound);
+        HighsInt range = direction * (lastBound - bound);
         if (range > maxNumSteps)
           step = (range + maxNumSteps - 1) >> maxNumStepsExp;
+        double shift = direction * (step - 10 * mipsolver.mipdata_->feastol);
         step *= direction;
 
-        const double shift =
-            step - direction * 10 * mipsolver.mipdata_->feastol;
-
-        for (HighsInt lurkingBound = otherBound;
+        for (HighsInt lurkingBound = bound;
              direction * lurkingBound <= direction * lastBound;
              lurkingBound += step) {
-          double fracBound = lurkingBound - otherBound + shift;
+          double fracBound = lurkingBound - bound + shift;
           double requiredCutoffBound =
               fracBound * redCost + lpObjective - mipsolver.mipdata_->feastol;
           if (requiredCutoffBound < mipsolver.mipdata_->lower_bound) continue;
@@ -267,8 +265,8 @@ void HighsRedcostFixing::addRootRedcost(const HighsMipSolver& mipsolver,
           }
           if (!useful) continue;
 
-          // we have no better lurking bound stored store this lurking bound and
-          // check if it dominates one that is already stored
+          // we have no better lurking bound stored; store this lurking bound
+          // and check if it dominates one that is already stored
           auto it = lurkingBounds.emplace_hint(pos, requiredCutoffBound,
                                                lurkingBound);
 
@@ -285,30 +283,32 @@ void HighsRedcostFixing::addRootRedcost(const HighsMipSolver& mipsolver,
       };
 
   for (HighsInt col : mipsolver.mipdata_->integral_cols) {
-    // get bounds
-    HighsInt lb =
-        static_cast<HighsInt>(mipsolver.mipdata_->domain.col_lower_[col]);
-    HighsInt ub =
-        static_cast<HighsInt>(mipsolver.mipdata_->domain.col_upper_[col]);
-
     if (lpredcost[col] > mipsolver.mipdata_->feastol) {
       // col <= (cutoffbound - lpobj)/redcost + lb
       // so for lurkub = lb to ub - 1 we can compute the necessary cutoff
       // bound to reach this bound which is:
       //  lurkub = (cutoffbound - lpobj)/redcost + lb
       //  cutoffbound = (lurkub - lb) * redcost + lpobj
-      findLurkingBounds(col, HighsInt{1}, ub, lb, lpobjective, lpredcost[col],
-                        maxNumSteps, maxNumStepsExp, lurkingColUpper[col],
-                        lurkingColLower[col]);
+      findLurkingBounds(
+          col, HighsInt{1},
+          static_cast<HighsInt>(mipsolver.mipdata_->domain.col_lower_[col]),
+          static_cast<HighsInt>(mipsolver.mipdata_->domain.col_upper_[col]),
+          mipsolver.mipdata_->domain.col_upper_[col] != kHighsInf, lpobjective,
+          lpredcost[col], maxNumSteps, maxNumStepsExp, lurkingColUpper[col],
+          lurkingColLower[col]);
     } else if (lpredcost[col] < -mipsolver.mipdata_->feastol) {
       // col >= (cutoffbound - lpobj)/redcost + ub
       // so for lurklb = lb + 1 to ub we can compute the necessary cutoff
       // bound to reach this bound which is:
       //  lurklb = (cutoffbound - lpobj)/redcost + ub
       //  cutoffbound = (lurklb - ub) * redcost + lpobj
-      findLurkingBounds(col, HighsInt{-1}, lb, ub, lpobjective, lpredcost[col],
-                        maxNumSteps, maxNumStepsExp, lurkingColLower[col],
-                        lurkingColUpper[col]);
+      findLurkingBounds(
+          col, HighsInt{-1},
+          static_cast<HighsInt>(mipsolver.mipdata_->domain.col_upper_[col]),
+          static_cast<HighsInt>(mipsolver.mipdata_->domain.col_lower_[col]),
+          mipsolver.mipdata_->domain.col_lower_[col] != -kHighsInf, lpobjective,
+          lpredcost[col], maxNumSteps, maxNumStepsExp, lurkingColLower[col],
+          lurkingColUpper[col]);
     }
   }
 }
