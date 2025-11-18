@@ -733,6 +733,56 @@ void HighsSparseMatrix::deleteRows(
   this->num_row_ = new_num_row;
 }
 
+double HighsSparseMatrix::colDynamism(const HighsInt iCol) const {
+  assert(iCol >= 0 && iCol < num_col_);
+  double min_abs_value = kHighsInf;
+  double max_abs_value = -kHighsInf;
+  if (isColwise()) {
+    for (HighsInt iEl = start_[iCol]; iEl < start_[iCol + 1]; iEl++) {
+      double value = fabs(value_[iEl]);
+      max_abs_value = max(max_abs_value, value);
+      min_abs_value = min(min_abs_value, value);
+    }
+  } else {
+    for (HighsInt iRow = 0; iRow < num_row_; iRow++) {
+      for (HighsInt iEl = start_[iRow]; iEl < start_[iRow + 1]; iEl++) {
+        if (index_[iEl] == iCol) {
+          double value = fabs(value_[iEl]);
+          max_abs_value = max(max_abs_value, value);
+          min_abs_value = min(min_abs_value, value);
+          break;
+        }
+      }
+    }
+  }
+  return max_abs_value / min_abs_value;
+}
+
+double HighsSparseMatrix::rowDynamism(const HighsInt iRow) const {
+  assert(iRow >= 0 && iRow < num_row_);
+  double min_abs_value = kHighsInf;
+  double max_abs_value = -kHighsInf;
+  if (isRowwise()) {
+    for (HighsInt iEl = start_[iRow]; iEl < start_[iRow + 1]; iEl++) {
+      double value = fabs(value_[iEl]);
+      max_abs_value = max(max_abs_value, value);
+      min_abs_value = min(min_abs_value, value);
+    }
+  } else {
+    for (HighsInt iCol = 0; iCol < num_col_; iCol++) {
+      for (HighsInt iEl = start_[iCol]; iEl < start_[iCol + 1]; iEl++) {
+        if (index_[iEl] == iRow) {
+          double value = fabs(value_[iEl]);
+          max_abs_value = max(max_abs_value, value);
+          min_abs_value = min(min_abs_value, value);
+          break;
+        }
+      }
+    }
+  }
+  return max_abs_value / min_abs_value;
+}
+
 HighsStatus HighsSparseMatrix::assessStart(const HighsLogOptions& log_options) {
   // Identify main dimensions
   HighsInt vec_dim;

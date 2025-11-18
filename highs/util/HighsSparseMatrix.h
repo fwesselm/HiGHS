@@ -62,6 +62,9 @@ class HighsSparseMatrix {
               double* value) const;
   void deleteCols(const HighsIndexCollection& index_collection);
   void deleteRows(const HighsIndexCollection& index_collection);
+  double colDynamism(const HighsInt iCol) const;
+  double rowDynamism(const HighsInt iRow) const;
+
   HighsStatus assessDimensions(const HighsLogOptions& log_options,
                                const std::string matrix_name);
   HighsStatus assessStart(const HighsLogOptions& log_options);

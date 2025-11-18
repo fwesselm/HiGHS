@@ -455,8 +455,9 @@ void HighsMipSolverData::finishAnalyticCenterComputation(
                           mipsolver.mipdata_->domain.col_lower_[i];
       if (boundRange == 0.0) continue;
 
-      double tolerance =
-          mipsolver.mipdata_->feastol * std::min(boundRange, 1.0);
+      double d = mipsolver.model_->a_matrix_.colDynamism(i);
+
+      double tolerance = mipsolver.mipdata_->feastol / d;
 
       if (analyticCenter[i] <= mipsolver.model_->col_lower_[i] + tolerance) {
         mipsolver.mipdata_->domain.changeBound(
@@ -1365,12 +1366,13 @@ void HighsMipSolverData::performRestart() {
   HighsInt num_reductions = HighsInt(postSolveStack.numReductions());
   HighsInt restart_presolve_reduction_limit =
       mipsolver.options_mip_->restart_presolve_reduction_limit;
-  assert(restart_presolve_reduction_limit);
+  // assert(restart_presolve_reduction_limit);
   HighsInt further_presolve_reduction_limit =
       restart_presolve_reduction_limit >= 0
           ? num_reductions + restart_presolve_reduction_limit
           : -1;
-  runMipPresolve(further_presolve_reduction_limit);
+  if (restart_presolve_reduction_limit > 0)
+    runMipPresolve(further_presolve_reduction_limit);
 
   if (mipsolver.modelstatus_ != HighsModelStatus::kNotset) {
     // transform the objective limit to the current model
@@ -1474,9 +1476,7 @@ bool HighsMipSolverData::addIncumbent(const std::vector<double>& sol,
       possibly_store_as_new_incumbent || execute_mip_solution_callback;
   // Get the transformed objective and solution if required
   const double transformed_solobj =
-      get_transformed_solution ? transformNewIntegerFeasibleSolution(
-                                     sol, possibly_store_as_new_incumbent)
-                               : 0;
+      transformNewIntegerFeasibleSolution(sol, possibly_store_as_new_incumbent);
   const bool highs_solution_report = false;
   if (solution_source == kSolutionSourceHighsSolution && highs_solution_report
       //&& possibly_store_as_new_incumbent
