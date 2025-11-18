@@ -455,8 +455,8 @@ void HighsMipSolverData::finishAnalyticCenterComputation(
                           mipsolver.mipdata_->domain.col_lower_[i];
       if (boundRange == 0.0) continue;
 
-      double tolerance =
-          mipsolver.mipdata_->feastol * std::min(boundRange, 1.0);
+      double tolerance = mipsolver.mipdata_->feastol /
+                         mipsolver.model_->a_matrix_.colDynamism(i);
 
       if (analyticCenter[i] <= mipsolver.model_->col_lower_[i] + tolerance) {
         mipsolver.mipdata_->domain.changeBound(
