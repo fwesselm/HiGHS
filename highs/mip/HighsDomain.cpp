@@ -401,40 +401,25 @@ void HighsDomain::CutpoolPropagation::recomputeCapacityThreshold(HighsInt cut) {
 }
 
 void HighsDomain::CutpoolPropagation::cutAdded(HighsInt cut, bool propagate) {
-  if (!propagate) {
-    if (domain != &domain->mipsolver->mipdata_->domain) return;
-    HighsInt start = cutpool->getMatrix().getRowStart(cut);
-    HighsInt end = cutpool->getMatrix().getRowEnd(cut);
-    const HighsInt* arindex = cutpool->getMatrix().getARindex();
-    const double* arvalue = cutpool->getMatrix().getARvalue();
+  if (!propagate && domain != &domain->mipsolver->mipdata_->domain) return;
 
-    if (HighsInt(activitycuts_.size()) <= cut) {
-      activitycuts_.resize(cut + 1);
-      activitycutsinf_.resize(cut + 1);
-      propagatecutflags_.resize(cut + 1, 2);
-      capacityThreshold_.resize(cut + 1);
-    }
+  HighsInt start = cutpool->getMatrix().getRowStart(cut);
+  HighsInt end = cutpool->getMatrix().getRowEnd(cut);
+  const HighsInt* arindex = cutpool->getMatrix().getARindex();
+  const double* arvalue = cutpool->getMatrix().getARvalue();
 
-    propagatecutflags_[cut] &= ~uint8_t{2};
-    domain->computeMinActivity(start, end, arindex, arvalue,
-                               activitycutsinf_[cut], activitycuts_[cut]);
-  } else {
-    HighsInt start = cutpool->getMatrix().getRowStart(cut);
-    HighsInt end = cutpool->getMatrix().getRowEnd(cut);
-    const HighsInt* arindex = cutpool->getMatrix().getARindex();
-    const double* arvalue = cutpool->getMatrix().getARvalue();
+  if (HighsInt(activitycuts_.size()) <= cut) {
+    activitycuts_.resize(cut + 1);
+    activitycutsinf_.resize(cut + 1);
+    propagatecutflags_.resize(cut + 1, 2);
+    capacityThreshold_.resize(cut + 1);
+  }
 
-    if (HighsInt(activitycuts_.size()) <= cut) {
-      activitycuts_.resize(cut + 1);
-      activitycutsinf_.resize(cut + 1);
-      propagatecutflags_.resize(cut + 1, 2);
-      capacityThreshold_.resize(cut + 1);
-    }
+  propagatecutflags_[cut] &= ~uint8_t{2};
+  domain->computeMinActivity(start, end, arindex, arvalue,
+                             activitycutsinf_[cut], activitycuts_[cut]);
 
-    propagatecutflags_[cut] &= ~uint8_t{2};
-    domain->computeMinActivity(start, end, arindex, arvalue,
-                               activitycutsinf_[cut], activitycuts_[cut]);
-
+  if (propagate) {
     recomputeCapacityThreshold(cut);
     markPropagateCut(cut);
   }
@@ -2415,23 +2400,24 @@ bool HighsDomain::propagate() {
         for (HighsInt k = 0; k != numproprows; ++k) {
           HighsInt i = propagateinds[k];
 
-          if (propRowNumChangedBounds_[k].first != 0) {
-            HighsInt start = 2 * mipsolver->mipdata_->ARstart_[i];
-            HighsInt end = start + propRowNumChangedBounds_[k].first;
+          auto changeBounds = [&](HighsInt row, HighsInt startOffset,
+                                  HighsInt endOffset, const Reason& r) {
+            if (endOffset == 0) return false;
+            HighsInt start =
+                2 * mipsolver->mipdata_->ARstart_[row] + startOffset;
+            HighsInt end = start + endOffset;
             for (HighsInt j = start; j != end && !infeasible_; ++j)
-              changeBound(changedbounds[j], Reason::modelRowUpper(i));
+              changeBound(changedbounds[j], r);
+            return infeasible_;
+          };
 
-            if (infeasible_) break;
-          }
-          if (propRowNumChangedBounds_[k].second != 0) {
-            HighsInt start = 2 * mipsolver->mipdata_->ARstart_[i] +
-                             propRowNumChangedBounds_[k].first;
-            HighsInt end = start + propRowNumChangedBounds_[k].second;
-            for (HighsInt j = start; j != end && !infeasible_; ++j)
-              changeBound(changedbounds[j], Reason::modelRowLower(i));
-
-            if (infeasible_) break;
-          }
+          if (changeBounds(i, HighsInt{0}, propRowNumChangedBounds_[k].first,
+                           Reason::modelRowUpper(i)))
+            break;
+          if (changeBounds(i, propRowNumChangedBounds_[k].first,
+                           propRowNumChangedBounds_[k].second,
+                           Reason::modelRowLower(i)))
+            break;
         }
       }
 
