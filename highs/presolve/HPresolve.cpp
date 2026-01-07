@@ -5017,9 +5017,8 @@ HPresolve::Result HPresolve::enumerateSolutions(
   };
 
   auto handleSolution = [&](HighsInt row, size_t numVars, size_t& numSolutions,
-                            size_t& numWorstCaseBounds, double& minActivity,
-                            double& maxActivity, HighsInt& maxNumActiveCols,
-                            bool& noReductions) {
+                            size_t& numWorstCaseBounds,
+                            HighsInt& maxNumActiveCols, bool& noReductions) {
     // propagate
     domain.propagate();
     if (domain.infeasible()) return;
@@ -5056,19 +5055,6 @@ HPresolve::Result HPresolve::enumerateSolutions(
         }
       }
     }
-
-    // update minimum / maximum activity
-    HighsCDouble activity = 0.0;
-    for (HighsInt j = mipsolver->mipdata_->ARstart_[row];
-         j < mipsolver->mipdata_->ARstart_[row + 1]; j++) {
-      // get index and coefficient
-      HighsInt col = mipsolver->mipdata_->ARindex_[j];
-      double val = mipsolver->mipdata_->ARvalue_[j];
-      // update activity
-      activity += static_cast<HighsCDouble>(val) * domain.col_lower_[col];
-    }
-    minActivity = std::min(minActivity, static_cast<double>(activity));
-    maxActivity = std::max(maxActivity, static_cast<double>(activity));
 
     // store solution
     numSolutions++;
@@ -5125,8 +5111,6 @@ HPresolve::Result HPresolve::enumerateSolutions(
     HighsInt numBranches = -1;
     size_t numWorstCaseBounds = 0;
     size_t numSolutions = 0;
-    double minActivity = kHighsInf;
-    double maxActivity = -kHighsInf;
     HighsInt maxNumActiveCols = 0;
     bool noReductions = false;
     while (true) {
@@ -5135,8 +5119,7 @@ HPresolve::Result HPresolve::enumerateSolutions(
         backtrack = solutionFound(numVars);
         if (backtrack) {
           handleSolution(row, numVars, numSolutions, numWorstCaseBounds,
-                         minActivity, maxActivity, maxNumActiveCols,
-                         noReductions);
+                         maxNumActiveCols, noReductions);
           if (noReductions) break;
         }
       }
