@@ -5016,8 +5016,10 @@ HPresolve::Result HPresolve::enumerateSolutions(
     numWorstCaseBounds--;
   };
 
-  auto handleSolution = [&](size_t numVars, size_t& numSolutions,
-                            size_t& numWorstCaseBounds, bool& noReductions) {
+  auto handleSolution = [&](HighsInt row, size_t numVars, size_t& numSolutions,
+                            size_t& numWorstCaseBounds, double& minActivity,
+                            double& maxActivity, HighsInt& maxNumActiveCols,
+                            bool& noReductions) {
     // propagate
     domain.propagate();
     if (domain.infeasible()) return;
@@ -5054,11 +5056,29 @@ HPresolve::Result HPresolve::enumerateSolutions(
         }
       }
     }
+
+    // update minimum / maximum activity
+    HighsCDouble activity = 0.0;
+    for (HighsInt j = mipsolver->mipdata_->ARstart_[row];
+         j < mipsolver->mipdata_->ARstart_[row + 1]; j++) {
+      // get index and coefficient
+      HighsInt col = mipsolver->mipdata_->ARindex_[j];
+      double val = mipsolver->mipdata_->ARvalue_[j];
+      // update activity
+      activity += static_cast<HighsCDouble>(val) * domain.col_lower_[col];
+    }
+    minActivity = std::min(minActivity, static_cast<double>(activity));
+    maxActivity = std::max(maxActivity, static_cast<double>(activity));
+
     // store solution
-    for (size_t i = 0; i < numVars; i++)
+    numSolutions++;
+    HighsInt numActiveCols = 0;
+    for (size_t i = 0; i < numVars; i++) {
       solutions[i][numSolutions] =
           (domain.col_lower_[vars[i]] == 0.0 ? HighsInt{0} : HighsInt{1});
-    numSolutions++;
+      if (solutions[i][numSolutions] == 1) numActiveCols++;
+    }
+    maxNumActiveCols = std::max(maxNumActiveCols, numActiveCols);
 
     // if no reductions are possible, stop enumerating solutions
     noReductions = numWorstCaseBounds == 0;
@@ -5105,13 +5125,17 @@ HPresolve::Result HPresolve::enumerateSolutions(
     HighsInt numBranches = -1;
     size_t numWorstCaseBounds = 0;
     size_t numSolutions = 0;
+    double minActivity = kHighsInf;
+    double maxActivity = -kHighsInf;
+    HighsInt maxNumActiveCols = 0;
     bool noReductions = false;
     while (true) {
       bool backtrack = domain.infeasible();
       if (!backtrack) {
         backtrack = solutionFound(numVars);
         if (backtrack) {
-          handleSolution(numVars, numSolutions, numWorstCaseBounds,
+          handleSolution(row, numVars, numSolutions, numWorstCaseBounds,
+                         minActivity, maxActivity, maxNumActiveCols,
                          noReductions);
           if (noReductions) break;
         }
@@ -5131,6 +5155,19 @@ HPresolve::Result HPresolve::enumerateSolutions(
 
     // no solutions -> infeasible
     HPRESOLVE_CHECKED_CALL(handleInfeasibility(numSolutions == 0));
+
+    // check if all variables form a clique
+    if (maxNumActiveCols == 1 || maxNumActiveCols == numVars - 1) {
+      std::vector<HighsCliqueTable::CliqueVar> clique(numVars);
+      HighsInt numelms = 0;
+      for (size_t i = 0; i < numVars; i++)
+        clique[numelms++] =
+            HighsCliqueTable::CliqueVar(vars[i], maxNumActiveCols == 1 ? 1 : 0);
+      if (numelms > 1) {
+        cliquetable.addClique(*mipsolver, clique.data(), numelms);
+        HPRESOLVE_CHECKED_CALL(handleInfeasibility(domain.infeasible()));
+      }
+    }
 
     // analyse worst-case bounds
     for (size_t i = 0; i < numWorstCaseBounds; i++) {
