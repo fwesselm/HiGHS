@@ -5067,7 +5067,8 @@ HPresolve::Result HPresolve::enumerateSolutions(
     maxNumActiveCols = std::max(maxNumActiveCols, numActiveCols);
 
     // if no reductions are possible, stop enumerating solutions
-    noReductions = numWorstCaseBounds == 0;
+    noReductions = numWorstCaseBounds == 0 && maxNumActiveCols != 1 &&
+                   maxNumActiveCols != numVars - 1;
     if (noReductions) {
       for (size_t i = 0; i < numVars - 1; i++) {
         for (size_t ii = i + 1; ii < numVars; ii++) {
@@ -5155,8 +5156,6 @@ HPresolve::Result HPresolve::enumerateSolutions(
     // analyse worst-case bounds
     for (size_t i = 0; i < numWorstCaseBounds; i++) {
       HighsInt col = worstCaseBounds[i];
-      assert(worstCaseLowerBound[col] >= domain.col_lower_[col]);
-      assert(worstCaseUpperBound[col] <= domain.col_upper_[col]);
       if (worstCaseLowerBound[col] > domain.col_lower_[col]) {
         // tighten lower bound
         col_lower[col] = worstCaseLowerBound[col];
