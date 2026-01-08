@@ -5141,7 +5141,7 @@ HPresolve::Result HPresolve::enumerateSolutions(
     HPRESOLVE_CHECKED_CALL(handleInfeasibility(numSolutions == 0));
 
     // check if all variables form a clique
-    if (maxNumActiveCols == 1 || maxNumActiveCols == numVars - 1) {
+    /*if (maxNumActiveCols == 1 || maxNumActiveCols == numVars - 1) {
       std::vector<HighsCliqueTable::CliqueVar> clique(numVars);
       for (size_t i = 0; i < numVars; i++)
         clique[i] =
@@ -5149,7 +5149,7 @@ HPresolve::Result HPresolve::enumerateSolutions(
       cliquetable.addClique(*mipsolver, clique.data(),
                             static_cast<HighsInt>(numVars));
       HPRESOLVE_CHECKED_CALL(handleInfeasibility(domain.infeasible()));
-    }
+    }*/
 
     // analyse worst-case bounds
     for (size_t i = 0; i < numWorstCaseBounds; i++) {
