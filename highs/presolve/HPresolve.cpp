@@ -5018,7 +5018,8 @@ HPresolve::Result HPresolve::enumerateSolutions(
 
   auto handleSolution = [&](HighsInt row, size_t numVars, size_t& numSolutions,
                             size_t& numWorstCaseBounds,
-                            size_t& maxNumActiveCols, bool& noReductions) {
+                            size_t& minNumActiveCols, size_t& maxNumActiveCols,
+                            bool& noReductions) {
     // propagate
     domain.propagate();
     if (domain.infeasible()) return;
@@ -5064,11 +5065,13 @@ HPresolve::Result HPresolve::enumerateSolutions(
       solutions[i][numSolutions] = solValue;
       if (solValue != 0) numActiveCols++;
     }
+    minNumActiveCols = std::min(minNumActiveCols, numActiveCols);
     maxNumActiveCols = std::max(maxNumActiveCols, numActiveCols);
 
     // if no reductions are possible, stop enumerating solutions
-    noReductions = numWorstCaseBounds == 0 && maxNumActiveCols != 1 &&
-                   maxNumActiveCols != numVars - 1;
+    noReductions =
+        numWorstCaseBounds == 0 && maxNumActiveCols != 1 &&
+        (minNumActiveCols != numVars - 1 || maxNumActiveCols != numVars - 1);
     if (noReductions) {
       for (size_t i = 0; i < numVars - 1; i++) {
         for (size_t ii = i + 1; ii < numVars; ii++) {
@@ -5112,6 +5115,7 @@ HPresolve::Result HPresolve::enumerateSolutions(
     HighsInt numBranches = -1;
     size_t numWorstCaseBounds = 0;
     size_t numSolutions = 0;
+    size_t minNumActiveCols = numVars;
     size_t maxNumActiveCols = 0;
     bool noReductions = false;
     while (true) {
@@ -5120,7 +5124,7 @@ HPresolve::Result HPresolve::enumerateSolutions(
         backtrack = solutionFound(numVars);
         if (backtrack) {
           handleSolution(row, numVars, numSolutions, numWorstCaseBounds,
-                         maxNumActiveCols, noReductions);
+                         minNumActiveCols, maxNumActiveCols, noReductions);
           if (noReductions) break;
         }
       }
@@ -5141,7 +5145,8 @@ HPresolve::Result HPresolve::enumerateSolutions(
     HPRESOLVE_CHECKED_CALL(handleInfeasibility(numSolutions == 0));
 
     // check if all variables form a clique
-    if (maxNumActiveCols == 1 || maxNumActiveCols == numVars - 1) {
+    if (maxNumActiveCols == 1 ||
+        (minNumActiveCols == numVars - 1 && maxNumActiveCols == numVars - 1)) {
       std::vector<HighsCliqueTable::CliqueVar> clique(numVars);
       for (size_t i = 0; i < numVars; i++)
         clique[i] =
