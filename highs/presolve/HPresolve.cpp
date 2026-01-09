@@ -5145,7 +5145,7 @@ HPresolve::Result HPresolve::enumerateSolutions(
       std::vector<HighsCliqueTable::CliqueVar> clique(numVars);
       for (size_t i = 0; i < numVars; i++)
         clique[i] =
-            HighsCliqueTable::CliqueVar(vars[i], maxNumActiveCols == 1 ? 0 : 1);
+            HighsCliqueTable::CliqueVar(vars[i], maxNumActiveCols == 1 ? 1 : 0);
       cliquetable.addClique(*mipsolver, clique.data(),
                             static_cast<HighsInt>(numVars));
       HPRESOLVE_CHECKED_CALL(handleInfeasibility(domain.infeasible()));
@@ -5191,15 +5191,15 @@ HPresolve::Result HPresolve::enumerateSolutions(
         if (identicalVars(numSolutions, i, ii)) {
           // add clique x_1 + (1 - x_2) = 1 to clique table
           std::array<HighsCliqueTable::CliqueVar, 2> clique;
-          clique[0] = HighsCliqueTable::CliqueVar(col, 0);
-          clique[1] = HighsCliqueTable::CliqueVar(col2, 1);
+          clique[0] = HighsCliqueTable::CliqueVar(col, 1);
+          clique[1] = HighsCliqueTable::CliqueVar(col2, 0);
           cliquetable.addClique(*mipsolver, clique.data(), 2, true);
           HPRESOLVE_CHECKED_CALL(handleInfeasibility(domain.infeasible()));
         } else if (complementaryVars(numSolutions, i, ii)) {
           // add clique x_1 + x_2 = 1 to clique table
           std::array<HighsCliqueTable::CliqueVar, 2> clique;
-          clique[0] = HighsCliqueTable::CliqueVar(col, 0);
-          clique[1] = HighsCliqueTable::CliqueVar(col2, 0);
+          clique[0] = HighsCliqueTable::CliqueVar(col, 1);
+          clique[1] = HighsCliqueTable::CliqueVar(col2, 1);
           cliquetable.addClique(*mipsolver, clique.data(), 2, true);
           HPRESOLVE_CHECKED_CALL(handleInfeasibility(domain.infeasible()));
         }
