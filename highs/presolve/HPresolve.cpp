@@ -5060,9 +5060,9 @@ HPresolve::Result HPresolve::enumerateSolutions(
     numSolutions++;
     size_t numActiveCols = 0;
     for (size_t i = 0; i < numVars; i++) {
-      solutions[i][numSolutions] =
-          (domain.col_lower_[vars[i]] == 0.0 ? HighsInt{0} : HighsInt{1});
-      if (solutions[i][numSolutions] == 1) numActiveCols++;
+      HighsInt solValue = domain.col_lower_[vars[i]] == 0.0 ? 0 : 1;
+      solutions[i][numSolutions] = solValue;
+      if (solValue != 0) numActiveCols++;
     }
     maxNumActiveCols = std::max(maxNumActiveCols, numActiveCols);
 
