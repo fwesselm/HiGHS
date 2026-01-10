@@ -5018,7 +5018,7 @@ HPresolve::Result HPresolve::enumerateSolutions(
     numWorstCaseBounds--;
   };
 
-  auto handleSolution = [&](HighsInt row, size_t numVars, size_t& numSolutions,
+  auto handleSolution = [&](size_t numVars, size_t& numSolutions,
                             size_t& numWorstCaseBounds,
                             size_t& minNumActiveCols, size_t& maxNumActiveCols,
                             bool& noReductions) {
@@ -5125,7 +5125,7 @@ HPresolve::Result HPresolve::enumerateSolutions(
       if (!backtrack) {
         backtrack = solutionFound(numVars);
         if (backtrack) {
-          handleSolution(row, numVars, numSolutions, numWorstCaseBounds,
+          handleSolution(numVars, numSolutions, numWorstCaseBounds,
                          minNumActiveCols, maxNumActiveCols, noReductions);
           if (noReductions) break;
         }
