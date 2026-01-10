@@ -5018,6 +5018,13 @@ HPresolve::Result HPresolve::enumerateSolutions(
     numWorstCaseBounds--;
   };
 
+  auto varsFormClique = [&](size_t numVars, size_t minNumActiveCols,
+                            size_t maxNumActiveCols) {
+    return (
+        (minNumActiveCols == 0 && maxNumActiveCols == 1) ||
+        (minNumActiveCols == numVars - 1 && maxNumActiveCols == numVars - 1));
+  };
+
   auto handleSolution = [&](size_t numVars, size_t& numSolutions,
                             size_t& numWorstCaseBounds,
                             size_t& minNumActiveCols, size_t& maxNumActiveCols,
@@ -5071,9 +5078,8 @@ HPresolve::Result HPresolve::enumerateSolutions(
     maxNumActiveCols = std::max(maxNumActiveCols, numActiveCols);
 
     // if no reductions are possible, stop enumerating solutions
-    noReductions =
-        numWorstCaseBounds == 0 && maxNumActiveCols != 1 &&
-        (minNumActiveCols != numVars - 1 || maxNumActiveCols != numVars - 1);
+    noReductions = numWorstCaseBounds == 0 &&
+                   !varsFormClique(numVars, minNumActiveCols, maxNumActiveCols);
     if (noReductions) {
       for (size_t i = 0; i < numVars - 1; i++) {
         for (size_t ii = i + 1; ii < numVars; ii++) {
@@ -5147,12 +5153,11 @@ HPresolve::Result HPresolve::enumerateSolutions(
     HPRESOLVE_CHECKED_CALL(handleInfeasibility(numSolutions == 0));
 
     // check if all variables form a clique
-    if (maxNumActiveCols == 1 ||
-        (minNumActiveCols == numVars - 1 && maxNumActiveCols == numVars - 1)) {
+    if (varsFormClique(numVars, minNumActiveCols, maxNumActiveCols)) {
       std::vector<HighsCliqueTable::CliqueVar> clique(numVars);
       for (size_t i = 0; i < numVars; i++)
-        clique[i] =
-            HighsCliqueTable::CliqueVar(vars[i], maxNumActiveCols == 1 ? 1 : 0);
+        clique[i] = HighsCliqueTable::CliqueVar(
+            vars[i], minNumActiveCols == 0 && maxNumActiveCols == 1 ? 1 : 0);
       cliquetable.addClique(*mipsolver, clique.data(),
                             static_cast<HighsInt>(numVars));
       HPRESOLVE_CHECKED_CALL(handleInfeasibility(domain.infeasible()));
