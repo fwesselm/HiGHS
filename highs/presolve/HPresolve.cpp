@@ -5206,16 +5206,16 @@ HPresolve::Result HPresolve::enumerateSolutions(
           // add clique x_1 + (1 - x_2) = 1 to clique table
           numCliquesFound++;
           std::array<HighsCliqueTable::CliqueVar, 2> clique;
-          clique[0] = HighsCliqueTable::CliqueVar(col, 1);
-          clique[1] = HighsCliqueTable::CliqueVar(col2, 0);
+          clique[0] = HighsCliqueTable::CliqueVar(col, 0);
+          clique[1] = HighsCliqueTable::CliqueVar(col2, 1);
           cliquetable.addClique(*mipsolver, clique.data(), 2, true);
           HPRESOLVE_CHECKED_CALL(handleInfeasibility(domain.infeasible()));
         } else if (complementaryVars(numSolutions, i, ii)) {
           // add clique x_1 + x_2 = 1 to clique table
           numCliquesFound++;
           std::array<HighsCliqueTable::CliqueVar, 2> clique;
-          clique[0] = HighsCliqueTable::CliqueVar(col, 1);
-          clique[1] = HighsCliqueTable::CliqueVar(col2, 1);
+          clique[0] = HighsCliqueTable::CliqueVar(col, 0);
+          clique[1] = HighsCliqueTable::CliqueVar(col2, 0);
           cliquetable.addClique(*mipsolver, clique.data(), 2, true);
           HPRESOLVE_CHECKED_CALL(handleInfeasibility(domain.infeasible()));
         }

@@ -521,49 +521,35 @@ bool HighsCliqueTable::processNewEdge(HighsDomain& globaldom, CliqueVar v1,
     vertexInfeasible(globaldom, v1);
     return false;
   } else {
-    HighsInt commonclique =
-        findCommonCliqueId(v1.complement(), v2.complement());
-    if (commonclique == -1) return false;
+    // lambda for checking common cliques
+    auto processCommonCliques = [&](CliqueVar v1, CliqueVar v2) {
+      HighsInt commonclique = findCommonCliqueId(v1, v2);
+      if (commonclique == -1) return false;
 
-    while (commonclique != -1) {
-      HighsInt start = cliques[commonclique].start;
-      HighsInt end = cliques[commonclique].end;
+      while (commonclique != -1) {
+        HighsInt start = cliques[commonclique].start;
+        HighsInt end = cliques[commonclique].end;
 
-      for (HighsInt i = start; i != end; ++i) {
-        if (cliqueentries[i] == v1.complement() ||
-            cliqueentries[i] == v2.complement())
-          continue;
+        for (HighsInt i = start; i != end; ++i) {
+          if (cliqueentries[i] == v1 || cliqueentries[i] == v2) continue;
 
-        vertexInfeasible(globaldom, cliqueentries[i], false);
-        if (globaldom.infeasible()) return true;
+          vertexInfeasible(globaldom, cliqueentries[i], false);
+          if (globaldom.infeasible()) return true;
+        }
+
+        removeClique(commonclique);
+        commonclique = findCommonCliqueId(v1, v2);
       }
 
-      removeClique(commonclique);
-      commonclique = findCommonCliqueId(v1.complement(), v2.complement());
-    }
+      processInfeasibleVertices(globaldom);
+      return true;
+    };
 
-    processInfeasibleVertices(globaldom);
-    if (globaldom.infeasible()) return false;
+    // return if complements are not in a clique
+    if (!processCommonCliques(v1.complement(), v2.complement())) return false;
+    if (globaldom.infeasible()) return true;
 
-    commonclique = findCommonCliqueId(v1, v2);
-
-    while (commonclique != -1) {
-      HighsInt start = cliques[commonclique].start;
-      HighsInt end = cliques[commonclique].end;
-
-      for (HighsInt i = start; i != end; ++i) {
-        if (cliqueentries[i] == v1 || cliqueentries[i] == v2) continue;
-
-        vertexInfeasible(globaldom, cliqueentries[i], false);
-        if (globaldom.infeasible()) return true;
-      }
-
-      removeClique(commonclique);
-      commonclique = findCommonCliqueId(v1, v2);
-    }
-
-    processInfeasibleVertices(globaldom);
-
+    processCommonCliques(v1, v2);
     if (globaldom.isFixed(v1.col) || globaldom.isFixed(v2.col) ||
         globaldom.infeasible())
       return true;
