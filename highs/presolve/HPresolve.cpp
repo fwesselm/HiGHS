@@ -5082,7 +5082,9 @@ HPresolve::Result HPresolve::enumerateSolutions(
                    !varsFormClique(numVars, minNumActiveCols, maxNumActiveCols);
     if (noReductions) {
       for (size_t i = 0; i < numVars - 1; i++) {
+        if (cliquetable.getSubstitution(vars[i]) != nullptr) continue;
         for (size_t ii = i + 1; ii < numVars; ii++) {
+          if (cliquetable.getSubstitution(vars[ii]) != nullptr) continue;
           noReductions = noReductions && !identicalVars(numSolutions, i, ii) &&
                          !complementaryVars(numSolutions, i, ii);
           if (!noReductions) break;
@@ -5154,8 +5156,8 @@ HPresolve::Result HPresolve::enumerateSolutions(
     HPRESOLVE_CHECKED_CALL(handleInfeasibility(numSolutions == 0));
 
     // check if all variables form a clique
-    /*if (varsFormClique(numVars, minNumActiveCols, maxNumActiveCols)) {
-     numCliquesFound++;
+    if (varsFormClique(numVars, minNumActiveCols, maxNumActiveCols)) {
+      numCliquesFound++;
       std::vector<HighsCliqueTable::CliqueVar> clique(numVars);
       for (size_t i = 0; i < numVars; i++)
         clique[i] = HighsCliqueTable::CliqueVar(
@@ -5163,7 +5165,7 @@ HPresolve::Result HPresolve::enumerateSolutions(
       cliquetable.addClique(*mipsolver, clique.data(),
                             static_cast<HighsInt>(numVars));
       HPRESOLVE_CHECKED_CALL(handleInfeasibility(domain.infeasible()));
-    }*/
+    }
 
     // analyse worst-case bounds
     for (size_t i = 0; i < numWorstCaseBounds; i++) {
@@ -5193,29 +5195,32 @@ HPresolve::Result HPresolve::enumerateSolutions(
     for (size_t i = 0; i < numVars - 1; i++) {
       // get column index
       HighsInt col = vars[i];
-      // skip already fixed columns
-      if (domain.isFixed(col)) continue;
+      // skip already fixed or substituted columns
+      if (domain.isFixed(col) || cliquetable.getSubstitution(col) != nullptr)
+        continue;
       for (size_t ii = i + 1; ii < numVars; ii++) {
         // get column index
         HighsInt col2 = vars[ii];
-        // skip already fixed columns
-        if (domain.isFixed(col2)) continue;
+        // skip already fixed or substituted columns
+        if (domain.isFixed(col2) ||
+            cliquetable.getSubstitution(col2) != nullptr)
+          continue;
         // check if two binary variables take identical or complementary
         // values in all feasible solutions
         if (identicalVars(numSolutions, i, ii)) {
           // add clique x_1 + (1 - x_2) = 1 to clique table
           numCliquesFound++;
           std::array<HighsCliqueTable::CliqueVar, 2> clique;
-          clique[0] = HighsCliqueTable::CliqueVar(col, 0);
-          clique[1] = HighsCliqueTable::CliqueVar(col2, 1);
+          clique[0] = HighsCliqueTable::CliqueVar(col, 1);
+          clique[1] = HighsCliqueTable::CliqueVar(col2, 0);
           cliquetable.addClique(*mipsolver, clique.data(), 2, true);
           HPRESOLVE_CHECKED_CALL(handleInfeasibility(domain.infeasible()));
         } else if (complementaryVars(numSolutions, i, ii)) {
           // add clique x_1 + x_2 = 1 to clique table
           numCliquesFound++;
           std::array<HighsCliqueTable::CliqueVar, 2> clique;
-          clique[0] = HighsCliqueTable::CliqueVar(col, 0);
-          clique[1] = HighsCliqueTable::CliqueVar(col2, 0);
+          clique[0] = HighsCliqueTable::CliqueVar(col, 1);
+          clique[1] = HighsCliqueTable::CliqueVar(col2, 1);
           cliquetable.addClique(*mipsolver, clique.data(), 2, true);
           HPRESOLVE_CHECKED_CALL(handleInfeasibility(domain.infeasible()));
         }
