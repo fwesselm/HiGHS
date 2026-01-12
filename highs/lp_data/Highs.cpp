@@ -974,7 +974,7 @@ HighsStatus Highs::run() {
   // and user_bound_scale
   assessExcessiveObjectiveBoundScaling(this->options_.log_options, this->model_,
                                        user_scale_data);
-  // Used when deveoping unit tests in TestUserScale.cpp
+  // Used when developing unit tests in TestUserScale.cpp
   //  this->writeModel("");
   HighsStatus status;
   if (!this->multi_linear_objective_.size()) {
@@ -1027,7 +1027,7 @@ HighsStatus Highs::run() {
       highsLogUser(
           this->options_.log_options, HighsLogType::kWarning,
           "User scaled problem solved to optimality, but unscaled solution "
-          "does not satisfy feasibilty and optimality tolerances\n");
+          "does not satisfy feasibility and optimality tolerances\n");
       status = HighsStatus::kWarning;
     }
   }
@@ -1419,7 +1419,7 @@ HighsStatus Highs::optimizeModel() {
       }
     } else {
       // One of unconstrained_lp, has_basis and without_presolve must
-      // be true, and the first two anren't
+      // be true, and the first two aren't
       assert(without_presolve);
       lp_solve_ss << "Solving LP without presolve or useful basis";
     }
@@ -4087,6 +4087,17 @@ HighsStatus Highs::callSolveQp() {
                  "QP solver has exceeded nullspace limit of %d\n",
                  int(nullspace_limit));
   });
+
+  // Define the degeneracy failure logging function
+  settings.degeneracy_fail_log.subscribe(
+      [this](std::pair<HighsInt, double>& degeneracy_fail_data) {
+        highsLogUser(options_.log_options, HighsLogType::kError,
+                     "QP solver has failed due to degeneracy: "
+                     "cannot find non-active constraint to leave basis."
+                     " max: log(d[%d]) = %lf\n",
+                     int(degeneracy_fail_data.first),
+                     degeneracy_fail_data.second);
+      });
 
   settings.time_limit = options_.time_limit;
   settings.lambda_zero_threshold = options_.dual_feasibility_tolerance;
