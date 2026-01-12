@@ -5094,6 +5094,7 @@ HPresolve::Result HPresolve::enumerateSolutions(
 
   // loop over candidate rows
   HighsInt numRowsChecked = 0;
+  HighsInt numCliquesFound = 0;
   for (const auto& r : rows) {
     // get row index
     HighsInt row = r.row;
@@ -5153,7 +5154,8 @@ HPresolve::Result HPresolve::enumerateSolutions(
     HPRESOLVE_CHECKED_CALL(handleInfeasibility(numSolutions == 0));
 
     // check if all variables form a clique
-    if (varsFormClique(numVars, minNumActiveCols, maxNumActiveCols)) {
+    /*if (varsFormClique(numVars, minNumActiveCols, maxNumActiveCols)) {
+     numCliquesFound++;
       std::vector<HighsCliqueTable::CliqueVar> clique(numVars);
       for (size_t i = 0; i < numVars; i++)
         clique[i] = HighsCliqueTable::CliqueVar(
@@ -5161,7 +5163,7 @@ HPresolve::Result HPresolve::enumerateSolutions(
       cliquetable.addClique(*mipsolver, clique.data(),
                             static_cast<HighsInt>(numVars));
       HPRESOLVE_CHECKED_CALL(handleInfeasibility(domain.infeasible()));
-    }
+    }*/
 
     // analyse worst-case bounds
     for (size_t i = 0; i < numWorstCaseBounds; i++) {
@@ -5202,6 +5204,7 @@ HPresolve::Result HPresolve::enumerateSolutions(
         // values in all feasible solutions
         if (identicalVars(numSolutions, i, ii)) {
           // add clique x_1 + (1 - x_2) = 1 to clique table
+          numCliquesFound++;
           std::array<HighsCliqueTable::CliqueVar, 2> clique;
           clique[0] = HighsCliqueTable::CliqueVar(col, 1);
           clique[1] = HighsCliqueTable::CliqueVar(col2, 0);
@@ -5209,6 +5212,7 @@ HPresolve::Result HPresolve::enumerateSolutions(
           HPRESOLVE_CHECKED_CALL(handleInfeasibility(domain.infeasible()));
         } else if (complementaryVars(numSolutions, i, ii)) {
           // add clique x_1 + x_2 = 1 to clique table
+          numCliquesFound++;
           std::array<HighsCliqueTable::CliqueVar, 2> clique;
           clique[0] = HighsCliqueTable::CliqueVar(col, 1);
           clique[1] = HighsCliqueTable::CliqueVar(col2, 1);
