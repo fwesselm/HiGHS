@@ -1584,7 +1584,7 @@ void HighsCliqueTable::propagateAndCleanup(HighsDomain& globaldom) {
       HighsInt fixval = (HighsInt)globaldom.col_lower_[col];
       CliqueVar v(col, 1 - fixval);
       if (numCliques(v) != 0) {
-        vertexInfeasible(globaldom, col, 1 - fixval);
+        vertexInfeasible(globaldom, v);
         if (globaldom.infeasible()) return;
       }
     }
@@ -1594,20 +1594,14 @@ void HighsCliqueTable::propagateAndCleanup(HighsDomain& globaldom) {
   }
 }
 
-void HighsCliqueTable::vertexInfeasible(HighsDomain& globaldom, HighsInt col,
-                                        HighsInt val,
-                                        bool doProcessInfeasibleVertices) {
-  bool wasfixed = globaldom.isFixed(col);
-  globaldom.fixCol(col, double(1 - val));
-  if (globaldom.infeasible()) return;
-  if (!wasfixed) ++nfixings;
-  infeasvertexstack.emplace_back(col, val);
-  if (doProcessInfeasibleVertices) processInfeasibleVertices(globaldom);
-}
-
 void HighsCliqueTable::vertexInfeasible(HighsDomain& globaldom, CliqueVar v,
                                         bool doProcessInfeasibleVertices) {
-  vertexInfeasible(globaldom, v.col, v.val, doProcessInfeasibleVertices);
+  bool wasfixed = globaldom.isFixed(v.col);
+  globaldom.fixCol(v.col, double(1 - v.val));
+  if (globaldom.infeasible()) return;
+  if (!wasfixed) ++nfixings;
+  infeasvertexstack.push_back(v);
+  if (doProcessInfeasibleVertices) processInfeasibleVertices(globaldom);
 }
 
 void HighsCliqueTable::separateCliques(const HighsMipSolver& mipsolver,
@@ -1842,10 +1836,9 @@ void HighsCliqueTable::cleanupFixed(HighsDomain& globaldom) {
     if (globaldom.col_lower_[i] != 1.0 && globaldom.col_lower_[i] != 0.0)
       continue;
 
-    HighsInt fixval = (HighsInt)globaldom.col_lower_[i];
-    CliqueVar v(i, 1 - fixval);
-
-    vertexInfeasible(globaldom, v.col, v.val);
+    vertexInfeasible(
+        globaldom,
+        CliqueVar{i, 1 - static_cast<HighsInt>(globaldom.col_lower_[i])});
     if (globaldom.infeasible()) return;
   }
 
@@ -1971,7 +1964,7 @@ void HighsCliqueTable::runCliqueMerging(HighsDomain& globaldomain,
 
   if (equation) {
     for (HighsInt i = initialCliqueSize; i < (HighsInt)clique.size(); ++i)
-      vertexInfeasible(globaldomain, clique[i].col, clique[i].val);
+      vertexInfeasible(globaldomain, clique[i]);
   } else {
     runCliqueSubsumption(globaldomain, clique);
 
@@ -2079,8 +2072,7 @@ void HighsCliqueTable::runCliqueMerging(HighsDomain& globaldomain) {
     }
 
     if (cliques[k].equality) {
-      for (CliqueVar v : extensionvars)
-        vertexInfeasible(globaldomain, v.col, v.val);
+      for (CliqueVar v : extensionvars) vertexInfeasible(globaldomain, v);
     } else {
       HighsInt originrow = cliques[k].origin;
       cliques[k].origin = kHighsIInf;
