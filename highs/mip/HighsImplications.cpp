@@ -55,7 +55,8 @@ bool HighsImplications::computeImplications(HighsInt col, bool val) {
     if (!globaldomain.infeasible()) return false;
     storeLiftingOpportunities(col, val);
     doBacktrack(changedend);
-    cliquetable.vertexInfeasible(globaldomain, col, val);
+    cliquetable.vertexInfeasible(globaldomain,
+                                 HighsCliqueTable::CliqueVar{col, val});
     return true;
   };
 

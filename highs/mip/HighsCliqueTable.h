@@ -250,7 +250,8 @@ class HighsCliqueTable {
 
   void extractObjCliques(HighsMipSolver& mipsolver);
 
-  void vertexInfeasible(HighsDomain& globaldom, HighsInt col, HighsInt val);
+  void vertexInfeasible(HighsDomain& globaldom, CliqueVar v,
+                        bool doProcessInfeasibleVertices = true);
 
   bool haveCommonClique(CliqueVar v1, CliqueVar v2) {
     if (v1.col == v2.col) return false;
