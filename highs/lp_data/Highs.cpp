@@ -928,116 +928,84 @@ HighsStatus Highs::presolve() {
 }
 
 HighsStatus Highs::run() {
-  this->sub_solver_call_time_.initialise();
-  const bool options_had_highs_files = this->optionsHasHighsFiles();
-  if (options_had_highs_files) {
-    HighsStatus status = HighsStatus::kOk;
-    if (this->options_.read_solution_file != "")
-      status = this->readSolution(this->options_.read_solution_file);
-    if (this->options_.read_basis_file != "")
-      status = this->readBasis(this->options_.read_basis_file);
-    if (this->options_.write_model_file != "")
-      status = this->writeModel(this->options_.write_model_file);
-    if (status != HighsStatus::kOk) return status;
-    // Save all the Highs files names from options_ to Highs::files_
-    // so that any relating to files written after run() are saved,
-    // and all can be reset to the user's values
-    this->saveHighsFiles();
-  }
-  // No subsequent calls to run() can have HiGHS files in options_, so
-  // options_had_highs_files is false in any future calls to
-  // Highs::run(), so solution and basis files are only written when
-  // returning to this call
-  assert(!this->optionsHasHighsFiles());
+  // Level 0 of Highs::run()
+  //
+  // Action the file operations associated with running HiGHS, and
+  // call Highs::runFromUserScaling()
+  HighsStatus status = HighsStatus::kOk;
+  if (this->options_.read_solution_file != "")
+    status = this->readSolution(this->options_.read_solution_file);
+  if (this->options_.read_basis_file != "")
+    status = this->readBasis(this->options_.read_basis_file);
+  if (this->options_.write_model_file != "")
+    status = this->writeModel(this->options_.write_model_file);
 
-  if (!options_.use_warm_start) this->clearSolver();
+  if (status != HighsStatus::kOk) return status;
+
   this->reportModelStats();
 
-  // Possibly apply user-defined scaling to the incumbent model and solution
+  // Apply any user objective and bound scaling
   HighsUserScaleData user_scale_data;
-  initialiseUserScaleData(this->options_, user_scale_data);
-  const bool user_scaling =
-      user_scale_data.user_objective_scale || user_scale_data.user_bound_scale;
-  if (user_scaling) {
-    if (this->userScaleModel(user_scale_data) == HighsStatus::kError)
-      return HighsStatus::kError;
-    this->userScaleSolution(user_scale_data);
-    // Indicate that the scaling has been applied
-    user_scale_data.applied = true;
-    // Zero the user scale values to prevent further scaling
-    this->options_.user_objective_scale = 0;
-    this->options_.user_bound_scale = 0;
-  }
+  if (this->userScale(user_scale_data) == HighsStatus::kError)
+    return HighsStatus::kError;
 
   // Determine coefficient ranges and possibly warn the user about
   // excessive values, obtaining suggested values for user_objective_scale
   // and user_bound_scale
   assessExcessiveObjectiveBoundScaling(this->options_.log_options, this->model_,
                                        user_scale_data);
-  // Used when deveoping unit tests in TestUserScale.cpp
-  //  this->writeModel("");
-  HighsStatus status;
-  if (!this->multi_linear_objective_.size()) {
-    status = this->optimizeModel();
-    if (options_had_highs_files) {
-      // This call to Highs::run() had HiGHS files in options, so
-      // recover HiGHS files to options_
-      this->getHighsFiles();
-      this->files_.clear();
-      if (this->options_.write_iis_model_file != "")
-        status = this->writeIisModel(this->options_.write_iis_model_file);
-      if (this->options_.solution_file != "")
-        status = this->writeSolution(this->options_.solution_file,
-                                     this->options_.write_solution_style);
-      if (this->options_.write_basis_file != "")
-        status = this->writeBasis(this->options_.write_basis_file);
-    }
-  } else {
-    status = this->multiobjectiveSolve();
-  }
-  if (user_scaling) {
-    // Unscale the incumbent model and solution
-    //
-    // Flip the scaling sign
-    user_scale_data.user_objective_scale *= -1;
-    user_scale_data.user_bound_scale *= -1;
-    HighsStatus unscale_status = this->userScaleModel(user_scale_data);
-    if (unscale_status == HighsStatus::kError) {
-      highsLogUser(
-          this->options_.log_options, HighsLogType::kError,
-          "Unexpected error removing user scaling from the incumbent model\n");
-      assert(unscale_status != HighsStatus::kError);
-    }
-    const bool update_kkt = true;
-    unscale_status = this->userScaleSolution(user_scale_data, update_kkt);
-    // Restore the user scale values, remembering that they've been
-    // negated to undo user scaling
-    this->options_.user_objective_scale = -user_scale_data.user_objective_scale;
-    this->options_.user_bound_scale = -user_scale_data.user_bound_scale;
-    // Indicate that the scaling has not been applied
-    user_scale_data.applied = false;
-    highsLogUser(this->options_.log_options, HighsLogType::kInfo,
-                 "After solving the user-scaled model, the unscaled solution "
-                 "has objective value %.12g\n",
-                 this->info_.objective_function_value);
-    if (model_status_ == HighsModelStatus::kOptimal &&
-        unscale_status != HighsStatus::kOk) {
-      // KKT errors in the unscaled optimal solution, so log a warning and
-      // return
-      highsLogUser(
-          this->options_.log_options, HighsLogType::kWarning,
-          "User scaled problem solved to optimality, but unscaled solution "
-          "does not satisfy feasibilty and optimality tolerances\n");
-      status = HighsStatus::kWarning;
-    }
-  }
+
+  // Optimize the model in the Highs instance
+  status = optimizeHighs();
+  if (status == HighsStatus::kError) return status;
+
+  // Undo any user objective and bound scaling
+  if (this->userUnscale(user_scale_data) == HighsStatus::kError)
+    return HighsStatus::kError;
+
+  if (this->options_.write_iis_model_file != "")
+    status = this->writeIisModel(this->options_.write_iis_model_file);
+  if (this->options_.solution_file != "")
+    status = this->writeSolution(this->options_.solution_file,
+                                 this->options_.write_solution_style);
+  if (this->options_.write_basis_file != "")
+    status = this->writeBasis(this->options_.write_basis_file);
+
+  return status;
+}
+
+HighsStatus Highs::optimizeHighs() {
+  // Level 1 of Highs::run()
+  //
+  // Move the "mods" to here
+  return this->multi_linear_objective_.size() ? this->multiobjectiveSolve()
+                                              : this->optimizeModel();
+}
+
+HighsStatus Highs::optimizeLp() {
+  // Solve what's in the HighsLp instance Highs::model_.lp_
+  assert(!model_.isQp());
+  assert(!model_.lp_.hasSemiVariables());
+  assert(!this->multi_linear_objective_.size());
+  return optimizeModel();
+}
+
+HighsStatus Highs::optimizeModel() {
+  // Level 2a of Highs::run()
+  //
+  if (!options_.use_warm_start) this->clearSolver();
+  this->sub_solver_call_time_.initialise();
+  HighsStatus status = this->calledOptimizeModel();
   if (this->options_.log_dev_level > 0) this->reportSubSolverCallTime();
   return status;
 }
 
-// Checks the options calls presolve and postsolve if needed. Solvers are called
-// with callSolveLp(..)
-HighsStatus Highs::optimizeModel() {
+// Checks the options calls presolve and postsolve if needed.
+//
+// LP solvers are called with callSolveLp(..)
+HighsStatus Highs::calledOptimizeModel() {
+  // Level 2b of Highs::run()
+  //
   HighsInt min_highs_debug_level = kHighsDebugLevelMin;
   // kHighsDebugLevelCostly;
   // kHighsDebugLevelMax;
@@ -1419,7 +1387,7 @@ HighsStatus Highs::optimizeModel() {
       }
     } else {
       // One of unconstrained_lp, has_basis and without_presolve must
-      // be true, and the first two anren't
+      // be true, and the first two aren't
       assert(without_presolve);
       lp_solve_ss << "Solving LP without presolve or useful basis";
     }
@@ -4088,6 +4056,17 @@ HighsStatus Highs::callSolveQp() {
                  int(nullspace_limit));
   });
 
+  // Define the degeneracy failure logging function
+  settings.degeneracy_fail_log.subscribe(
+      [this](std::pair<HighsInt, double>& degeneracy_fail_data) {
+        highsLogUser(options_.log_options, HighsLogType::kError,
+                     "QP solver has failed due to degeneracy: "
+                     "cannot find non-active constraint to leave basis."
+                     " max: log(d[%d]) = %lf\n",
+                     int(degeneracy_fail_data.first),
+                     degeneracy_fail_data.second);
+      });
+
   settings.time_limit = options_.time_limit;
   settings.lambda_zero_threshold = options_.dual_feasibility_tolerance;
 
@@ -4912,69 +4891,4 @@ HighsStatus Highs::closeLogFile() {
 
 void Highs::resetGlobalScheduler(bool blocking) {
   HighsTaskExecutor::shutdown(blocking);
-}
-
-void HighsFiles::clear() {
-  this->empty = true;
-  this->read_solution_file = "";
-  this->read_basis_file = "";
-  this->write_model_file = "";
-  this->write_iis_model_file = "";
-  this->write_solution_file = "";
-  this->write_basis_file = "";
-}
-
-bool Highs::optionsHasHighsFiles() const {
-  if (this->options_.read_solution_file != "") return true;
-  if (this->options_.read_basis_file != "") return true;
-  if (this->options_.write_model_file != "") return true;
-  if (this->options_.write_iis_model_file != "") return true;
-  if (this->options_.solution_file != "") return true;
-  if (this->options_.write_basis_file != "") return true;
-  return false;
-}
-
-void Highs::saveHighsFiles() {
-  this->files_.empty = true;
-  if (this->options_.read_solution_file != "") {
-    this->files_.read_solution_file = this->options_.read_solution_file;
-    this->options_.read_solution_file = "";
-    this->files_.empty = false;
-  }
-  if (this->options_.read_basis_file != "") {
-    this->files_.read_basis_file = this->options_.read_basis_file;
-    this->options_.read_basis_file = "";
-    this->files_.empty = false;
-  }
-  if (this->options_.write_model_file != "") {
-    this->files_.write_model_file = this->options_.write_model_file;
-    this->options_.write_model_file = "";
-    this->files_.empty = false;
-  }
-  if (this->options_.write_iis_model_file != "") {
-    this->files_.write_iis_model_file = this->options_.write_iis_model_file;
-    this->options_.write_iis_model_file = "";
-    this->files_.empty = false;
-  }
-  if (this->options_.solution_file != "") {
-    this->files_.write_solution_file = this->options_.solution_file;
-    this->options_.solution_file = "";
-    this->files_.empty = false;
-  }
-  if (this->options_.write_basis_file != "") {
-    this->files_.write_basis_file = this->options_.write_basis_file;
-    this->options_.write_basis_file = "";
-    this->files_.empty = false;
-  }
-}
-
-void Highs::getHighsFiles() {
-  if (this->files_.empty) return;
-  this->options_.read_solution_file = this->files_.read_solution_file;
-  this->options_.read_basis_file = this->files_.read_basis_file;
-  this->options_.write_model_file = this->files_.write_model_file;
-  this->options_.write_iis_model_file = this->files_.write_iis_model_file;
-  this->options_.solution_file = this->files_.write_solution_file;
-  this->options_.write_basis_file = this->files_.write_basis_file;
-  this->files_.clear();
 }
