@@ -791,9 +791,9 @@ void HighsCliqueTable::extractCliques(
   nbin = binaryend - perm.begin();
   HighsInt ntotal = (HighsInt)perm.size();
 
-  // if not all variables are binary, we extract variable upper and lower
-  // bounds constraints on the non-binary variable for each binary variable in
-  // the constraint
+  // if not all variables are binary, we extract variable upper and lower bounds
+  // constraints on the non-binary variable for each binary variable in the
+  // constraint
   if (nbin < ntotal) {
     for (HighsInt i = 0; i != nbin; ++i) {
       HighsInt bincol = inds[perm[i]];
@@ -1074,9 +1074,9 @@ void HighsCliqueTable::extractCliquesFromCut(const HighsMipSolver& mipsolver,
 
   nbin = binaryend - perm.begin();
 
-  // if not all variables are binary, we extract variable upper and lower
-  // bounds constraints on the non-binary variable for each binary variable in
-  // the constraint:
+  // if not all variables are binary, we extract variable upper and lower bounds
+  // constraints on the non-binary variable for each binary variable in the
+  // constraint:
   if (nbin < len) {
     for (HighsInt i = 0; i != nbin; ++i) {
       HighsInt bincol = inds[perm[i]];
@@ -1099,8 +1099,8 @@ void HighsCliqueTable::extractCliquesFromCut(const HighsMipSolver& mipsolver,
               coef = globaldom.col_upper_[col] - implcolub;
               constant = implcolub;
             } else {
-              // make sure that upper bound is not infinite to avoid adding
-              // VUB with coefficient '-kHighsInf' and constant 'kHighsInf'
+              // make sure that upper bound is not infinite to avoid adding VUB
+              // with coefficient '-kHighsInf' and constant 'kHighsInf'
               if (globaldom.col_upper_[col] == kHighsInf) continue;
               coef = implcolub - globaldom.col_upper_[col];
               constant = globaldom.col_upper_[col];
@@ -1124,8 +1124,8 @@ void HighsCliqueTable::extractCliquesFromCut(const HighsMipSolver& mipsolver,
               coef = globaldom.col_lower_[col] - implcollb;
               constant = implcollb;
             } else {
-              // make sure that lower bound is not infinite to avoid adding
-              // VLB with coefficient 'kHighsInf' and constant '-kHighsInf'
+              // make sure that lower bound is not infinite to avoid adding VLB
+              // with coefficient 'kHighsInf' and constant '-kHighsInf'
               if (globaldom.col_lower_[col] == -kHighsInf) continue;
               coef = implcollb - globaldom.col_lower_[col];
               constant = globaldom.col_lower_[col];
@@ -1224,9 +1224,9 @@ void HighsCliqueTable::extractCliques(HighsMipSolver& mipsolver,
         mipsolver.orig_model_->num_row_)
       break;
 
-    // catch set packing and partitioning constraints that already have the
-    // form of a clique without transformations and add those cliques with the
-    // rows being recorded
+    // catch set packing and partitioning constraints that already have the form
+    // of a clique without transformations and add those cliques with the rows
+    // being recorded
     if (mipsolver.rowUpper(i) == 1.0) {
       bool issetppc = true;
 
@@ -1852,8 +1852,8 @@ HighsInt HighsCliqueTable::getNumImplications(HighsInt col) {
   HighsInt i1 = CliqueVar(col, 1).index();
   HighsInt numimplics = numcliquesvar[i0] + numcliquesvar[i1];
 
-  // now loop over cliques larger than size two and add the cliquelength - 1
-  // as additional implications
+  // now loop over cliques larger than size two and add the cliquelength - 1 as
+  // additional implications
   auto countImplics = [&](HighsInt cliqueid) {
     HighsInt nimplics = cliques[cliqueid].end - cliques[cliqueid].start - 1;
     nimplics *= (1 + cliques[cliqueid].equality);
@@ -1870,8 +1870,8 @@ HighsInt HighsCliqueTable::getNumImplications(HighsInt col, bool val) {
   // each size two clique is one implication
   HighsInt numimplics = numcliquesvar[iVal];
 
-  // now loop over cliques larger than size two and add the cliquelength - 1
-  // as additional implications
+  // now loop over cliques larger than size two and add the cliquelength - 1 as
+  // additional implications
   invertedHashList[iVal].for_each([&](HighsInt cliqueid) {
     HighsInt nimplics = cliques[cliqueid].end - cliques[cliqueid].start - 1;
     nimplics *= (1 + cliques[cliqueid].equality);
@@ -2157,9 +2157,9 @@ void HighsCliqueTable::runCliqueMerging(HighsDomain& globaldomain) {
           deletedrows.push_back(originrow);
         else {
           // this clique is redundant in the cliquetable but its row is not
-          // necessarily. Also there might be rows that have been deleted due
-          // to being dominated by this row after adding the lifted entries so
-          // they must be added to the cliqueextension vector
+          // necessarily. Also there might be rows that have been deleted due to
+          // being dominated by this row after adding the lifted entries so they
+          // must be added to the cliqueextension vector
           for (HighsInt i = 0; i < numExtensions; ++i)
             cliqueextensions.emplace_back(originrow, extensionvars[i]);
         }
