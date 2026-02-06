@@ -4884,6 +4884,12 @@ HPresolve::Result HPresolve::enumerateSolutions(
   const HighsInt maxNumRowsChecked = 400;
   const size_t maxNumSolutions = 1 << maxRowSize;
 
+  // minimum percentage of 'maxNumRowsChecked' that need to be examined before
+  // checking if enumeration should be stopped
+  const HighsInt minPercentageRowsChecked = 20;
+  // maximum percentage of iterations with no reductions
+  const HighsInt maxPercentageNoReductions = 10;
+
   // check rows
   struct candidaterow {
     HighsInt row;
@@ -5077,8 +5083,7 @@ HPresolve::Result HPresolve::enumerateSolutions(
     numSolutions++;
 
     // if no reductions are possible, stop enumerating solutions
-    noReductions = numWorstCaseBounds == 0 &&
-                   !varsFormClique(numVars, minNumActiveCols, maxNumActiveCols);
+    noReductions = numWorstCaseBounds == 0;
     if (noReductions) {
       for (size_t i = 0; i < numVars - 1; i++) {
         for (size_t ii = i + 1; ii < numVars; ii++) {
@@ -5094,6 +5099,7 @@ HPresolve::Result HPresolve::enumerateSolutions(
   // loop over candidate rows
   HighsInt numRowsChecked = 0;
   HighsInt numCliquesFound = 0;
+  HighsInt numNoReductions = 0;
   for (const auto& r : rows) {
     // get row index
     HighsInt row = r.row;
@@ -5133,7 +5139,9 @@ HPresolve::Result HPresolve::enumerateSolutions(
         if (backtrack) {
           handleSolution(numVars, numSolutions, numWorstCaseBounds,
                          minNumActiveCols, maxNumActiveCols, noReductions);
-          if (noReductions) break;
+          if (noReductions &&
+              !varsFormClique(numVars, minNumActiveCols, maxNumActiveCols))
+            break;
         }
       }
       // branch or backtrack
@@ -5144,7 +5152,9 @@ HPresolve::Result HPresolve::enumerateSolutions(
     }
 
     // no reductions for this row?
-    if (noReductions) {
+    if (noReductions) numNoReductions++;
+    if (noReductions &&
+        !varsFormClique(numVars, minNumActiveCols, maxNumActiveCols)) {
       // clang-format off
       //
       // clang formatting on oronsay can put the ";" on the next line!
@@ -5221,6 +5231,13 @@ HPresolve::Result HPresolve::enumerateSolutions(
         }
       }
     }
+
+    // stop early if there are too many rows (outer iterations) without
+    // reductions
+    if ((100 * numRowsChecked) / maxNumRowsChecked >=
+            minPercentageRowsChecked &&
+        (100 * numNoReductions) / numRowsChecked >= maxPercentageNoReductions)
+      break;
   }
 
   // finalise probing
