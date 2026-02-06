@@ -5249,6 +5249,9 @@ HPresolve::Result HPresolve::enumerateSolutions(
                                          numVarsFixed, numBndsTightened,
                                          numVarsSubstituted, liftedNonzeros));
 
+  // new cliques added -> reset flag
+  if (numCliquesFound > 0) mipsolver->mipdata_->cliquesExtracted = false;
+
   if (numVarsFixed > 0 || numBndsTightened > 0 || numVarsSubstituted > 0)
     highsLogDev(options->log_options, HighsLogType::kInfo,
                 "Enumeration presolve fixed %d columns, tightened %d bounds "
