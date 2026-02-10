@@ -2246,7 +2246,8 @@ void HighsCliqueTable::rebuild(
         std::remove_if(cliqueentries.begin() + cliques[i].start,
                        cliqueentries.begin() + cliques[i].end,
                        [](CliqueVar v) { return v.col == kHighsIInf; });
-    auto numvars = newend - (cliqueentries.begin() + cliques[i].start);
+    HighsInt numvars = static_cast<HighsInt>(
+        newend - (cliqueentries.begin() + cliques[i].start));
     // since we do not know how variables in the clique that have been deleted
     // are replaced (i.e. are they fixed to 0 or 1, or substituted) we relax
     // them out which means the equality status needs to be set to false
