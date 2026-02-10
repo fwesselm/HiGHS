@@ -163,7 +163,7 @@ struct HighsMipSolverData {
         domain(mipsolver),
         lp(mipsolver),
         pseudocost(),
-        cliquetable(mipsolver.numCol()),
+        cliquetable(static_cast<size_t>(mipsolver.numCol())),
         implications(mipsolver),
         heuristics(mipsolver),
         objectiveFunction(mipsolver),

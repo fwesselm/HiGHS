@@ -2228,9 +2228,9 @@ void HighsCliqueTable::rebuild(
   HighsCliqueTable newCliqueTable(ncols);
   newCliqueTable.setPresolveFlag(inPresolve);
   newCliqueTable.setMinEntriesForParallelism(minEntriesForParallelism);
-  HighsInt ncliques = cliques.size();
-  for (HighsInt i = 0; i != ncliques; ++i) {
+  for (size_t i = 0; i != cliques.size(); ++i) {
     if (cliques[i].start == -1) continue;
+    HighsInt oldnumvars = cliques[i].end - cliques[i].start;
 
     for (HighsInt k = cliques[i].start; k != cliques[i].end; ++k) {
       HighsInt col = orig2reducedcol[cliqueentries[k].col];
@@ -2246,15 +2246,18 @@ void HighsCliqueTable::rebuild(
         std::remove_if(cliqueentries.begin() + cliques[i].start,
                        cliqueentries.begin() + cliques[i].end,
                        [](CliqueVar v) { return v.col == kHighsIInf; });
-    HighsInt numvars = newend - (cliqueentries.begin() + cliques[i].start);
+    auto numvars = newend - (cliqueentries.begin() + cliques[i].start);
     // since we do not know how variables in the clique that have been deleted
     // are replaced (i.e. are they fixed to 0 or 1, or substituted) we relax
     // them out which means the equality status needs to be set to false
     if (numvars <= 1) continue;
 
-    HighsInt origin = cliques[i].origin != kHighsIInf ? -1 : kHighsIInf;
-    newCliqueTable.doAddClique(&cliqueentries[cliques[i].start], numvars, false,
-                               origin);
+    HighsInt origin = cliques[i].origin != -1 && cliques[i].origin != kHighsIInf
+                          ? orig2reducedrow[cliques[i].origin]
+                          : cliques[i].origin;
+    newCliqueTable.doAddClique(
+        &cliqueentries[cliques[i].start], static_cast<HighsInt>(numvars),
+        numvars == oldnumvars ? cliques[i].equality : false, origin);
   }
 
   *this = std::move(newCliqueTable);
@@ -2263,14 +2266,12 @@ void HighsCliqueTable::rebuild(
 void HighsCliqueTable::buildFrom(const HighsLp* origModel,
                                  const HighsCliqueTable& init) {
   assert(init.colsubstituted.size() == colsubstituted.size());
-  HighsInt ncols = init.colsubstituted.size();
-  HighsCliqueTable newCliqueTable(ncols);
+  HighsCliqueTable newCliqueTable(init.colsubstituted.size());
   newCliqueTable.setPresolveFlag(inPresolve);
   newCliqueTable.setPresolveFlag(minEntriesForParallelism);
-  HighsInt ncliques = init.cliques.size();
   std::vector<CliqueVar> clqBuffer;
   clqBuffer.reserve(2 * static_cast<size_t>(origModel->num_col_));
-  for (HighsInt i = 0; i != ncliques; ++i) {
+  for (size_t i = 0; i != init.cliques.size(); ++i) {
     if (init.cliques[i].start == -1) continue;
 
     HighsInt numvars = init.cliques[i].end - init.cliques[i].start;
@@ -2289,7 +2290,8 @@ void HighsCliqueTable::buildFrom(const HighsLp* origModel,
     if (clqBuffer.size() <= 1) continue;
 
     HighsInt origin = init.cliques[i].origin != kHighsIInf ? -1 : kHighsIInf;
-    newCliqueTable.doAddClique(clqBuffer.data(), clqBuffer.size(), false,
+    newCliqueTable.doAddClique(clqBuffer.data(),
+                               static_cast<HighsInt>(clqBuffer.size()), false,
                                origin);
   }
 
