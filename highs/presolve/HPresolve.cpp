@@ -4886,9 +4886,9 @@ HPresolve::Result HPresolve::enumerateSolutions(
 
   // minimum percentage of 'maxNumRowsChecked' that need to be examined before
   // checking if enumeration should be stopped
-  const HighsInt minPercentageRowsChecked = 20;
+  const HighsInt minPercentageRowsChecked = 25;
   // maximum percentage of iterations with no reductions
-  const HighsInt maxPercentageNoReductions = 10;
+  const HighsInt maxPercentageNoReductions = 50;
 
   // check rows
   struct candidaterow {
