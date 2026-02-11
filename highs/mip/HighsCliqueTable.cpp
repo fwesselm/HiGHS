@@ -95,8 +95,6 @@ void HighsCliqueTable::resolveSubstitution(HighsInt& col, double& val,
 HighsInt HighsCliqueTable::runCliqueSubsumption(
     const HighsDomain& globaldom, std::vector<CliqueVar>& clique) {
   if (clique.size() == 2) return 0;
-  HighsInt nremoved = 0;
-  bool redundant = false;
   if (cliquehits.size() < cliques.size()) cliquehits.resize(cliques.size());
 
   clique.erase(
@@ -104,47 +102,19 @@ HighsInt HighsCliqueTable::runCliqueSubsumption(
                      [&](CliqueVar clqvar) { return colDeleted[clqvar.col]; }),
       clique.end());
 
-  for (CliqueVar v : clique) {
-    invertedHashList[v.index()].for_each([&](HighsInt cliqueid) {
-      if (cliquehits[cliqueid] == 0) cliquehitinds.push_back(cliqueid);
+  // check clique
+  bool redundant;
+  HighsInt dominatingOrigin;
+  std::vector<HighsInt> removeCliques;
+  checkCliqueSubsumption(clique, redundant, dominatingOrigin, removeCliques);
 
-      ++cliquehits[cliqueid];
-    });
-
-    // for (const auto& entry : invertedHashListSizeTwo[v.index()])
-    invertedHashListSizeTwo[v.index()].for_each([&](HighsInt cliqueid) {
-      if (cliquehits[cliqueid] == 0) cliquehitinds.push_back(cliqueid);
-
-      ++cliquehits[cliqueid];
-    });
+  // remove cliques
+  HighsInt nremoved = 0;
+  for (HighsInt cliqueid : removeCliques) {
+    ++nremoved;
+    cliques[cliqueid].origin = kHighsIInf;
+    removeClique(cliqueid);
   }
-
-  for (HighsInt cliqueid : cliquehitinds) {
-    HighsInt hits = cliquehits[cliqueid];
-    cliquehits[cliqueid] = 0;
-
-    HighsInt len = cliques[cliqueid].end - cliques[cliqueid].start -
-                   cliques[cliqueid].numZeroFixed;
-    if (hits == static_cast<HighsInt>(clique.size()))
-      redundant = true;
-    else if (len == hits) {
-      if (cliques[cliqueid].equality) {
-        for (CliqueVar v : clique) {
-          bool sizeTwo = cliques[cliqueid].end - cliques[cliqueid].start == 2;
-          bool vHasClq =
-              sizeTwo ? invertedHashListSizeTwo[v.index()].contains(cliqueid)
-                      : invertedHashList[v.index()].contains(cliqueid);
-          if (!vHasClq) infeasvertexstack.push_back(v);
-        }
-      } else {
-        ++nremoved;
-        cliques[cliqueid].origin = kHighsIInf;
-        removeClique(cliqueid);
-      }
-    }
-  }
-
-  cliquehitinds.clear();
 
   if (redundant) clique.clear();
 
@@ -156,6 +126,60 @@ HighsInt HighsCliqueTable::runCliqueSubsumption(
   }
 
   return nremoved;
+}
+
+void HighsCliqueTable::checkCliqueSubsumption(
+    const std::vector<CliqueVar>& clique, bool& redundant,
+    HighsInt& dominatingOrigin, std::vector<HighsInt>& removeCliques) {
+  for (CliqueVar v : clique) {
+    // collect indices of cliques that contain this variable
+    invertedHashList[v.index()].for_each([&](HighsInt cliqueid) {
+      if (cliquehits[cliqueid] == 0) cliquehitinds.push_back(cliqueid);
+      ++cliquehits[cliqueid];
+    });
+
+    invertedHashListSizeTwo[v.index()].for_each([&](HighsInt cliqueid) {
+      if (cliquehits[cliqueid] == 0) cliquehitinds.push_back(cliqueid);
+      ++cliquehits[cliqueid];
+    });
+  }
+
+  // initialise
+  redundant = false;
+  dominatingOrigin = kHighsIInf;
+
+  for (HighsInt cliqueid : cliquehitinds) {
+    // remember hits and zero out vector
+    HighsInt hits = cliquehits[cliqueid];
+    cliquehits[cliqueid] = 0;
+
+    if (hits == static_cast<HighsInt>(clique.size())) {
+      // clique is redundant
+      redundant = true;
+      if (cliques[cliqueid].origin != kHighsIInf &&
+          cliques[cliqueid].origin != -1)
+        dominatingOrigin = cliques[cliqueid].origin;
+    } else if (cliques[cliqueid].numActive() == hits) {
+      // clique is subset of another clique
+      if (cliques[cliqueid].equality) {
+        // subset of clique is an equality clique (stored in the clique table),
+        // thus the remaining variables can be fixed
+        bool sizeTwo = cliques[cliqueid].end - cliques[cliqueid].start == 2;
+        for (CliqueVar v : clique) {
+          bool vHasClq =
+              sizeTwo ? invertedHashListSizeTwo[v.index()].contains(cliqueid)
+                      : invertedHashList[v.index()].contains(cliqueid);
+          if (!vHasClq) infeasvertexstack.push_back(v);
+        }
+      } else {
+        // clique from clique table contains a subset of the variables, thus it
+        // can be removed
+        removeCliques.push_back(cliqueid);
+      }
+    }
+  }
+  // clear vector of cliques indices
+  cliquehitinds.clear();
 }
 
 void HighsCliqueTable::bronKerboschRecurse(BronKerboschData& data,
@@ -1539,10 +1563,7 @@ void HighsCliqueTable::processInfeasibleVertices(HighsDomain& globaldom) {
       // may be found by probing and will be deleted upon rebuild anyways
       vHashLists.for_each([&](HighsInt cliqueid) {
         cliques[cliqueid].numZeroFixed += 1;
-        if (cliques[cliqueid].end - cliques[cliqueid].start -
-                cliques[cliqueid].numZeroFixed <=
-            1)
-          removeClique(cliqueid);
+        if (cliques[cliqueid].numActive() <= 1) removeClique(cliqueid);
       });
       continue;
     }
@@ -1556,9 +1577,7 @@ void HighsCliqueTable::processInfeasibleVertices(HighsDomain& globaldom) {
       // assert(cliqueentries[entry.value()].val == 1 - v.val);
 
       cliques[cliqueid].numZeroFixed += 1;
-      if (cliques[cliqueid].end - cliques[cliqueid].start -
-              cliques[cliqueid].numZeroFixed <=
-          1) {
+      if (cliques[cliqueid].numActive() <= 1) {
         removeClique(cliqueid);
       } else if (cliques[cliqueid].numZeroFixed >=
                  std::max(
@@ -2114,51 +2133,15 @@ void HighsCliqueTable::runCliqueMerging(HighsDomain& globaldomain) {
           extensionvars.end());
       removeClique(k);
 
-      for (CliqueVar v : extensionvars) {
-        invertedHashList[v.index()].for_each([&](HighsInt cliqueid) {
-          if (cliquehits[cliqueid] == 0) cliquehitinds.push_back(cliqueid);
+      // check extension
+      bool redundant;
+      HighsInt dominatingOrigin;
+      std::vector<HighsInt> removeCliques;
+      checkCliqueSubsumption(extensionvars, redundant, dominatingOrigin,
+                             removeCliques);
 
-          ++cliquehits[cliqueid];
-        });
-
-        invertedHashListSizeTwo[v.index()].for_each([&](HighsInt cliqueid) {
-          if (cliquehits[cliqueid] == 0) cliquehitinds.push_back(cliqueid);
-
-          ++cliquehits[cliqueid];
-        });
-      }
-
-      bool redundant = false;
-      HighsInt dominatingOrigin = kHighsIInf;
-      for (HighsInt cliqueid : cliquehitinds) {
-        HighsInt hits = cliquehits[cliqueid];
-        cliquehits[cliqueid] = 0;
-
-        if (hits == static_cast<HighsInt>(extensionvars.size())) {
-          redundant = true;
-          if (cliques[cliqueid].origin != kHighsIInf &&
-              cliques[cliqueid].origin != -1)
-            dominatingOrigin = cliques[cliqueid].origin;
-        } else if (cliques[cliqueid].end - cliques[cliqueid].start -
-                       cliques[cliqueid].numZeroFixed ==
-                   hits) {
-          if (cliques[cliqueid].equality) {
-            for (CliqueVar v : extensionvars) {
-              bool sizeTwo =
-                  cliques[cliqueid].end - cliques[cliqueid].start == 2;
-              bool vHasClq =
-                  sizeTwo
-                      ? invertedHashListSizeTwo[v.index()].contains(cliqueid)
-                      : invertedHashList[v.index()].contains(cliqueid);
-              if (!vHasClq) infeasvertexstack.push_back(v);
-            }
-          } else {
-            removeClique(cliqueid);
-          }
-        }
-      }
-
-      cliquehitinds.clear();
+      // remove cliques
+      for (HighsInt cliqueid : removeCliques) removeClique(cliqueid);
 
       if (!redundant) {
         for (HighsInt i = 0; i < numExtensions; ++i)
@@ -2272,10 +2255,7 @@ void HighsCliqueTable::buildFrom(const HighsLp* origModel,
   clqBuffer.reserve(2 * static_cast<size_t>(origModel->num_col_));
   for (HighsInt i = 0; i != ncliques; ++i) {
     if (init.cliques[i].start == -1) continue;
-
-    HighsInt numvars = init.cliques[i].end - init.cliques[i].start;
-
-    if (numvars - init.cliques[i].numZeroFixed <= 1) continue;
+    if (init.cliques[i].numActive() <= 1) continue;
 
     clqBuffer.assign(init.cliqueentries.begin() + init.cliques[i].start,
                      init.cliqueentries.begin() + init.cliques[i].end);

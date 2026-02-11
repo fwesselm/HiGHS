@@ -58,6 +58,7 @@ class HighsCliqueTable {
     HighsInt origin;
     HighsInt numZeroFixed;
     bool equality;
+    HighsInt numActive() const { return end - start - numZeroFixed; }
   };
 
   struct Substitution {
@@ -109,6 +110,11 @@ class HighsCliqueTable {
 
   HighsInt runCliqueSubsumption(const HighsDomain& globaldom,
                                 std::vector<CliqueVar>& clique);
+
+  void checkCliqueSubsumption(const std::vector<CliqueVar>& clique,
+                              bool& redundant, HighsInt& dominatingOrigin,
+                              std::vector<HighsInt>& deleteRows);
+
   struct BronKerboschData {
     const std::vector<double>& sol;
     std::vector<CliqueVar> P;
