@@ -111,9 +111,9 @@ class HighsCliqueTable {
   HighsInt runCliqueSubsumption(const HighsDomain& globaldom,
                                 std::vector<CliqueVar>& clique);
 
-  void checkCliqueSubsumption(const std::vector<CliqueVar>& clique,
+  void cliqueSubsumption(const std::vector<CliqueVar>& clique,
                               bool& redundant, HighsInt& dominatingOrigin,
-                              std::vector<HighsInt>& deleteRows);
+                              std::vector<HighsInt>& cliquesToRemove);
 
   struct BronKerboschData {
     const std::vector<double>& sol;

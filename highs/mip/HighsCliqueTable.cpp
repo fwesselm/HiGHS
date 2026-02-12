@@ -94,23 +94,27 @@ void HighsCliqueTable::resolveSubstitution(HighsInt& col, double& val,
 
 HighsInt HighsCliqueTable::runCliqueSubsumption(
     const HighsDomain& globaldom, std::vector<CliqueVar>& clique) {
-  if (clique.size() == 2) return 0;
-  if (cliquehits.size() < cliques.size()) cliquehits.resize(cliques.size());
-
+  // remove deleted cols
   clique.erase(
       std::remove_if(clique.begin(), clique.end(),
                      [&](CliqueVar clqvar) { return colDeleted[clqvar.col]; }),
       clique.end());
 
+  // return if clique does not have enough elements
+  if (clique.size() <= 2) return 0;
+
+  // resize vector
+  if (cliquehits.size() < cliques.size()) cliquehits.resize(cliques.size());
+
   // check clique
   bool redundant;
   HighsInt dominatingOrigin;
-  std::vector<HighsInt> removeCliques;
-  checkCliqueSubsumption(clique, redundant, dominatingOrigin, removeCliques);
+  std::vector<HighsInt> cliquesToRemove;
+  cliqueSubsumption(clique, redundant, dominatingOrigin, cliquesToRemove);
 
   // remove cliques
   HighsInt nremoved = 0;
-  for (HighsInt cliqueid : removeCliques) {
+  for (HighsInt cliqueid : cliquesToRemove) {
     ++nremoved;
     cliques[cliqueid].origin = kHighsIInf;
     removeClique(cliqueid);
@@ -128,9 +132,9 @@ HighsInt HighsCliqueTable::runCliqueSubsumption(
   return nremoved;
 }
 
-void HighsCliqueTable::checkCliqueSubsumption(
+void HighsCliqueTable::cliqueSubsumption(
     const std::vector<CliqueVar>& clique, bool& redundant,
-    HighsInt& dominatingOrigin, std::vector<HighsInt>& removeCliques) {
+    HighsInt& dominatingOrigin, std::vector<HighsInt>& cliquesToRemove) {
   for (CliqueVar v : clique) {
     // collect indices of cliques that contain this variable
     invertedHashList[v.index()].for_each([&](HighsInt cliqueid) {
@@ -174,7 +178,7 @@ void HighsCliqueTable::checkCliqueSubsumption(
       } else {
         // clique from clique table contains a subset of the variables, thus it
         // can be removed
-        removeCliques.push_back(cliqueid);
+        cliquesToRemove.push_back(cliqueid);
       }
     }
   }
@@ -2036,7 +2040,7 @@ void HighsCliqueTable::runCliqueMerging(HighsDomain& globaldomain) {
 
   if (cliquehits.size() < cliques.size()) cliquehits.resize(cliques.size());
 
-  HighsInt numcliqueslots = cliques.size();
+  HighsInt numcliqueslots = static_cast<HighsInt>(cliques.size());
   const HighsInt maxNewEntries = numEntries + globaldomain.numModelNonzeros();
   bool haveNonModelCliquesToMerge = false;
   for (HighsInt k = 0; k != numcliqueslots; ++k) {
@@ -2094,22 +2098,24 @@ void HighsCliqueTable::runCliqueMerging(HighsDomain& globaldomain) {
 
       HighsInt newSize = shrinkToNeighbourhood(
           neighbourhoodInds, numNeighbourhoodQueries, clqvars[i],
-          extensionvars.data(), extensionvars.size());
+          extensionvars.data(), static_cast<HighsInt>(extensionvars.size()));
       extensionvars.erase(extensionvars.begin() + newSize, extensionvars.end());
     }
 
     if (!extensionvars.empty()) {
       // todo, shuffle extension vars?
-      randgen.shuffle(extensionvars.data(), extensionvars.size());
-      size_t i = 0;
-      while (i < extensionvars.size()) {
+      randgen.shuffle(extensionvars.data(),
+                      static_cast<HighsInt>(extensionvars.size()));
+      HighsInt i = 0;
+      while (i < static_cast<HighsInt>(extensionvars.size())) {
         CliqueVar extvar = extensionvars[i];
         i += 1;
 
         HighsInt newSize =
             i + shrinkToNeighbourhood(
                     neighbourhoodInds, numNeighbourhoodQueries, extvar,
-                    extensionvars.data() + i, extensionvars.size() - i);
+                    extensionvars.data() + i,
+                    static_cast<HighsInt>(extensionvars.size()) - i);
         extensionvars.erase(extensionvars.begin() + newSize,
                             extensionvars.end());
       }
@@ -2122,7 +2128,7 @@ void HighsCliqueTable::runCliqueMerging(HighsDomain& globaldomain) {
       HighsInt originrow = cliques[k].origin;
       cliques[k].origin = kHighsIInf;
 
-      HighsInt numExtensions = extensionvars.size();
+      size_t numExtensions = extensionvars.size();
       extensionvars.insert(extensionvars.end(),
                            cliqueentries.begin() + cliques[k].start,
                            cliqueentries.begin() + cliques[k].end);
@@ -2136,15 +2142,15 @@ void HighsCliqueTable::runCliqueMerging(HighsDomain& globaldomain) {
       // check extension
       bool redundant;
       HighsInt dominatingOrigin;
-      std::vector<HighsInt> removeCliques;
-      checkCliqueSubsumption(extensionvars, redundant, dominatingOrigin,
-                             removeCliques);
+      std::vector<HighsInt> cliquesToRemove;
+      cliqueSubsumption(extensionvars, redundant, dominatingOrigin,
+                        cliquesToRemove);
 
       // remove cliques
-      for (HighsInt cliqueid : removeCliques) removeClique(cliqueid);
+      for (HighsInt cliqueid : cliquesToRemove) removeClique(cliqueid);
 
       if (!redundant) {
-        for (HighsInt i = 0; i < numExtensions; ++i)
+        for (size_t i = 0; i < numExtensions; ++i)
           cliqueextensions.emplace_back(originrow, extensionvars[i]);
 
         extensionvars.erase(
@@ -2158,7 +2164,8 @@ void HighsCliqueTable::runCliqueMerging(HighsDomain& globaldomain) {
             extensionvars.end());
 
         if (extensionvars.size() > 1)
-          doAddClique(extensionvars.data(), extensionvars.size(), false,
+          doAddClique(extensionvars.data(),
+                      static_cast<HighsInt>(extensionvars.size()), false,
                       originrow);
       } else {
         // the extended clique is redundant, check if the row can be removed
@@ -2169,7 +2176,7 @@ void HighsCliqueTable::runCliqueMerging(HighsDomain& globaldomain) {
           // necessarily. Also there might be rows that have been deleted due to
           // being dominated by this row after adding the lifted entries so they
           // must be added to the cliqueextension vector
-          for (HighsInt i = 0; i < numExtensions; ++i)
+          for (size_t i = 0; i < numExtensions; ++i)
             cliqueextensions.emplace_back(originrow, extensionvars[i]);
         }
       }
@@ -2198,7 +2205,8 @@ void HighsCliqueTable::runCliqueMerging(HighsDomain& globaldomain) {
       runCliqueMerging(globaldomain, extensionvars);
 
       if (extensionvars.size() > 1)
-        doAddClique(extensionvars.data(), extensionvars.size());
+        doAddClique(extensionvars.data(),
+                    static_cast<HighsInt>(extensionvars.size()));
     }
   }
 }
