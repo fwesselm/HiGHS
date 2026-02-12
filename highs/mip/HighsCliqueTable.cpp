@@ -132,8 +132,8 @@ HighsInt HighsCliqueTable::runCliqueSubsumption(
 void HighsCliqueTable::cliqueSubsumption(
     const std::vector<CliqueVar>& clique, bool& redundant,
     HighsInt& dominatingOrigin, std::vector<HighsInt>& cliquesToRemove) {
-  // collect indices of cliques in clique table that contain variables from the
-  // passed clique
+  // collect indices of cliques that contain variables from the
+  // provided vector
   collectCliques(clique);
 
   // initialise
@@ -178,8 +178,9 @@ void HighsCliqueTable::collectCliques(const std::vector<CliqueVar>& clique) {
   // resize vector
   if (cliquehits.size() < cliques.size()) cliquehits.resize(cliques.size());
 
+  // collect indices of cliques that contain variables from the
+  // provided vector
   for (CliqueVar v : clique) {
-    // collect indices of cliques that contain this variable
     invertedHashList[v.index()].for_each([&](HighsInt cliqueid) {
       if (cliquehits[cliqueid] == 0) cliquehitinds.push_back(cliqueid);
       ++cliquehits[cliqueid];
