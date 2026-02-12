@@ -4884,11 +4884,11 @@ HPresolve::Result HPresolve::enumerateSolutions(
   const HighsInt maxNumRowsChecked = 400;
   const size_t maxNumSolutions = 1 << maxRowSize;
 
-  // minimum percentage of 'maxNumRowsChecked' that need to be examined before
+  // minimum percentage of rows that need to be examined before
   // checking if enumeration should be stopped
   const HighsInt minPercentageRowsChecked = 25;
   // maximum percentage of iterations with no reductions
-  const HighsInt maxPercentageNoReductions = 50;
+  const HighsInt maxPercentageNoReductions = 10;
 
   // check rows
   struct candidaterow {
@@ -5025,14 +5025,26 @@ HPresolve::Result HPresolve::enumerateSolutions(
   };
 
   auto varsFormClique = [&](size_t numVars, size_t minNumActiveCols,
-                            size_t maxNumActiveCols) {
-    return (maxNumActiveCols == 1 || minNumActiveCols == numVars - 1);
+                            size_t maxNumActiveCols, bool cliqueKnown,
+                            bool compCliqueKnown) {
+    return ((!cliqueKnown && maxNumActiveCols == 1) ||
+            (!compCliqueKnown && minNumActiveCols == numVars - 1));
+  };
+
+  auto cliqueIsKnown = [&](size_t numVars, HighsInt val) {
+    // check if clique is already known
+    std::vector<HighsCliqueTable::CliqueVar> clique(numVars);
+    for (size_t i = 0; i < numVars; i++) {
+      clique[i] = HighsCliqueTable::CliqueVar(vars[i], val);
+    }
+    return cliquetable.isRedundant(clique);
   };
 
   auto handleSolution = [&](size_t numVars, size_t& numSolutions,
                             size_t& numWorstCaseBounds,
                             size_t& minNumActiveCols, size_t& maxNumActiveCols,
-                            bool& noReductions) {
+                            bool& noReductions, bool cliqueKnown,
+                            bool compCliqueKnown) {
     // propagate
     domain.propagate();
     if (domain.infeasible()) return;
@@ -5082,7 +5094,9 @@ HPresolve::Result HPresolve::enumerateSolutions(
     numSolutions++;
 
     // if no reductions are possible, stop enumerating solutions
-    noReductions = numWorstCaseBounds == 0;
+    noReductions = numWorstCaseBounds == 0 &&
+                   !varsFormClique(numVars, minNumActiveCols, maxNumActiveCols,
+                                   cliqueKnown, compCliqueKnown);
     if (noReductions) {
       for (size_t i = 0; i < numVars - 1; i++) {
         for (size_t ii = i + 1; ii < numVars; ii++) {
@@ -5131,16 +5145,17 @@ HPresolve::Result HPresolve::enumerateSolutions(
     size_t minNumActiveCols = numVars;
     size_t maxNumActiveCols = 0;
     bool noReductions = false;
+    bool cliqueKnown = cliqueIsKnown(numVars, 1);
+    bool complCliqueKnown = cliqueIsKnown(numVars, 0);
     while (true) {
       bool backtrack = domain.infeasible();
       if (!backtrack) {
         backtrack = solutionFound(numVars);
         if (backtrack) {
           handleSolution(numVars, numSolutions, numWorstCaseBounds,
-                         minNumActiveCols, maxNumActiveCols, noReductions);
-          if (noReductions &&
-              !varsFormClique(numVars, minNumActiveCols, maxNumActiveCols))
-            break;
+                         minNumActiveCols, maxNumActiveCols, noReductions,
+                         cliqueKnown, complCliqueKnown);
+          if (noReductions) break;
         }
       }
       // branch or backtrack
@@ -5151,9 +5166,8 @@ HPresolve::Result HPresolve::enumerateSolutions(
     }
 
     // no reductions for this row?
-    if (noReductions) numNoReductions++;
-    if (noReductions &&
-        !varsFormClique(numVars, minNumActiveCols, maxNumActiveCols)) {
+    if (noReductions) {
+      numNoReductions++;
       // clang-format off
       //
       // clang formatting on oronsay can put the ";" on the next line!
@@ -5166,7 +5180,8 @@ HPresolve::Result HPresolve::enumerateSolutions(
     HPRESOLVE_CHECKED_CALL(handleInfeasibility(numSolutions == 0));
 
     // check if all variables form a clique
-    if (varsFormClique(numVars, minNumActiveCols, maxNumActiveCols)) {
+    if (varsFormClique(numVars, minNumActiveCols, maxNumActiveCols, cliqueKnown,
+                       complCliqueKnown)) {
       numCliquesFound++;
       std::vector<HighsCliqueTable::CliqueVar> clique(numVars);
       for (size_t i = 0; i < numVars; i++)

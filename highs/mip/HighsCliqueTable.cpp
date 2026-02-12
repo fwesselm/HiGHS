@@ -103,9 +103,6 @@ HighsInt HighsCliqueTable::runCliqueSubsumption(
   // return if clique does not have enough elements
   if (clique.size() <= 2) return 0;
 
-  // resize vector
-  if (cliquehits.size() < cliques.size()) cliquehits.resize(cliques.size());
-
   // check clique
   bool redundant;
   HighsInt dominatingOrigin;
@@ -135,18 +132,9 @@ HighsInt HighsCliqueTable::runCliqueSubsumption(
 void HighsCliqueTable::cliqueSubsumption(
     const std::vector<CliqueVar>& clique, bool& redundant,
     HighsInt& dominatingOrigin, std::vector<HighsInt>& cliquesToRemove) {
-  for (CliqueVar v : clique) {
-    // collect indices of cliques that contain this variable
-    invertedHashList[v.index()].for_each([&](HighsInt cliqueid) {
-      if (cliquehits[cliqueid] == 0) cliquehitinds.push_back(cliqueid);
-      ++cliquehits[cliqueid];
-    });
-
-    invertedHashListSizeTwo[v.index()].for_each([&](HighsInt cliqueid) {
-      if (cliquehits[cliqueid] == 0) cliquehitinds.push_back(cliqueid);
-      ++cliquehits[cliqueid];
-    });
-  }
+  // collect indices of cliques in clique table that contain variables from the
+  // passed clique
+  collectCliques(clique);
 
   // initialise
   redundant = false;
@@ -184,6 +172,24 @@ void HighsCliqueTable::cliqueSubsumption(
   }
   // clear vector of cliques indices
   cliquehitinds.clear();
+}
+
+void HighsCliqueTable::collectCliques(const std::vector<CliqueVar>& clique) {
+  // resize vector
+  if (cliquehits.size() < cliques.size()) cliquehits.resize(cliques.size());
+
+  for (CliqueVar v : clique) {
+    // collect indices of cliques that contain this variable
+    invertedHashList[v.index()].for_each([&](HighsInt cliqueid) {
+      if (cliquehits[cliqueid] == 0) cliquehitinds.push_back(cliqueid);
+      ++cliquehits[cliqueid];
+    });
+
+    invertedHashListSizeTwo[v.index()].for_each([&](HighsInt cliqueid) {
+      if (cliquehits[cliqueid] == 0) cliquehitinds.push_back(cliqueid);
+      ++cliquehits[cliqueid];
+    });
+  }
 }
 
 void HighsCliqueTable::bronKerboschRecurse(BronKerboschData& data,
@@ -1750,8 +1756,6 @@ void HighsCliqueTable::separateCliques(const HighsMipSolver& mipsolver,
   numNeighbourhoodQueries += data.numNeighbourhoodQueries;
 
   if (runcliquesubsumption) {
-    if (cliquehits.size() < cliques.size()) cliquehits.resize(cliques.size());
-
     for (std::vector<CliqueVar>& clique : data.cliques) {
       HighsInt nremoved = runCliqueSubsumption(globaldom, clique);
 
@@ -2038,8 +2042,6 @@ void HighsCliqueTable::runCliqueMerging(HighsDomain& globaldomain) {
   std::vector<HighsInt> neighbourhoodInds;
   neighbourhoodInds.reserve(invertedHashList.size());
 
-  if (cliquehits.size() < cliques.size()) cliquehits.resize(cliques.size());
-
   HighsInt numcliqueslots = static_cast<HighsInt>(cliques.size());
   const HighsInt maxNewEntries = numEntries + globaldomain.numModelNonzeros();
   bool haveNonModelCliquesToMerge = false;
@@ -2284,4 +2286,28 @@ void HighsCliqueTable::buildFrom(const HighsLp* origModel,
   newCliqueTable.colsubstituted = init.colsubstituted;
   newCliqueTable.substitutions = init.substitutions;
   *this = std::move(newCliqueTable);
+}
+
+bool HighsCliqueTable::isRedundant(const std::vector<CliqueVar>& clique) {
+  // collect indices of cliques that contain variables from the
+  // provided vector
+  collectCliques(clique);
+
+  // check if clique is redundant
+  bool redundant = false;
+  HighsInt numclqvars = static_cast<HighsInt>(clique.size());
+  for (HighsInt cliqueid : cliquehitinds) {
+    redundant = cliquehits[cliqueid] == numclqvars;
+    if (redundant) break;
+  }
+
+  // clean up
+  for (HighsInt cliqueid : cliquehitinds) cliquehits[cliqueid] = 0;
+
+  // clear vector of cliques indices
+  cliquehitinds.clear();
+
+  // redundant?
+  if (redundant) return true;
+  return false;
 }
