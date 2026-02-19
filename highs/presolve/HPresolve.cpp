@@ -1521,7 +1521,7 @@ HPresolve::Result HPresolve::finaliseProbing(
 
   cliquetable.cleanupFixed(domain);
 
-  if (!firstCall) cliquetable.extractCliques(*mipsolver, false);
+  if (!firstCall) cliquetable.extractCliques(*mipsolver);
   cliquetable.runCliqueMerging(domain);
 
   // apply changes from probing
