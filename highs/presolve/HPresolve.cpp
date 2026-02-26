@@ -4958,12 +4958,10 @@ HPresolve::Result HPresolve::singletonColStuffing(
 
   // lambda for storing a candidate
   auto addCandidate = [&](std::vector<candidate>& candidates, HighsInt col,
-                          double val, HighsInt direction, double& minWeight,
-                          double& maxWeight, bool& allInteger) {
-    allInteger =
-        allInteger && model->integrality_[col] == HighsVarType::kInteger;
-    minWeight = std::min(minWeight, direction * val);
-    maxWeight = std::max(maxWeight, direction * val);
+                          double val, HighsInt direction) {
+    if (model->integrality_[col] == HighsVarType::kInteger &&
+        !HighsIntegers::isIntegral(1.0 / val, 0.0))
+      return;
     candidates.push_back(std::make_tuple(col, val, direction));
   };
 
@@ -4987,9 +4985,6 @@ HPresolve::Result HPresolve::singletonColStuffing(
     HighsCDouble sumUpper = 0.0;
     bool sumLowerFinite = true;
     bool sumUpperFinite = true;
-    bool allInteger = true;
-    double minWeight = kHighsInf;
-    double maxWeight = -kHighsInf;
 
     for (auto& nz : getRowVector(row)) {
       // get column index, coefficient, cost and bounds
@@ -5004,16 +4999,12 @@ HPresolve::Result HPresolve::singletonColStuffing(
           // use lower bound
           sumUpperBound = sumLowerBound;
           // candidate for stuffing?
-          if (cj < 0)
-            addCandidate(candidates, j, aj, HighsInt{1}, minWeight, maxWeight,
-                         allInteger);
+          if (cj < 0) addCandidate(candidates, j, aj, HighsInt{1});
         } else {
           // use upper bound
           sumLowerBound = sumUpperBound;
           // candidate for stuffing? multiply column with -1
-          if (cj > 0)
-            addCandidate(candidates, j, aj, HighsInt{-1}, minWeight, maxWeight,
-                         allInteger);
+          if (cj > 0) addCandidate(candidates, j, aj, HighsInt{-1});
         }
       } else if (aj < 0)
         std::swap(sumLowerBound, sumUpperBound);
@@ -5022,19 +5013,6 @@ HPresolve::Result HPresolve::singletonColStuffing(
                            aj, sumLowerBound, sumUpperBound);
       if (!sumLowerFinite && !sumUpperFinite) return Result::kOk;
     }
-
-    // all columns need to have same weights if we only have integer columns
-    if (allInteger && minWeight != maxWeight) return Result::kOk;
-
-    // remove integer columns if there are also continuous ones
-    if (!allInteger)
-      candidates.erase(
-          std::remove_if(candidates.begin(), candidates.end(),
-                         [&](const candidate& p) {
-                           return model->integrality_[std::get<0>(p)] ==
-                                  HighsVarType::kInteger;
-                         }),
-          candidates.end());
 
     // sort candidates
     sortCols(candidates);
