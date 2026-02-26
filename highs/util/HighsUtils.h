@@ -16,6 +16,7 @@
 #include <vector>
 
 #include "lp_data/HighsOptions.h"
+#include "util/HighsCDouble.h"
 
 const HighsInt kIndexCollectionCreateOk = 0;
 const HighsInt kIndexCollectionCreateIllegalInterval = 1;
@@ -269,4 +270,15 @@ inline std::pair<double, double> infeasibility(const double lower,
   if (infeasibility == 0) residual = min(residual, tolerance);
   return std::make_pair(infeasibility, residual);
 }
+
+template <typename T>
+inline bool computeBound(double rhs, const HighsCDouble& residual, double val,
+                         double tolerance, T& bound) {
+  using std::abs;
+  if (abs(residual) * kHighsTiny > tolerance * abs(val) * 0.01) return false;
+  bound = static_cast<T>((static_cast<HighsCDouble>(rhs) - residual) / val);
+  if (abs(bound) * kHighsTiny > tolerance) return false;
+  return true;
+}
+
 #endif  // UTIL_HIGHSUTILS_H_
