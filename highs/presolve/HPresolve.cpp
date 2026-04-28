@@ -5579,6 +5579,10 @@ HPresolve::Result HPresolve::enumerateSolutions(
         numSolutions++;
       };
 
+  // vector for storing conflicts found while enumerating
+  std::vector<std::vector<row_entry>> conflicts;
+  std::vector<double> conflicts_rhs;
+
   // loop over candidate rows
   HighsInt numCliquesFound = 0;
   HighsInt numFails = 0;
@@ -5604,6 +5608,20 @@ HPresolve::Result HPresolve::enumerateSolutions(
         if (backtrack)
           handleSolution(numVars, numSolutions, numWorstCaseBounds,
                          minNumActiveCols, maxNumActiveCols);
+      } else {
+        // store conflict
+        std::vector<row_entry> conflict;
+        HighsInt rhs = numBranches;
+        for (HighsInt i = 0; i <= numBranches; i++) {
+          const auto& domchg =
+              domain.getDomainChangeStack()[branches[i].numDomainChanges];
+          conflict.push_back(row_entry{
+              domchg.column,
+              domchg.boundtype == HighsBoundType::kLower ? 1.0 : -1.0});
+          if (domchg.boundtype == HighsBoundType::kUpper) rhs--;
+        }
+        conflicts.push_back(conflict);
+        conflicts_rhs.push_back(static_cast<double>(rhs));
       }
       // branch or backtrack
       if (!backtrack)
