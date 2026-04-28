@@ -8515,6 +8515,47 @@ HPresolve::Result HPresolve::sparsify(HighsPostsolveStack& postsolve_stack) {
   return Result::kOk;
 }
 
+HPresolve::Result HPresolve::fourierMotzkinElimination(
+    HighsPostsolveStack& postsolve_stack) {
+  std::vector<HighsInt> candidates;
+
+  for (HighsInt col = 0; col < model->num_col_; col++) {
+    bool isCandidate = true;
+    for (const auto& colNz : getColumnVector(col)) {
+      isCandidate = !isEquation(colNz.index());
+      if (!isCandidate) break;
+    }
+    if (!isCandidate) continue;
+    candidates.push_back(col);
+  }
+
+  for (HighsInt col : candidates) {
+    std::vector<HighsInt> iPlus;
+    std::vector<HighsInt> iMinus;
+    size_t totalNumNonZerosPlus = 0;
+    size_t totalNumNonZerosMinus = 0;
+    for (const auto& colNz : getColumnVector(col)) {
+      size_t numNonZeros = static_cast<size_t>(rowsize[colNz.index()]);
+      if (isRanged(colNz.index())) {
+        iPlus.push_back(col);
+        iMinus.push_back(col);
+        totalNumNonZerosPlus += numNonZeros;
+        totalNumNonZerosMinus += numNonZeros;
+      } else {
+        HighsInt direction =
+            model->row_upper_[colNz.index()] != kHighsInf ? 1 : -1;
+        if (direction * colNz.value() > 0) {
+          iPlus.push_back(col);
+          totalNumNonZerosPlus += numNonZeros;
+        } else {
+          iMinus.push_back(col);
+          totalNumNonZerosMinus += numNonZeros;
+        }
+      }
+    }
+  }
+}
+
 bool HPresolve::zeroRowActivityFeasible() const {
   // Check that zero row activity is feasible - called when reduced model
   // has no columns to assess whether the HighsModelStatus returned is

@@ -484,6 +484,8 @@ class HPresolve {
 
   Result sparsify(HighsPostsolveStack& postsolve_stack);
 
+  Result fourierMotzkinElimination(HighsPostsolveStack& postsolve_stack);
+
   void setRelaxedImpliedBounds();
 
   const HighsPresolveLog& getPresolveLog() const {
