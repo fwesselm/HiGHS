@@ -891,9 +891,9 @@ void HEkkDual::majorUpdatePrimal() {
         // Devex
         for (HighsInt jFn = 0; jFn < iFn; jFn++) {
           HighsInt jRow = multi_finish[jFn].row_out;
-          const double aa_iRow = colArray[iRow];
+          const double aa_jRow = colArray[jRow];
           edge_weight[jRow] = max(edge_weight[jRow],
-                                  new_pivotal_edge_weight * aa_iRow * aa_iRow);
+                                  new_pivotal_edge_weight * aa_jRow * aa_jRow);
         }
         edge_weight[iRow] = new_pivotal_edge_weight;
         num_devex_iterations++;
