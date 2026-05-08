@@ -1223,11 +1223,11 @@ class HighsHashTree {
 
         ListNode* iter = &leaf->first;
         ListNode* copyIter = &copyLeaf->first;
-        do {
+        while (iter->next != nullptr) {
           copyIter->next = new ListNode(*iter->next);
           iter = iter->next;
           copyIter = copyIter->next;
-        } while (iter->next != nullptr);
+        }
 
         return copyLeaf;
       }
