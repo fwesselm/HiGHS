@@ -1387,7 +1387,7 @@ void HighsMipSolverData::performRestart() {
   runSetup();
   if (mipsolver.terminate()) return;
 
-  postSolveStack.removeCutsFromModel(numCuts);
+  postSolveStack.removeCutsFromModel();
 
   // HighsNodeQueue oldNodeQueue;
   // std::swap(nodequeue, oldNodeQueue);
