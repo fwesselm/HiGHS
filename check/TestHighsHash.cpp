@@ -126,15 +126,12 @@ TEST_CASE("Highs_HashTree", "[util]") {
 }
 
 TEST_CASE("Highs_HashTree_findCommon_hash_collision", "[util]") {
-  // Bug: findCommonInLeaf's merge-join advances both i and j when 16-bit hashes
-  // match but keys differ. With tree1=[A, B] and tree2=[B, C] where all three
-  // keys share the same 16-bit hash, the merge-join compares A↔B (hash equal,
-  // keys differ, advance both), then B↔C (never checked — already past B in
-  // tree1 or past B in tree2). The common key B is missed.
+  // findCommonInLeaf may not work when 16-bit hashes
+  // match but keys differ.
 
   // These three keys all share the same top-16 bits of their 64-bit hash
   const int keyA = 57501;
-  const int keyB = 91344;   // common key
+  const int keyB = 91344;
   const int keyC = 159347;
 
   REQUIRE((HighsHashHelpers::hash(keyA) >> 48) ==
@@ -153,14 +150,14 @@ TEST_CASE("Highs_HashTree_findCommon_hash_collision", "[util]") {
   REQUIRE(tree1.contains(keyB));
   REQUIRE(tree2.contains(keyB));
 
-  // Brute-force confirms a common element exists
+  // Confirm that a common element exists
   bool hasCommon = false;
   tree1.for_each([&](const int& k) {
     if (tree2.contains(k)) hasCommon = true;
   });
   REQUIRE(hasCommon);
 
-  // find_common misses it due to the merge-join bug
+  // find_common should find the common element
   const auto* common = tree1.find_common(tree2);
   REQUIRE(common != nullptr);
 }
