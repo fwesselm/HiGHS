@@ -504,6 +504,11 @@ class HighsHashTree {
     }
   }
 
+  template <int SizeClass>
+  inline static bool pastChunkEnd(InnerLeaf<SizeClass>* leaf, int i, int pos) {
+    return i == leaf->size || get_first_chunk16(leaf->hashes[i]) != pos;
+  }
+
   template <int SizeClass1, int SizeClass2>
   static HighsHashTableEntry<K, V>* findCommonInLeaf(
       InnerLeaf<SizeClass1>* leaf1, InnerLeaf<SizeClass2>* leaf2, int hashPos) {
@@ -533,22 +538,16 @@ class HighsHashTree {
       while (true) {
         if (leaf1->hashes[i] > leaf2->hashes[j]) {
           ++i;
-          if (i == leaf1->size || get_first_chunk16(leaf1->hashes[i]) != pos)
-            break;
+          if (pastChunkEnd(leaf1, i, pos)) break;
         } else if (leaf2->hashes[j] > leaf1->hashes[i]) {
           ++j;
-          if (j == leaf2->size || get_first_chunk16(leaf2->hashes[j]) != pos)
-            break;
+          if (pastChunkEnd(leaf2, j, pos)) break;
         } else {
-          if (leaf1->entries[i].key() == leaf2->entries[j].key())
-            return &leaf1->entries[i];
-
-          ++i;
-          if (i == leaf1->size || get_first_chunk16(leaf1->hashes[i]) != pos)
-            break;
-          ++j;
-          if (j == leaf2->size || get_first_chunk16(leaf2->hashes[j]) != pos)
-            break;
+          for (int ii = i; !pastChunkEnd(leaf1, ii, pos); ++ii)
+            for (int jj = j; !pastChunkEnd(leaf2, jj, pos); ++jj)
+              if (leaf1->entries[ii].key() == leaf2->entries[jj].key())
+                return &leaf1->entries[ii];
+          break;
         }
       };
     }
@@ -593,7 +592,7 @@ class HighsHashTree {
                              leaf->entries[i].key()))
               return &leaf->entries[i];
             ++i;
-          } while (i < leaf->size && get_first_chunk16(leaf->hashes[i]) == pos);
+          } while (!pastChunkEnd(leaf, i, pos));
         }
         break;
       }
