@@ -3008,7 +3008,7 @@ double HEkk::computeDualForTableauColumn(const HighsInt iVar,
 }
 
 bool HEkk::reinvertOnNumericalTrouble(
-    const std::string method_name, double& numerical_trouble_measure,
+    const std::string& method_name, double& numerical_trouble_measure,
     const double alpha_from_col, const double alpha_from_row,
     const double numerical_trouble_tolerance) {
   double abs_alpha_from_col = fabs(alpha_from_col);

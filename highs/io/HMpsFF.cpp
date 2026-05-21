@@ -19,7 +19,7 @@ namespace free_format_parser {
 const bool kNoClockCalls = false;
 
 FreeFormatParserReturnCode HMpsFF::loadProblem(
-    const HighsLogOptions& log_options, const std::string filename,
+    const HighsLogOptions& log_options, const std::string& filename,
     HighsModel& model) {
   // Keep track of any warnings that are issued so that
   // Highs::readModel can return HighsStatus::kWarning

@@ -1774,7 +1774,7 @@ class Highs {
   void clearZeroHessian();
   HighsStatus checkOptimality(const std::string& solver_type);
   void callLpKktCheck(const HighsLp& lp, const std::string& message = "");
-  HighsStatus invertRequirementError(std::string method_name) const;
+  HighsStatus invertRequirementError(const std::string& method_name) const;
 
   HighsStatus handleInfCost();
   void restoreInfCost(HighsStatus& return_status);

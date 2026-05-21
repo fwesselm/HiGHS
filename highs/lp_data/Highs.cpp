@@ -1957,7 +1957,7 @@ HighsStatus Highs::getFixedLp(HighsLp& lp) const {
     return HighsStatus::kError;
   }
   lp = this->model_.lp_;
-  const std::vector<HighsVarType> integrality = this->model_.lp_.integrality_;
+  const std::vector<HighsVarType>& integrality = this->model_.lp_.integrality_;
   lp.integrality_.clear();
   HighsInt num_non_conts_fractional = 0;
   double max_fractional = 0;

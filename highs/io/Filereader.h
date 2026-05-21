@@ -32,13 +32,13 @@ std::string extractModelName(const std::string& filename);
 class Filereader {
  public:
   virtual FilereaderRetcode readModelFromFile(const HighsOptions& options,
-                                              const std::string filename,
+                                              const std::string& filename,
                                               HighsModel& model) = 0;
   virtual HighsStatus writeModelToFile(const HighsOptions& options,
-                                       const std::string filename,
+                                       const std::string& filename,
                                        const HighsModel& model) = 0;
   static Filereader* getFilereader(const HighsLogOptions& log_options,
-                                   const std::string filename);
+                                   const std::string& filename);
 
   virtual ~Filereader(){};
 };

@@ -19,7 +19,7 @@
 using free_format_parser::HMpsFF;
 
 FilereaderRetcode FilereaderMps::readModelFromFile(const HighsOptions& options,
-                                                   const std::string filename,
+                                                   const std::string& filename,
                                                    HighsModel& model) {
   HighsLp& lp = model.lp_;
   HighsHessian& hessian = model.hessian_;
@@ -78,7 +78,7 @@ FilereaderRetcode FilereaderMps::readModelFromFile(const HighsOptions& options,
 }
 
 HighsStatus FilereaderMps::writeModelToFile(const HighsOptions& options,
-                                            const std::string filename,
+                                            const std::string& filename,
                                             const HighsModel& model) {
   assert(model.lp_.a_matrix_.isColwise());
   return writeModelAsMps(options, filename, model,

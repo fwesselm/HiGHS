@@ -503,7 +503,7 @@ retry:
 
       double change = 0.0;
       // select a set of fractional variables to fix
-      for (auto fracint : heurlp.getFractionalIntegers()) {
+      for (const auto& fracint : heurlp.getFractionalIntegers()) {
         double fixval = getFixVal(fracint.first, fracint.second);
 
         if (localdom.col_lower_[fracint.first] < fixval) {

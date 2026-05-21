@@ -83,7 +83,7 @@ class HipdlpTimer {
   };
 
   bool reportHipdlpClockList(
-      const char* grepStamp, const std::vector<HighsInt> hipdlp_clock_list,
+      const char* grepStamp, const std::vector<HighsInt>& hipdlp_clock_list,
       const HighsTimerClock& hipdlp_timer_clock,
       const HighsInt kHipdlpClockIdeal = kHipdlpClockTotal,
       const double tolerance_percent_report_ = -1) {

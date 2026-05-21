@@ -26,11 +26,11 @@
 class FilereaderLp : public Filereader {
  public:
   FilereaderRetcode readModelFromFile(const HighsOptions& options,
-                                      const std::string filename,
+                                      const std::string& filename,
                                       HighsModel& model);
 
   HighsStatus writeModelToFile(const HighsOptions& options,
-                               const std::string filename,
+                               const std::string& filename,
                                const HighsModel& model);
 
  private:

@@ -10,8 +10,9 @@
 #include <cassert>
 #include <memory>
 
-Basis::Basis(Runtime& rt, std::vector<HighsInt> active,
-             std::vector<BasisStatus> status, std::vector<HighsInt> inactive)
+Basis::Basis(Runtime& rt, const std::vector<HighsInt>& active,
+             const std::vector<BasisStatus>& status,
+             const std::vector<HighsInt>& inactive)
     : Ztprod_res(rt.instance.num_var),
       buffer_Zprod(rt.instance.num_var),
       runtime(rt),

@@ -20,7 +20,7 @@
 #include "lp_data/HighsLpUtils.h"
 
 FilereaderRetcode FilereaderLp::readModelFromFile(const HighsOptions& options,
-                                                  const std::string filename,
+                                                  const std::string& filename,
                                                   HighsModel& model) {
   bool warning_issued = false;
   HighsLp& lp = model.lp_;
@@ -357,7 +357,7 @@ void FilereaderLp::writeToFileMatrixRow(FILE* file, const HighsInt iRow,
 }
 
 HighsStatus FilereaderLp::writeModelToFile(const HighsOptions& options,
-                                           const std::string filename,
+                                           const std::string& filename,
                                            const HighsModel& model) {
   const HighsLp& lp = model.lp_;
 

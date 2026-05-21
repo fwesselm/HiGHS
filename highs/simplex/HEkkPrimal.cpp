@@ -2872,7 +2872,7 @@ void HEkkPrimal::savePrimalRay() {
   ekk_instance_.primal_ray_record_.sign = -move_in;
 }
 
-HighsDebugStatus HEkkPrimal::debugPrimalSimplex(const std::string message,
+HighsDebugStatus HEkkPrimal::debugPrimalSimplex(const std::string& message,
                                                 const bool initialise) {
   HighsDebugStatus return_status =
       ekk_instance_.debugSimplex(message, algorithm, solve_phase, initialise);
@@ -2885,7 +2885,7 @@ HighsDebugStatus HEkkPrimal::debugPrimalSimplex(const std::string message,
 }
 
 HighsDebugStatus HEkkPrimal::debugPrimalSteepestEdgeWeights(
-    const std::string message) {
+    const std::string& message) {
   // Possibly force the expensive check for development work
   const bool check_primal_edge_weights = true;
   if (check_primal_edge_weights) {
@@ -2910,7 +2910,7 @@ HighsDebugStatus HEkkPrimal::debugPrimalSteepestEdgeWeights(
     return HighsDebugStatus::kNotChecked;
   const HighsLp& lp = ekk_instance_.lp_;
   const HighsInt num_row = lp.num_row_;
-  const std::vector<int8_t> nonbasic_flag = ekk_instance_.basis_.nonbasicFlag_;
+  const std::vector<int8_t>& nonbasic_flag = ekk_instance_.basis_.nonbasicFlag_;
   double primal_steepest_edge_weight_norm = 0;
   double primal_steepest_edge_weight_error = 0;
   HighsInt num_check_weight;

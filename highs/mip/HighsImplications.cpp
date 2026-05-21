@@ -597,8 +597,7 @@ void HighsImplications::separateImpliedBounds(
         mipsolver.mipdata_->cliquetable.numNeighbourhoodQueries;
     HighsInt oldNumEntries = mipsolver.mipdata_->cliquetable.getNumEntries();
 
-    for (std::pair<HighsInt, double> fracint :
-         lpRelaxation.getFractionalIntegers()) {
+    for (const auto& fracint : lpRelaxation.getFractionalIntegers()) {
       HighsInt col = fracint.first;
       if (globaldomain.col_lower_[col] != 0.0 ||
           globaldomain.col_upper_[col] != 1.0 ||
@@ -638,8 +637,7 @@ void HighsImplications::separateImpliedBounds(
     mipsolver.mipdata_->cliquetable.numNeighbourhoodQueries = oldNumQueries;
   }
 
-  for (std::pair<HighsInt, double> fracint :
-       lpRelaxation.getFractionalIntegers()) {
+  for (const auto& fracint : lpRelaxation.getFractionalIntegers()) {
     HighsInt col = fracint.first;
     // skip non binary variables
     if (globaldomain.col_lower_[col] != 0.0 ||

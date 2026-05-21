@@ -140,7 +140,7 @@ class FactorTimer {
 
   void reportFactorClockList(const char* grepStamp,
                              HighsTimerClock& factor_timer_clock,
-                             std::vector<HighsInt> factor_clock_list) {
+                             const std::vector<HighsInt>& factor_clock_list) {
     HighsTimer* timer_pointer = factor_timer_clock.timer_pointer_;
     std::vector<HighsInt>& clock = factor_timer_clock.clock_;
     HighsInt factor_clock_list_size = factor_clock_list.size();

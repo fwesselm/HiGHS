@@ -295,7 +295,7 @@ class MipTimer {
   };
 
   bool reportMipClockList(const char* grepStamp,
-                          const std::vector<HighsInt> mip_clock_list,
+                          const std::vector<HighsInt>& mip_clock_list,
                           const HighsTimerClock& mip_timer_clock,
                           const HighsInt kMipClockIdeal = kMipClockTotal,
                           const double tolerance_percent_report_ = -1) {
@@ -316,9 +316,9 @@ class MipTimer {
         grepStamp, clockList, ideal_sum_time, tolerance_percent_report);
   };
 
-  void csvMipClockList(const std::string grep_query,
-                       const std::string model_name,
-                       const std::vector<HighsInt> mip_clock_list,
+  void csvMipClockList(const std::string& grep_query,
+                       const std::string& model_name,
+                       const std::vector<HighsInt>& mip_clock_list,
                        const HighsTimerClock& mip_timer_clock,
                        const HighsInt kMipClockIdeal, const bool header,
                        const bool end_line) {
@@ -493,7 +493,7 @@ class MipTimer {
                        kMipClockTotal);  //, tolerance_percent_report);
   };
 
-  void csvMipClock(const std::string model_name,
+  void csvMipClock(const std::string& model_name,
                    const HighsTimerClock& mip_timer_clock, const bool header,
                    const bool end_line) {
     const std::vector<HighsInt> mip_clock_list{
@@ -503,7 +503,7 @@ class MipTimer {
                     kMipClockTotal, header, end_line);
   };
 
-  void csvEvaluateRootNodeClock(const std::string model_name,
+  void csvEvaluateRootNodeClock(const std::string& model_name,
                                 const HighsTimerClock& mip_timer_clock,
                                 const bool header, const bool end_line) {
     const std::vector<HighsInt> mip_clock_list{

@@ -95,7 +95,7 @@ class HEkkDualRow {
       const std::vector<HighsInt>& pass_workGroup);
 
   void reportWorkDataAndGroup(
-      const std::string message, const HighsInt reportWorkCount,
+      const std::string& message, const HighsInt reportWorkCount,
       const std::vector<std::pair<HighsInt, double>>& reportWorkData,
       const std::vector<HighsInt>& reportWorkGroup);
   bool compareWorkDataAndGroup();

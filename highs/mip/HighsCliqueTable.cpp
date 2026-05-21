@@ -203,14 +203,12 @@ void HighsCliqueTable::bronKerboschRecurse(BronKerboschData& data,
   if (w < data.minW - data.feastol) return;
 
   if (Plen == 0 && Xlen == 0) {
-    std::vector<CliqueVar> clique = data.R;
-
     if (data.minW < w - data.feastol) {
       data.maxcliques -= data.cliques.size();
       data.cliques.clear();
       data.minW = w;
     }
-    data.cliques.emplace_back(std::move(clique));
+    data.cliques.push_back(data.R);
     // do not further search for cliques that are violated less than this
     // current clique
     return;
