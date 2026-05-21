@@ -538,17 +538,24 @@ class HighsHashTree {
       while (true) {
         if (leaf1->hashes[i] > leaf2->hashes[j]) {
           ++i;
-          if (pastChunkEnd(leaf1, i, pos)) break;
         } else if (leaf2->hashes[j] > leaf1->hashes[i]) {
           ++j;
-          if (pastChunkEnd(leaf2, j, pos)) break;
         } else {
-          for (int ii = i; !pastChunkEnd(leaf1, ii, pos); ++ii)
-            for (int jj = j; !pastChunkEnd(leaf2, jj, pos); ++jj)
+          uint16_t commonHash = leaf1->hashes[i];
+          int iSave = i;
+          i++;
+          while (!pastChunkEnd(leaf1, i, pos) && leaf1->hashes[i] == commonHash)
+            ++i;
+          int jSave = j;
+          j++;
+          while (!pastChunkEnd(leaf2, j, pos) && leaf2->hashes[j] == commonHash)
+            ++j;
+          for (int ii = iSave; ii < i; ++ii)
+            for (int jj = jSave; jj < j; ++jj)
               if (leaf1->entries[ii].key() == leaf2->entries[jj].key())
                 return &leaf1->entries[ii];
-          break;
         }
+        if (pastChunkEnd(leaf1, i, pos) || pastChunkEnd(leaf2, j, pos)) break;
       };
     }
 
