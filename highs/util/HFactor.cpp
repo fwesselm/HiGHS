@@ -28,6 +28,14 @@ using std::fabs;
 using std::copy;
 using std::fill_n;
 using std::make_pair;
+
+template <typename T>
+static void resizeAndCheckShift(std::vector<T>& vec, const HighsInt to_size,
+                                bool& data_shift) {
+  T* from_p = vec.data();
+  vec.resize(to_size);
+  data_shift = data_shift || vec.data() != from_p;
+}
 using std::min;
 using std::pair;
 
@@ -925,22 +933,6 @@ HighsInt HFactor::buildKernel() {
   // Parameters for the running average claculation
   double mu0, mu1;
 
-  // Lambda functions that resize HighsInt/double vectors, with a
-  // check for them being moved as a result
-  auto resizeHighsInt = [&](std::vector<HighsInt>& i_vector,
-                            const HighsInt to_size) {
-    HighsInt* from_p = i_vector.data();
-    i_vector.resize(to_size);
-    if (i_vector.data() != from_p) resize_data_shift = true;
-  };
-
-  auto resizeDouble = [&](std::vector<double>& d_vector,
-                          const HighsInt to_size) {
-    double* from_p = d_vector.data();
-    d_vector.resize(to_size);
-    if (d_vector.data() != from_p) resize_data_shift = true;
-  };
-
   // Work out the parameters for the running average claculation
   auto runningAverageMu = [&]() {
     mu0 = (1.0 * timer_frequency) / (10.0 * max_timer_frequency);
@@ -1191,6 +1183,7 @@ HighsInt HFactor::buildKernel() {
       } else {
         // Otherwise, other entries in the pivotal column will be
         // smaller than the pivot, so zero the column
+        num_active_nz_ -= mc_count_a[jColPivot];
         zeroCol(jColPivot);
         // Add the pivotal row to the linked list of rows with its new
         // count
@@ -1302,8 +1295,8 @@ HighsInt HFactor::buildKernel() {
           mc_space[iCol] += max(mc_space[iCol], nFillin);
           HighsInt p5 = mc_start[iCol] = mc_index.size();
           HighsInt p7 = p5 + mc_space[iCol] - mc_count_n[iCol];
-          resizeHighsInt(mc_index, p5 + mc_space[iCol]);
-          resizeDouble(mc_value, p5 + mc_space[iCol]);
+          resizeAndCheckShift(mc_index, p5 + mc_space[iCol], resize_data_shift);
+          resizeAndCheckShift(mc_value, p5 + mc_space[iCol], resize_data_shift);
           copy(&mc_index[p1], &mc_index[p2], &mc_index[p5]);
           copy(&mc_value[p1], &mc_value[p2], &mc_value[p5]);
           copy(&mc_index[p3], &mc_index[p4], &mc_index[p7]);
@@ -1330,7 +1323,8 @@ HighsInt HFactor::buildKernel() {
               HighsInt p2 = p1 + mr_count[iRow];
               HighsInt p3 = mr_start[iRow] = mr_index.size();
               mr_space[iRow] *= 2;
-              resizeHighsInt(mr_index, p3 + mr_space[iRow]);
+              resizeAndCheckShift(mr_index, p3 + mr_space[iRow],
+                                  resize_data_shift);
               copy(&mr_index[p1], &mr_index[p2], &mr_index[p3]);
             }
             rowInsert(iCol, iRow);
