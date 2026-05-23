@@ -3379,15 +3379,16 @@ HPresolve::Result HPresolve::singletonCol(HighsPostsolveStack& postsolve_stack,
   double colCoef = Avalue[nzPos];
 
   if (rowsize[row] == 1) {
-    HPRESOLVE_TIMED_CALL(
-        timing, kPresolveClockSingletonColSingletonRow, -1, [&]() -> Result {
-          HPRESOLVE_CHECKED_CALL(singletonRow(postsolve_stack, row));
-          if (!colDeleted[col]) {
-            assert(colsize[col] == 0);
-            return emptyCol(postsolve_stack, col);
-          }
-          return Result::kOk;
-        }());
+    auto handleSingletonRow = [&]() {
+      HPRESOLVE_CHECKED_CALL(singletonRow(postsolve_stack, row));
+      if (!colDeleted[col]) {
+        assert(colsize[col] == 0);
+        return emptyCol(postsolve_stack, col);
+      }
+      return Result::kOk;
+    };
+    HPRESOLVE_TIMED_CALL(timing, kPresolveClockSingletonColSingletonRow, -1,
+                         handleSingletonRow());
     return Result::kOk;
   }
 
@@ -3433,26 +3434,27 @@ HPresolve::Result HPresolve::singletonCol(HighsPostsolveStack& postsolve_stack,
   }
   // now check if column is implied free within an equation and substitute the
   // column if that is the case
-  HPRESOLVE_TIMED_CALL(
-      timing, kPresolveClockSingletonColDualImpliedFree, -1, [&]() -> Result {
-        if (!isDualImpliedFree(row) || !isImpliedFree(col) ||
-            !analysis_.allow_rule_[kPresolveRuleFreeColSubstitution])
-          return Result::kOk;
-        if (model->integrality_[col] == HighsVarType::kInteger) {
-          StatusResult impliedIntegral = isImpliedIntegral(col);
-          HPRESOLVE_CHECKED_CALL(static_cast<Result>(impliedIntegral));
-          if (!impliedIntegral) return Result::kOk;
-        }
-        const bool logging_on = analysis_.logging_on_;
-        if (logging_on)
-          analysis_.startPresolveRuleLog(kPresolveRuleFreeColSubstitution);
-        storeRow(row);
-        substituteFreeCol(postsolve_stack, row, col);
-        analysis_.logging_on_ = logging_on;
-        if (logging_on)
-          analysis_.stopPresolveRuleLog(kPresolveRuleFreeColSubstitution);
-        return checkLimits(postsolve_stack);
-      }());
+  auto checkImpliedFree = [&]() {
+    if (!isDualImpliedFree(row) || !isImpliedFree(col) ||
+        !analysis_.allow_rule_[kPresolveRuleFreeColSubstitution])
+      return Result::kOk;
+    if (model->integrality_[col] == HighsVarType::kInteger) {
+      StatusResult impliedIntegral = isImpliedIntegral(col);
+      HPRESOLVE_CHECKED_CALL(static_cast<Result>(impliedIntegral));
+      if (!impliedIntegral) return Result::kOk;
+    }
+    const bool logging_on = analysis_.logging_on_;
+    if (logging_on)
+      analysis_.startPresolveRuleLog(kPresolveRuleFreeColSubstitution);
+    storeRow(row);
+    substituteFreeCol(postsolve_stack, row, col);
+    analysis_.logging_on_ = logging_on;
+    if (logging_on)
+      analysis_.stopPresolveRuleLog(kPresolveRuleFreeColSubstitution);
+    return checkLimits(postsolve_stack);
+  };
+  HPRESOLVE_TIMED_CALL(timing, kPresolveClockSingletonColDualImpliedFree, -1,
+                       checkImpliedFree());
 
   // todo: check for zero cost singleton and remove
   return Result::kOk;
@@ -4457,14 +4459,15 @@ HPresolve::Result HPresolve::colPresolve(HighsPostsolveStack& postsolve_stack,
   HPRESOLVE_CHECKED_CALL(checkColBounds(col, &isFixed));
   if (isFixed) {
     // remove fixed column
-    HPRESOLVE_TIMED_CALL(
-        timing, kPresolveClockInitialColIsFixed, -1, [&]() -> Result {
-          postsolve_stack.removedFixedCol(col, model->col_lower_[col],
-                                          model->col_cost_[col],
-                                          getColumnVector(col));
-          removeFixedCol(col);
-          return checkLimits(postsolve_stack);
-        }());
+    auto remFixCol = [&]() {
+      postsolve_stack.removedFixedCol(col, model->col_lower_[col],
+                                      model->col_cost_[col],
+                                      getColumnVector(col));
+      removeFixedCol(col);
+      return checkLimits(postsolve_stack);
+    };
+    HPRESOLVE_TIMED_CALL(timing, kPresolveClockInitialColIsFixed, -1,
+                         remFixCol());
     return Result::kOk;
   }
   switch (colsize[col]) {
@@ -5781,22 +5784,24 @@ double HPresolve::computeWorstCaseUpperBound(HighsInt col, HighsInt boundCol,
 
 HPresolve::Result HPresolve::initialRowAndColPresolve(
     HighsPostsolveStack& postsolve_stack) {
+  const bool timing = analysis_.analyse_presolve_time_;
+
   // do a full scan over the rows as the singleton arrays and the changed row
   // arrays are not initialized, also unset changedRowFlag so that the row will
   // be added to the changed row vector when it is changed after it was
   // processed
-  HPRESOLVE_TIMED_CALL(true, kPresolveClockInitialRow, -1, [&]() -> Result {
+  auto initRowPresolve = [&]() {
     for (HighsInt row = 0; row != model->num_row_; ++row) {
       if (rowDeleted[row]) continue;
       HPRESOLVE_CHECKED_CALL(rowPresolve(postsolve_stack, row));
       changedRowFlag[row] = false;
     }
     return Result::kOk;
-  }());
+  };
+  HPRESOLVE_TIMED_CALL(true, kPresolveClockInitialRow, -1, initRowPresolve());
 
   // same for the columns
-  const bool timing = analysis_.analyse_presolve_time_;
-  HPRESOLVE_TIMED_CALL(true, kPresolveClockInitialCol, -1, [&]() -> Result {
+  auto initColPresolve = [&]() {
     for (HighsInt col = 0; col != model->num_col_; ++col) {
       if (colDeleted[col]) continue;
       // round and update bounds
@@ -5807,7 +5812,8 @@ HPresolve::Result HPresolve::initialRowAndColPresolve(
       changedColFlag[col] = false;
     }
     return Result::kOk;
-  }());
+  };
+  HPRESOLVE_TIMED_CALL(true, kPresolveClockInitialCol, -1, initColPresolve());
 
   return checkLimits(postsolve_stack);
 }
