@@ -62,4 +62,33 @@ class HPresolveAnalysis {
   friend class HPresolve;
 };
 
+class HPresolveTimingGuard {
+ public:
+  HPresolveTimingGuard(HPresolveAnalysis& analysis, bool timing, HighsInt clock,
+                       HighsInt rule)
+      : analysis_(analysis), timing_(timing), clock_(clock), rule_(rule) {
+    saved_logging_ = analysis_.logging_on_;
+    logging_ = rule_ >= 0 && saved_logging_;
+    if (logging_) analysis_.startPresolveRuleLog(rule_);
+    if (timing_) analysis_.presolveTimerStart(clock_);
+  }
+
+  ~HPresolveTimingGuard() {
+    if (timing_) analysis_.presolveTimerStop(clock_);
+    analysis_.logging_on_ = saved_logging_;
+    if (logging_) analysis_.stopPresolveRuleLog(rule_);
+  }
+
+  HPresolveTimingGuard(const HPresolveTimingGuard&) = delete;
+  HPresolveTimingGuard& operator=(const HPresolveTimingGuard&) = delete;
+
+ private:
+  HPresolveAnalysis& analysis_;
+  bool timing_;
+  bool logging_;
+  bool saved_logging_;
+  HighsInt clock_;
+  HighsInt rule_;
+};
+
 #endif /* PRESOLVE_HPRESOLVEANALYSIS_H_ */

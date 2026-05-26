@@ -45,14 +45,8 @@
 
 #define HPRESOLVE_TIMED_CALL(timing, clock, rule, presolveCall)        \
   do {                                                                 \
-    const bool __saved_logging = analysis_.logging_on_;                \
-    const bool __logging = (rule) >= 0 && __saved_logging;             \
-    if (__logging) analysis_.startPresolveRuleLog(rule);               \
-    if (timing) analysis_.presolveTimerStart(clock);                   \
+    HPresolveTimingGuard __guard(analysis_, timing, clock, rule);      \
     HPresolve::Result __result = presolveCall;                         \
-    if (timing) analysis_.presolveTimerStop(clock);                    \
-    analysis_.logging_on_ = __saved_logging;                           \
-    if (__logging) analysis_.stopPresolveRuleLog(rule);                \
     if (__result != presolve::HPresolve::Result::kOk) return __result; \
   } while (0)
 
