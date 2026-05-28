@@ -390,11 +390,11 @@ void HighsLpRelaxation::computeBasicDegenerateDuals(
 
         double val = sign * row_ep.array[iRow];
         if (ub == lb || val > mipsolver.mipdata_->epsilon) {
-          rhs += val * ub;
+          rhs += static_cast<HighsCDouble>(val) * ub;
         } else if (val < -mipsolver.mipdata_->epsilon) {
-          rhs += val * lb;
+          rhs += static_cast<HighsCDouble>(val) * lb;
         } else {
-          rhs += val * solution.row_value[iRow];
+          rhs += static_cast<HighsCDouble>(val) * solution.row_value[iRow];
         }
       }
 
@@ -745,7 +745,7 @@ bool HighsLpRelaxation::computeDualProof(const HighsDomain& globaldomain,
   vals.clear();
   double maxVal = 0.0;
   double maxValGlb = 0.0;
-  double sumLocal = 0.0;
+  HighsCDouble sumLocal = 0.0;
   HighsInt numLocalCols = 0;
   const HighsInt numCol = lpsolver.getNumCol();
   for (HighsInt i : mipsolver.mipdata_->integral_cols) {
@@ -766,7 +766,7 @@ bool HighsLpRelaxation::computeDualProof(const HighsDomain& globaldomain,
     } else
       continue;
 
-    proofRhs += sol.col_value[i] * sol.col_dual[i];
+    proofRhs += static_cast<HighsCDouble>(sol.col_value[i]) * sol.col_dual[i];
 
     vals.push_back(sol.col_dual[i]);
     inds.push_back(i);
@@ -778,10 +778,11 @@ bool HighsLpRelaxation::computeDualProof(const HighsDomain& globaldomain,
 
   HighsInt len = vals.size();
 
-  double minGlbVal = numLocalCols == 0
-                         ? 0.0
-                         : std::ldexp(sumLocal / numLocalCols, expShift) -
-                               mipsolver.mipdata_->feastol;
+  double minGlbVal =
+      numLocalCols == 0
+          ? 0.0
+          : static_cast<double>(ldexp(sumLocal / numLocalCols, expShift) -
+                                mipsolver.mipdata_->feastol);
 
   for (HighsInt i = len - 1; i >= 0; --i) {
     HighsInt iCol = inds[i];
@@ -793,10 +794,10 @@ bool HighsLpRelaxation::computeDualProof(const HighsDomain& globaldomain,
     if (absVal <= mipsolver.mipdata_->feastol || globaldomain.isFixed(iCol)) {
       if (vals[i] > 0) {
         if (globaldomain.col_lower_[iCol] == -kHighsInf) return false;
-        proofRhs -= vals[i] * globaldomain.col_lower_[iCol];
+        proofRhs -= static_cast<HighsCDouble>(vals[i]) * globaldomain.col_lower_[iCol];
       } else {
         if (globaldomain.col_upper_[iCol] == kHighsInf) return false;
-        proofRhs -= vals[i] * globaldomain.col_upper_[iCol];
+        proofRhs -= static_cast<HighsCDouble>(vals[i]) * globaldomain.col_upper_[iCol];
       }
 
       remove = true;
@@ -806,7 +807,7 @@ bool HighsLpRelaxation::computeDualProof(const HighsDomain& globaldomain,
       else
         remove = sol.col_value[iCol] == globaldomain.col_upper_[iCol];
 
-      if (remove) proofRhs -= vals[i] * sol.col_value[iCol];
+      if (remove) proofRhs -= static_cast<HighsCDouble>(vals[i]) * sol.col_value[iCol];
     }
 
     if (remove) {
@@ -845,14 +846,14 @@ bool HighsLpRelaxation::computeDualProof(const HighsDomain& globaldomain,
     if (row_dual[i] > 0) {
       if (lp.row_lower_[i] != -kHighsInf)
         // @FlipRowDual += became -=
-        upper -= row_dual[i] * lp.row_lower_[i];
+        upper -= static_cast<HighsCDouble>(row_dual[i]) * lp.row_lower_[i];
       else
         row_dual[i] = 0;
       // @FlipRowDual row_dual[i] > 0 became row_dual[i] < 0
     } else if (row_dual[i] < 0) {
       if (lp.row_upper_[i] != kHighsInf)
         // @FlipRowDual += became -=
-        upper -= row_dual[i] * lp.row_upper_[i];
+        upper -= static_cast<HighsCDouble>(row_dual[i]) * lp.row_upper_[i];
       else
         row_dual[i] = 0;
     }
@@ -871,7 +872,8 @@ bool HighsLpRelaxation::computeDualProof(const HighsDomain& globaldomain,
     for (HighsInt j = start; j != end; ++j) {
       if (row_dual[lp.a_matrix_.index_[j]] == 0) continue;
       // @FlipRowDual += became -=
-      sum -= lp.a_matrix_.value_[j] * row_dual[lp.a_matrix_.index_[j]];
+      sum -= static_cast<HighsCDouble>(lp.a_matrix_.value_[j]) *
+             row_dual[lp.a_matrix_.index_[j]];
     }
 
     double val = double(sum);
@@ -896,11 +898,11 @@ bool HighsLpRelaxation::computeDualProof(const HighsDomain& globaldomain,
     if (removeValue) {
       if (val < 0) {
         if (globaldomain.col_upper_[i] == kHighsInf) return false;
-        upper -= val * globaldomain.col_upper_[i];
+        upper -= static_cast<HighsCDouble>(val) * globaldomain.col_upper_[i];
       } else {
         if (globaldomain.col_lower_[i] == -kHighsInf) return false;
 
-        upper -= val * globaldomain.col_lower_[i];
+        upper -= static_cast<HighsCDouble>(val) * globaldomain.col_lower_[i];
       }
 
       continue;
@@ -967,10 +969,10 @@ void HighsLpRelaxation::storeDualInfProof() {
       continue;
     else if (weight > 0) {
       if (lp.row_upper_[iRow] == kHighsInf) continue;
-      upper += weight * lp.row_upper_[iRow];
+      upper += static_cast<HighsCDouble>(weight) * lp.row_upper_[iRow];
     } else {
       if (lp.row_lower_[iRow] == -kHighsInf) continue;
-      upper += weight * lp.row_lower_[iRow];
+      upper += static_cast<HighsCDouble>(weight) * lp.row_lower_[iRow];
     }
 
     HighsInt len;
@@ -1012,13 +1014,13 @@ void HighsLpRelaxation::storeDualInfProof() {
           hasdualproof = false;
           return;
         }
-        upper -= val * globaldomain.col_upper_[i];
+        upper -= static_cast<HighsCDouble>(val) * globaldomain.col_upper_[i];
       } else {
         if (globaldomain.col_lower_[i] == -kHighsInf) {
           hasdualproof = false;
           return;
         }
-        upper -= val * globaldomain.col_lower_[i];
+        upper -= static_cast<HighsCDouble>(val) * globaldomain.col_lower_[i];
       }
 
       continue;
@@ -1078,11 +1080,11 @@ bool HighsLpRelaxation::checkDualProof() const {
     HighsInt col = dualproofinds[i];
     if (dualproofvals[i] > 0) {
       if (lp.col_lower_[col] == -kHighsInf) return false;
-      viol += dualproofvals[i] * lp.col_lower_[col];
+      viol += static_cast<HighsCDouble>(dualproofvals[i]) * lp.col_lower_[col];
     } else {
       assert(dualproofvals[i] < 0);
       if (lp.col_upper_[col] == kHighsInf) return false;
-      viol += dualproofvals[i] * lp.col_upper_[col];
+      viol += static_cast<HighsCDouble>(dualproofvals[i]) * lp.col_upper_[col];
     }
   }
 

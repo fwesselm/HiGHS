@@ -323,12 +323,12 @@ void HighsCutPool::separate(const std::vector<double>& sol,
       double solval = sol[col];
       if (ARvalue[j] > 0) {
         if (solval > domain.col_lower_[col] + feastol) {
-          rownorm += ARvalue[j] * ARvalue[j];
+          rownorm += static_cast<HighsCDouble>(ARvalue[j]) * ARvalue[j];
           numActiveNzs += 1;
         }
       } else {
         if (solval < domain.col_upper_[col] - feastol) {
-          rownorm += ARvalue[j] * ARvalue[j];
+          rownorm += static_cast<HighsCDouble>(ARvalue[j]) * ARvalue[j];
           numActiveNzs += 1;
         }
       }

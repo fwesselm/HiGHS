@@ -1093,10 +1093,12 @@ void HighsCliqueTable::extractCliquesFromCut(const HighsMipSolver& mipsolver,
 
     if (vals[i] > 0) {
       if (globaldom.col_lower_[inds[i]] == -kHighsInf) return;
-      minact += vals[i] * globaldom.col_lower_[inds[i]];
+      minact +=
+          static_cast<HighsCDouble>(vals[i]) * globaldom.col_lower_[inds[i]];
     } else {
       if (globaldom.col_upper_[inds[i]] == kHighsInf) return;
-      minact += vals[i] * globaldom.col_upper_[inds[i]];
+      minact +=
+          static_cast<HighsCDouble>(vals[i]) * globaldom.col_upper_[inds[i]];
     }
   }
 

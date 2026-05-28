@@ -101,7 +101,8 @@ void HighsDebugSol::shrink(const std::vector<HighsInt>& newColIndex) {
   debugSolution.resize(mipsolver->model_->num_col_);
   HighsCDouble debugsolobj = 0.0;
   for (HighsInt i = 0; i != mipsolver->model_->num_col_; ++i)
-    debugsolobj += mipsolver->model_->col_cost_[i] * debugSolution[i];
+    debugsolobj += static_cast<HighsCDouble>(mipsolver->model_->col_cost_[i]) *
+                   debugSolution[i];
 
   debugSolObjective = double(debugsolobj);
 
@@ -171,7 +172,8 @@ void HighsDebugSol::checkCut(const HighsInt* Rindex, const double* Rvalue,
   HighsCDouble violation = -rhs;
 
   for (HighsInt i = 0; i != Rlen; ++i)
-    violation += debugSolution[Rindex[i]] * Rvalue[i];
+    violation +=
+        static_cast<HighsCDouble>(debugSolution[Rindex[i]]) * Rvalue[i];
 
   assert(violation <= mipsolver->mipdata_->feastol);
 }
@@ -189,9 +191,12 @@ void HighsDebugSol::checkRowAggregation(const HighsLp& lp,
   calculateRowValuesQuad(lp, dbgSol);
   for (HighsInt i = 0; i < Rlen; ++i) {
     if (Rindex[i] < lp.num_col_)
-      violation += dbgSol.col_value[Rindex[i]] * Rvalue[i];
+      violation +=
+          static_cast<HighsCDouble>(dbgSol.col_value[Rindex[i]]) * Rvalue[i];
     else
-      violation += dbgSol.row_value[Rindex[i] - lp.num_col_] * Rvalue[i];
+      violation +=
+          static_cast<HighsCDouble>(dbgSol.row_value[Rindex[i] - lp.num_col_]) *
+          Rvalue[i];
   }
 
   double viol = fabs(double(violation));
@@ -206,7 +211,7 @@ void HighsDebugSol::checkRow(const HighsInt* Rindex, const double* Rvalue,
   HighsCDouble activity = 0;
 
   for (HighsInt i = 0; i != Rlen; ++i)
-    activity += debugSolution[Rindex[i]] * Rvalue[i];
+    activity += static_cast<HighsCDouble>(debugSolution[Rindex[i]]) * Rvalue[i];
 
   assert(activity - mipsolver->mipdata_->feastol <= Rupper);
   assert(activity + mipsolver->mipdata_->feastol >= Rlower);

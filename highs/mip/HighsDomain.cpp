@@ -730,12 +730,14 @@ HighsDomain::ObjectivePropagation::ObjectivePropagation(HighsDomain* domain)
       if (domain->col_lower_[col] == -kHighsInf)
         ++numInfObjLower;
       else
-        objectiveLower += domain->col_lower_[col] * cost[col];
+        objectiveLower +=
+            static_cast<HighsCDouble>(domain->col_lower_[col]) * cost[col];
     } else {
       if (domain->col_upper_[col] == kHighsInf)
         ++numInfObjLower;
       else
-        objectiveLower += domain->col_upper_[col] * cost[col];
+        objectiveLower +=
+            static_cast<HighsCDouble>(domain->col_upper_[col]) * cost[col];
     }
   }
 
@@ -776,7 +778,7 @@ void HighsDomain::ObjectivePropagation::getPropagationConstraint(
       }
     }
 
-    tmpRhs += largest * partitionCliqueData[i].rhs;
+    tmpRhs += static_cast<HighsCDouble>(largest) * partitionCliqueData[i].rhs;
     if (partitionCliqueData[i].multiplier != largest) {
       partitionCliqueData[i].multiplier = largest;
       const auto& packedObjVals = objFunc->getObjectiveValuesPacked();
@@ -845,12 +847,12 @@ void HighsDomain::ObjectivePropagation::updateActivityLbChange(
     if (oldbound == -kHighsInf)
       --numInfObjLower;
     else
-      objectiveLower -= oldbound * cost[col];
+      objectiveLower -= static_cast<HighsCDouble>(oldbound) * cost[col];
 
     if (newbound == -kHighsInf)
       ++numInfObjLower;
     else
-      objectiveLower += newbound * cost[col];
+      objectiveLower += static_cast<HighsCDouble>(newbound) * cost[col];
 
     debugCheckObjectiveLower();
 
@@ -965,12 +967,12 @@ void HighsDomain::ObjectivePropagation::updateActivityUbChange(
     if (oldbound == kHighsInf)
       --numInfObjLower;
     else
-      objectiveLower -= oldbound * cost[col];
+      objectiveLower -= static_cast<HighsCDouble>(oldbound) * cost[col];
 
     if (newbound == kHighsInf)
       ++numInfObjLower;
     else
-      objectiveLower += newbound * cost[col];
+      objectiveLower += static_cast<HighsCDouble>(newbound) * cost[col];
 
     debugCheckObjectiveLower();
 
@@ -1105,12 +1107,14 @@ void HighsDomain::ObjectivePropagation::debugCheckObjectiveLower() const {
     HighsInt col = objNonzeros[i];
     if (cost[col] > 0) {
       if (domain->col_lower_[col] > -kHighsInf)
-        lowerFromScratch += domain->col_lower_[col] * cost[col];
+        lowerFromScratch +=
+            static_cast<HighsCDouble>(domain->col_lower_[col]) * cost[col];
       else
         ++numInf;
     } else {
       if (domain->col_upper_[col] < kHighsInf)
-        lowerFromScratch += domain->col_upper_[col] * cost[col];
+        lowerFromScratch +=
+            static_cast<HighsCDouble>(domain->col_upper_[col]) * cost[col];
       else
         ++numInf;
     }
@@ -2671,11 +2675,11 @@ void HighsDomain::tightenCoefficients(HighsInt* inds, double* vals,
     if (vals[i] > 0) {
       if (col_upper_[inds[i]] == kHighsInf) return;
 
-      maxactivity += col_upper_[inds[i]] * vals[i];
+      maxactivity += static_cast<HighsCDouble>(col_upper_[inds[i]]) * vals[i];
     } else {
       if (col_lower_[inds[i]] == -kHighsInf) return;
 
-      maxactivity += col_lower_[inds[i]] * vals[i];
+      maxactivity += static_cast<HighsCDouble>(col_lower_[inds[i]]) * vals[i];
     }
   }
 
@@ -2798,7 +2802,8 @@ bool HighsDomain::ConflictSet::explainBoundChangeGeq(
       if (it != currentFrontier.end()) {
         cand.baseBound = it->domchg.boundval;
         if (cand.baseBound != globaldom.col_upper_[col])
-          M += vals[i] * (cand.baseBound - globaldom.col_upper_[col]);
+          M += static_cast<HighsCDouble>(vals[i]) *
+               (cand.baseBound - globaldom.col_upper_[col]);
         if (cand.baseBound <= ub) continue;
       } else
         cand.baseBound = globaldom.col_upper_[col];
@@ -2815,7 +2820,8 @@ bool HighsDomain::ConflictSet::explainBoundChangeGeq(
       if (it != currentFrontier.end()) {
         cand.baseBound = it->domchg.boundval;
         if (cand.baseBound != globaldom.col_lower_[col])
-          M += vals[i] * (cand.baseBound - globaldom.col_lower_[col]);
+          M += static_cast<HighsCDouble>(vals[i]) *
+               (cand.baseBound - globaldom.col_lower_[col]);
         if (cand.baseBound >= lb) continue;
       } else
         cand.baseBound = globaldom.col_lower_[col];
@@ -2866,9 +2872,11 @@ bool HighsDomain::ConflictSet::explainBoundChangeGeq(
 
   // M is the current residual activity initially
   if (domchgVal < 0)
-    M -= domchgVal * globaldom.col_lower_[domchg.domchg.column];
+    M -= static_cast<HighsCDouble>(domchgVal) *
+         globaldom.col_lower_[domchg.domchg.column];
   else
-    M -= domchgVal * globaldom.col_upper_[domchg.domchg.column];
+    M -= static_cast<HighsCDouble>(domchgVal) *
+         globaldom.col_upper_[domchg.domchg.column];
 
   return resolveLinearGeq(M, Mupper, vals);
 }
@@ -2906,7 +2914,8 @@ bool HighsDomain::ConflictSet::explainBoundChangeLeq(
       if (it != currentFrontier.end()) {
         cand.baseBound = it->domchg.boundval;
         if (cand.baseBound != globaldom.col_lower_[col])
-          M += vals[i] * (cand.baseBound - globaldom.col_lower_[col]);
+          M += static_cast<HighsCDouble>(vals[i]) *
+               (cand.baseBound - globaldom.col_lower_[col]);
         if (cand.baseBound >= lb) continue;
       } else
         cand.baseBound = globaldom.col_lower_[col];
@@ -2922,7 +2931,8 @@ bool HighsDomain::ConflictSet::explainBoundChangeLeq(
       if (it != currentFrontier.end()) {
         cand.baseBound = it->domchg.boundval;
         if (cand.baseBound != globaldom.col_upper_[col])
-          M += vals[i] * (cand.baseBound - globaldom.col_upper_[col]);
+          M += static_cast<HighsCDouble>(vals[i]) *
+               (cand.baseBound - globaldom.col_upper_[col]);
         if (cand.baseBound <= ub) continue;
       } else
         cand.baseBound = globaldom.col_upper_[col];
@@ -2975,9 +2985,11 @@ bool HighsDomain::ConflictSet::explainBoundChangeLeq(
 
   // M is the global residual activity initially
   if (domchgVal < 0)
-    M -= domchgVal * globaldom.col_upper_[domchg.domchg.column];
+    M -= static_cast<HighsCDouble>(domchgVal) *
+         globaldom.col_upper_[domchg.domchg.column];
   else
-    M -= domchgVal * globaldom.col_lower_[domchg.domchg.column];
+    M -= static_cast<HighsCDouble>(domchgVal) *
+         globaldom.col_lower_[domchg.domchg.column];
 
   return resolveLinearLeq(M, Mlower, vals);
 }
@@ -3037,7 +3049,7 @@ bool HighsDomain::ConflictSet::resolveLinearGeq(HighsCDouble M, double Mupper,
               locdomchg.pos = localdom.prevboundval_[locdomchg.pos].second;
 
             // bound can be relaxed
-            M += vals[i] * (relaxLb - lb);
+            M += static_cast<HighsCDouble>(vals[i]) * (relaxLb - lb);
             // ++numRelaxed;
           }
 
@@ -3068,7 +3080,7 @@ bool HighsDomain::ConflictSet::resolveLinearGeq(HighsCDouble M, double Mupper,
             while (relaxUb >= localdom.prevboundval_[locdomchg.pos].first)
               locdomchg.pos = localdom.prevboundval_[locdomchg.pos].second;
 
-            M += vals[i] * (relaxUb - ub);
+            M += static_cast<HighsCDouble>(vals[i]) * (relaxUb - ub);
             // ++numRelaxed;
           }
 
@@ -3149,7 +3161,7 @@ bool HighsDomain::ConflictSet::resolveLinearLeq(HighsCDouble M, double Mlower,
             while (relaxLb <= localdom.prevboundval_[locdomchg.pos].first)
               locdomchg.pos = localdom.prevboundval_[locdomchg.pos].second;
 
-            M += vals[i] * (relaxLb - lb);
+            M += static_cast<HighsCDouble>(vals[i]) * (relaxLb - lb);
             // ++numRelaxed;
           }
 
@@ -3180,7 +3192,7 @@ bool HighsDomain::ConflictSet::resolveLinearLeq(HighsCDouble M, double Mlower,
             while (relaxUb >= localdom.prevboundval_[locdomchg.pos].first)
               locdomchg.pos = localdom.prevboundval_[locdomchg.pos].second;
 
-            M += vals[i] * (relaxUb - ub);
+            M += static_cast<HighsCDouble>(vals[i]) * (relaxUb - ub);
             // ++numRelaxed;
           }
 

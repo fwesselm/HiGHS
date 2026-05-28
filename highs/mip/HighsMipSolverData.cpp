@@ -171,13 +171,14 @@ bool HighsMipSolverData::checkSolution(
   }
 
   for (HighsInt i = 0; i != mipsolver.numRow(); ++i) {
-    double rowactivity = 0.0;
+    HighsCDouble rowactivity = 0.0;
 
     HighsInt start = ARstart_[i];
     HighsInt end = ARstart_[i + 1];
 
     for (HighsInt j = start; j != end; ++j)
-      rowactivity += solution[ARindex_[j]] * ARvalue_[j];
+      rowactivity +=
+          static_cast<HighsCDouble>(solution[ARindex_[j]]) * ARvalue_[j];
 
     if (rowactivity > mipsolver.rowUpper(i) + feastol) return false;
     if (rowactivity < mipsolver.rowLower(i) - feastol) return false;
@@ -224,17 +225,18 @@ bool HighsMipSolverData::trySolution(const std::vector<double>& solution,
     if (mipsolver.isColInteger(i) && fractionality(solution[i]) > feastol)
       return false;
 
-    obj += mipsolver.colCost(i) * solution[i];
+    obj += static_cast<HighsCDouble>(mipsolver.colCost(i)) * solution[i];
   }
 
   for (HighsInt i = 0; i != mipsolver.numRow(); ++i) {
-    double rowactivity = 0.0;
+    HighsCDouble rowactivity = 0.0;
 
     HighsInt start = ARstart_[i];
     HighsInt end = ARstart_[i + 1];
 
     for (HighsInt j = start; j != end; ++j)
-      rowactivity += solution[ARindex_[j]] * ARvalue_[j];
+      rowactivity +=
+          static_cast<HighsCDouble>(solution[ARindex_[j]]) * ARvalue_[j];
 
     if (rowactivity > mipsolver.rowUpper(i) + feastol) return false;
     if (rowactivity < mipsolver.rowLower(i) - feastol) return false;
@@ -387,7 +389,8 @@ HighsModelStatus HighsMipSolverData::trivialHeuristics() {
 
     HighsCDouble cdouble_obj = 0.0;
     for (HighsInt iCol = 0; iCol < mipsolver.numCol(); iCol++)
-      cdouble_obj += mipsolver.colCost(iCol) * solution[iCol];
+      cdouble_obj +=
+          static_cast<HighsCDouble>(mipsolver.colCost(iCol)) * solution[iCol];
     double obj = double(cdouble_obj);
     const double save_upper_bound = upper_bound;
     const bool new_incumbent =
@@ -2235,7 +2238,7 @@ restart:
       //  pseudocost.addObservation(i, -curdirection[i],
       //                            lp.getObjective() - firstobj);
 
-      sqrnorm += curdirection[i] * curdirection[i];
+      sqrnorm += static_cast<HighsCDouble>(curdirection[i]) * curdirection[i];
     }
 #if 1
     double scale = double(1.0 / sqrt(sqrnorm));
@@ -2244,8 +2247,9 @@ restart:
     for (HighsInt i = 0; i != mipsolver.numCol(); ++i) {
       avgdirection[i] =
           (scale * curdirection[i] - avgdirection[i]) / nseparounds;
-      sqrnorm += avgdirection[i] * avgdirection[i];
-      dotproduct += avgdirection[i] * curdirection[i];
+      sqrnorm += static_cast<HighsCDouble>(avgdirection[i]) * avgdirection[i];
+      dotproduct +=
+          static_cast<HighsCDouble>(avgdirection[i]) * curdirection[i];
     }
 #endif
 
