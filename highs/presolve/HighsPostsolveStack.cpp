@@ -1644,16 +1644,13 @@ void HighsPostsolveStack::FourierMotzkinElimination::undo(
     bool betaIsBasic = postsolveStack.isModelRow(newRow) &&
                        basis.row_status[newRow] == HighsBasisStatus::kBasic;
 
-    // Helper: only assign nonbasic status if not already basic from a prior
-    // iteration (a parent row can appear in multiple newRowOrigins)
     auto setRowNonbasic = [&](HighsInt idx,
                               const std::vector<FmeRowHeader>& headers,
                               const std::vector<std::vector<Nonzero>>& entries,
                               const std::vector<double>& coefs) {
       if (!postsolveStack.isModelRow(headers[idx].row)) return;
-      if (basis.row_status[headers[idx].row] != HighsBasisStatus::kBasic)
-        basis.row_status[headers[idx].row] =
-            nonbasicRowStatus(headers[idx], entries[idx], coefs[idx]);
+      basis.row_status[headers[idx].row] =
+          nonbasicRowStatus(headers[idx], entries[idx], coefs[idx]);
     };
 
     if (!betaIsBasic) {
