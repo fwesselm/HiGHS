@@ -1605,6 +1605,7 @@ void HighsPostsolveStack::FourierMotzkinElimination::undo(
   if (newRowOrigins.empty()) {
     basis.col_status[col] = HighsBasisStatus::kBasic;
     for (HighsInt r = 0; r < numPlus; ++r) {
+      if (!postsolveStack.isModelRow(plusHeaders[r].row)) continue;
       if (plusSlacks[r] > tol)
         basis.row_status[plusHeaders[r].row] = HighsBasisStatus::kBasic;
       else
@@ -1612,6 +1613,7 @@ void HighsPostsolveStack::FourierMotzkinElimination::undo(
             nonbasicRowStatus(plusHeaders[r], plusEntries[r], plusCoefOfCol[r]);
     }
     for (HighsInt r = 0; r < numMinus; ++r) {
+      if (!postsolveStack.isModelRow(minusHeaders[r].row)) continue;
       if (minusSlacks[r] > tol)
         basis.row_status[minusHeaders[r].row] = HighsBasisStatus::kBasic;
       else
@@ -1639,54 +1641,56 @@ void HighsPostsolveStack::FourierMotzkinElimination::undo(
             ? minusSlacks[mIdx]
             : (mOrigRow < 0 ? std::max(solution.col_value[col] - colLower, 0.0)
                             : 0.0);
-    bool betaIsBasic = basis.row_status[newRow] == HighsBasisStatus::kBasic;
+    bool betaIsBasic = postsolveStack.isModelRow(newRow) &&
+                       basis.row_status[newRow] == HighsBasisStatus::kBasic;
+
+    // Helper: only assign nonbasic status if not already basic from a prior
+    // iteration (a parent row can appear in multiple newRowOrigins)
+    auto setRowNonbasic = [&](HighsInt idx,
+                              const std::vector<FmeRowHeader>& headers,
+                              const std::vector<std::vector<Nonzero>>& entries,
+                              const std::vector<double>& coefs) {
+      if (!postsolveStack.isModelRow(headers[idx].row)) return;
+      if (basis.row_status[headers[idx].row] != HighsBasisStatus::kBasic)
+        basis.row_status[headers[idx].row] =
+            nonbasicRowStatus(headers[idx], entries[idx], coefs[idx]);
+    };
 
     if (!betaIsBasic) {
       // non-basic propagation: both parent slacks are zero, both non-basic
       if (pIdx >= 0)
-        basis.row_status[plusHeaders[pIdx].row] = nonbasicRowStatus(
-            plusHeaders[pIdx], plusEntries[pIdx], plusCoefOfCol[pIdx]);
+        setRowNonbasic(pIdx, plusHeaders, plusEntries, plusCoefOfCol);
       if (mIdx >= 0)
-        basis.row_status[minusHeaders[mIdx].row] = nonbasicRowStatus(
-            minusHeaders[mIdx], minusEntries[mIdx], minusCoefOfCol[mIdx]);
+        setRowNonbasic(mIdx, minusHeaders, minusEntries, minusCoefOfCol);
     } else {
       // basic propagation
       if (pSlack > tol && mSlack <= tol) {
-        // plus parent has slack: it becomes basic
-        if (pIdx >= 0)
+        if (pIdx >= 0 && postsolveStack.isModelRow(plusHeaders[pIdx].row))
           basis.row_status[plusHeaders[pIdx].row] = HighsBasisStatus::kBasic;
         else
           basis.col_status[col] = HighsBasisStatus::kBasic;
         if (mIdx >= 0)
-          basis.row_status[minusHeaders[mIdx].row] = nonbasicRowStatus(
-              minusHeaders[mIdx], minusEntries[mIdx], minusCoefOfCol[mIdx]);
+          setRowNonbasic(mIdx, minusHeaders, minusEntries, minusCoefOfCol);
       } else if (mSlack > tol && pSlack <= tol) {
-        // minus parent has slack: it becomes basic
-        if (mIdx >= 0)
+        if (mIdx >= 0 && postsolveStack.isModelRow(minusHeaders[mIdx].row))
           basis.row_status[minusHeaders[mIdx].row] = HighsBasisStatus::kBasic;
         else
           basis.col_status[col] = HighsBasisStatus::kBasic;
         if (pIdx >= 0)
-          basis.row_status[plusHeaders[pIdx].row] = nonbasicRowStatus(
-              plusHeaders[pIdx], plusEntries[pIdx], plusCoefOfCol[pIdx]);
+          setRowNonbasic(pIdx, plusHeaders, plusEntries, plusCoefOfCol);
       } else if (pSlack > tol && mSlack > tol) {
-        // both have slack: plus parent becomes basic
-        if (pIdx >= 0)
+        if (pIdx >= 0 && postsolveStack.isModelRow(plusHeaders[pIdx].row))
           basis.row_status[plusHeaders[pIdx].row] = HighsBasisStatus::kBasic;
         else
           basis.col_status[col] = HighsBasisStatus::kBasic;
         if (mIdx >= 0)
-          basis.row_status[minusHeaders[mIdx].row] = nonbasicRowStatus(
-              minusHeaders[mIdx], minusEntries[mIdx], minusCoefOfCol[mIdx]);
+          setRowNonbasic(mIdx, minusHeaders, minusEntries, minusCoefOfCol);
       } else {
-        // both slacks zero (degenerate): x_j becomes basic
         basis.col_status[col] = HighsBasisStatus::kBasic;
         if (pIdx >= 0)
-          basis.row_status[plusHeaders[pIdx].row] = nonbasicRowStatus(
-              plusHeaders[pIdx], plusEntries[pIdx], plusCoefOfCol[pIdx]);
+          setRowNonbasic(pIdx, plusHeaders, plusEntries, plusCoefOfCol);
         if (mIdx >= 0)
-          basis.row_status[minusHeaders[mIdx].row] = nonbasicRowStatus(
-              minusHeaders[mIdx], minusEntries[mIdx], minusCoefOfCol[mIdx]);
+          setRowNonbasic(mIdx, minusHeaders, minusEntries, minusCoefOfCol);
       }
     }
   }
@@ -1701,6 +1705,7 @@ void HighsPostsolveStack::FourierMotzkinElimination::undo(
 
   for (HighsInt r = 0; r < numPlus; ++r) {
     if (isInvolved(plusHeaders[r].row)) continue;
+    if (!postsolveStack.isModelRow(plusHeaders[r].row)) continue;
     if (plusSlacks[r] > tol)
       basis.row_status[plusHeaders[r].row] = HighsBasisStatus::kBasic;
     else
@@ -1709,11 +1714,23 @@ void HighsPostsolveStack::FourierMotzkinElimination::undo(
   }
   for (HighsInt r = 0; r < numMinus; ++r) {
     if (isInvolved(minusHeaders[r].row)) continue;
+    if (!postsolveStack.isModelRow(minusHeaders[r].row)) continue;
     if (minusSlacks[r] > tol)
       basis.row_status[minusHeaders[r].row] = HighsBasisStatus::kBasic;
     else
       basis.row_status[minusHeaders[r].row] = nonbasicRowStatus(
           minusHeaders[r], minusEntries[r], minusCoefOfCol[r]);
+  }
+
+  // If x_j is not at any bound, it must be basic by LP complementarity
+  if (basis.col_status[col] != HighsBasisStatus::kBasic) {
+    double val = solution.col_value[col];
+    bool atLower = (colLower != -kHighsInf && std::abs(val - colLower) <= tol);
+    bool atUpper = (colUpper != kHighsInf && std::abs(val - colUpper) <= tol);
+    bool atZero = (colLower == -kHighsInf && colUpper == kHighsInf &&
+                   std::abs(val) <= tol);
+    if (!atLower && !atUpper && !atZero)
+      basis.col_status[col] = HighsBasisStatus::kBasic;
   }
 }
 

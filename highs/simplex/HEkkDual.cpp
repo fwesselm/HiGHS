@@ -10,6 +10,7 @@
  */
 #include "simplex/HEkkDual.h"
 
+#include "io/HMPSIO.h"
 #include <algorithm>
 #include <cassert>
 #include <cmath>
@@ -2105,7 +2106,34 @@ void HEkkDual::updateDual() {
   // no dual objective change
   const HighsInt variable_out_nonbasicFlag =
       ekk_instance_.basis_.nonbasicFlag_[variable_out];
-  assert(variable_out_nonbasicFlag == 0);
+  if (variable_out_nonbasicFlag) {
+    HighsModel model;
+    model.lp_ = ekk_instance_.lp_;
+    model.lp_.col_names_.clear();
+    model.lp_.row_names_.clear();
+    for (HighsInt i = 0; i < model.lp_.num_col_; i++)
+      model.lp_.col_names_.push_back("x" + std::to_string(i));
+    for (HighsInt i = 0; i < model.lp_.num_row_; i++)
+      model.lp_.row_names_.push_back("r" + std::to_string(i));
+    writeModelAsMps(
+        *ekk_instance_.options_,
+        "C:/Users/fwesselm/claude_code/highs/build/debug_bad_basis.mps", model);
+    // Write basis
+    FILE* f = fopen(
+        "C:/Users/fwesselm/claude_code/highs/build/debug_bad_basis.bas", "w");
+    if (f) {
+      fprintf(f, "HiGHS v1\n");
+      const auto& basis = ekk_instance_.basis_;
+      HighsInt numTot = model.lp_.num_col_ + model.lp_.num_row_;
+      for (HighsInt i = 0; i < numTot; i++)
+        fprintf(f, "%d %d\n", (int)basis.nonbasicFlag_[i],
+                (int)basis.nonbasicMove_[i]);
+      fclose(f);
+    }
+  }
+  if (variable_out_nonbasicFlag)
+    printf("BAD BASIS: variable_out=%d nonbasicFlag=%d\n",
+           (int)variable_out, (int)variable_out_nonbasicFlag);
   if (variable_out_nonbasicFlag) {
     const double variable_out_delta_dual = workDual[variable_out] - theta_dual;
     const double variable_out_value = workValue[variable_out];
