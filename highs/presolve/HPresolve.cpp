@@ -5208,13 +5208,28 @@ HPresolve::Result HPresolve::singletonColStuffing(
     // sort candidates
     sortCols(candidates);
 
-    // check candidates
-    // Temporary for fix-col-stuffing
+    // lambda for status report
+    auto reportStuffing = [&](int case_id, HighsInt multiplier, HighsInt col,
+                              double cost, double delta, double threshold,
+                              const std::string& threshold_name) {
+      if (!report_stuffing) return;
+      printf(
+          "ColStuffing:%d (%2d) fix %6d to %s: cost = %11.4g; delta = "
+          "%11.4g <= %11.4g (%s)\n",
+          case_id, static_cast<int>(multiplier), static_cast<int>(col),
+          multiplier < 0 ? "lower" : "upper", cost, delta, threshold,
+          threshold_name.c_str());
+    };
+
+    // print information about candidates
     if (report_stuffing)
       printf(
           "ColStuffing: num candidates = %d; sumLower = %g; sumUpper = %g; rhs "
           "= %g\n",
-          int(candidates.size()), double(sumLower), double(sumUpper), rhs);
+          static_cast<int>(candidates.size()), static_cast<double>(sumLower),
+          static_cast<double>(sumUpper), rhs);
+
+    // check candidates
     for (const auto& t : candidates) {
       // both bounds have to be finite
       if (model->col_lower_[t.col] == -kHighsInf ||
@@ -5228,38 +5243,22 @@ HPresolve::Result HPresolve::singletonColStuffing(
       // check if variable can be fixed
       if (sumUpperFinite &&
           delta <= direction * rhs - sumUpper + primal_feastol) {
-        if (report_stuffing)
-          printf(
-              "ColStuffing:0 (%2d) fix %6d to %s: cost =  %11.4g; delta = "
-              "%11.4g | "
-              "Logic: delta = %11.4g <= %11.4g = direction * rhs - sumUpper + "
-              "primal_feastol\n",
-              int(t.multiplier), int(t.col),
-              t.multiplier < 0 ? "lower" : "upper", model->col_cost_[t.col],
-              double(delta), double(delta),
-              double(direction * rhs - sumUpper + primal_feastol));
         numFixedCols++;
         HPRESOLVE_CHECKED_CALL(fixCol(t.col, t.multiplier));
+        reportStuffing(
+            0, t.multiplier, t.col, model->col_cost_[t.col],
+            static_cast<double>(delta),
+            static_cast<double>(direction * rhs - sumUpper + primal_feastol),
+            "direction * rhs - sumUpper + primal_feastol");
       } else if (sumLowerFinite &&
-                 direction * rhs <= sumLower + primal_feastol) {
-        // Only allow fixing if there is no degeneracy
-        const bool allow_fixing =
-            direction * rhs + delta <= sumLower + primal_feastol;
-        if (report_stuffing) {
-          printf(
-              "ColStuffing:1 (%2d) fix %6d to %s: cost =  %11.4g; delta = "
-              "%11.4g | "
-              "Logic: direction * rhs = %11.4g <= %11.4g = sumLower + "
-              "primal_feastol: %s fixing\n",
-              int(-t.multiplier), int(t.col),
-              -t.multiplier < 0 ? "lower" : "upper", model->col_cost_[t.col],
-              double(delta), double(direction * rhs),
-              double(sumLower + primal_feastol), allow_fixing ? "allow" : "no");
-        }
-        if (allow_fixing) {
-          numFixedCols++;
-          HPRESOLVE_CHECKED_CALL(fixCol(t.col, -t.multiplier));
-        }
+                 delta <= sumLower - direction * rhs + primal_feastol) {
+        numFixedCols++;
+        HPRESOLVE_CHECKED_CALL(fixCol(t.col, -t.multiplier));
+        reportStuffing(
+            1, -t.multiplier, t.col, model->col_cost_[t.col],
+            static_cast<double>(delta),
+            static_cast<double>(sumLower - direction * rhs + primal_feastol),
+            "sumLower - direction * rhs + primal_feastol");
       }
       // update row activities
       if (sumLowerFinite) sumLower += delta;
