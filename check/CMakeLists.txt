@@ -71,6 +71,11 @@ if ((NOT FAST_BUILD OR ALL_TESTS) AND NOT (BUILD_EXTRA_UNIT_ONLY))
       TestPdlp.cpp
       TestPdlpHi.cpp
       TestPresolve.cpp
+      TestFmMeszaros.cpp
+      TestFmMiplib2010.cpp
+      TestFmMiplib3.cpp
+      TestFmNetlib.cpp
+      TestFmPlato.cpp
       TestPresolveRules.cpp
       TestQpSolver.cpp
       TestRanging.cpp
