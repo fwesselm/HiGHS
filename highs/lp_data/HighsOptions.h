@@ -505,6 +505,7 @@ struct HighsOptionsStruct {
   bool mip_heuristic_run_zi_round;
   bool mip_heuristic_run_shifting;
   double mip_min_logging_interval;
+  bool mip_compute_analytic_centre;
   std::string mip_lp_solver;
   std::string mip_ipm_solver;
 #ifdef HIGHS_DEBUGSOL
@@ -671,6 +672,7 @@ struct HighsOptionsStruct {
         mip_heuristic_run_zi_round(false),
         mip_heuristic_run_shifting(false),
         mip_min_logging_interval(0.0),
+        mip_compute_analytic_centre(false),
         mip_lp_solver(""),
         mip_ipm_solver(""),
 #ifdef HIGHS_DEBUGSOL
@@ -1293,6 +1295,12 @@ class HighsOptions : public HighsOptionsStruct {
         kMipIpmSolverString, "MIP IPM solver: \"choose\", \"ipx\" or \"hipo\"",
         advanced, &mip_ipm_solver, kHighsChooseString);
     records.push_back(record_string);
+
+    record_bool = new OptionRecordBool(
+        "mip_compute_analytic_centre",
+        "Whether the analytic centre should be computed during MIP", advanced,
+        &mip_compute_analytic_centre, true);
+    records.push_back(record_bool);
 
     record_double = new OptionRecordDouble(
         "ipm_optimality_tolerance", "IPM optimality tolerance", advanced,
