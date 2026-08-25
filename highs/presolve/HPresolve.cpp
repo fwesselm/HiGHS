@@ -5344,18 +5344,26 @@ HPresolve::Result HPresolve::dualFixing(HighsPostsolveStack& postsolve_stack,
   // compute locks
   computeLocks(col, true, lockCallback);
 
-  // Check if variable is fixed: only possible if there are no up
-  // (down) locks, and the cost forces it up (down) to its bound
+  // If there are no up (down) locks, the variable must/can be fixed
+  // at its upper (lower) bound. Note that if there are no up (down)
+  // locks, then cost <= 0 (>= 0).
+  //
+  // If |cost| > dual_feasibility_tolerance then fixing is forced, and
+  // may identify unboundedness
+  //
+  // If |cost| <= dual_feasibility_tolerance, then the variable is
+  // dual feasible at any value, so only fix if the corresponding
+  // bound is finite
   if (numDownLocks == 0 || numUpLocks == 0) {
-    // fix variable if cost is driving it to its bound
-    if (numDownLocks == 0 &&
-        model->col_cost_[col] <= options->dual_feasibility_tolerance &&
-        model->col_lower_[col] > -kHighsInf) {
-      HPRESOLVE_CHECKED_CALL(fixColToLower(postsolve_stack, col));
-    } else if (numUpLocks == 0 &&
-               model->col_cost_[col] >= -options->dual_feasibility_tolerance &&
-               model->col_upper_[col] < kHighsInf) {
-      HPRESOLVE_CHECKED_CALL(fixColToUpper(postsolve_stack, col));
+    if (numDownLocks == 0) {
+      if (model->col_cost_[col] > options->dual_feasibility_tolerance ||
+          model->col_lower_[col] > -kHighsInf)
+        HPRESOLVE_CHECKED_CALL(fixColToLower(postsolve_stack, col));
+    } else {
+      assert(numUpLocks == 0);
+      if (model->col_cost_[col] < -options->dual_feasibility_tolerance ||
+          model->col_upper_[col] < kHighsInf)
+        HPRESOLVE_CHECKED_CALL(fixColToUpper(postsolve_stack, col));
     }
   } else {
     bool hasSingleDownLock = numDownLocks == 1 && downLockRow != -1;

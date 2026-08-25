@@ -1335,9 +1335,9 @@ void HighsPostsolveStack::SlackColSubstitution::undo(
     printf(
         "HighsPostsolveStack::SlackColSubstitution::undo OgRowStatus = %s; "
         "RowStatus = %s; ColStatus = %s\n",
-        utilBasisStatusToString(save_row_basis_status).c_str(),
-        utilBasisStatusToString(basis.row_status[row]).c_str(),
-        utilBasisStatusToString(basis.col_status[col]).c_str());
+        utilBasisStatusToString(save_row_basis_status).full_.c_str(),
+        utilBasisStatusToString(basis.row_status[row]).full_.c_str(),
+        utilBasisStatusToString(basis.col_status[col]).full_.c_str());
   if (basis.col_status[col] == HighsBasisStatus::kLower) {
     assert(solution.col_dual[col] > -options.dual_feasibility_tolerance);
   } else if (basis.col_status[col] == HighsBasisStatus::kUpper) {
@@ -1348,9 +1348,6 @@ void HighsPostsolveStack::SlackColSubstitution::undo(
 void HighsPostsolveStack::ZeroObjSingletonContinuousCol::undo(
     const HighsOptions& options, const std::vector<Nonzero>& rowValues,
     HighsSolution& solution, HighsBasis& basis) {
-  // a (removed) cut may have been used in this reduction.
-  bool isModelRow = static_cast<size_t>(row) < solution.row_value.size();
-
   assert(origRowLower != -kHighsInf && origRowUpper != kHighsInf);
 
   const double primal_tol = options.primal_feasibility_tolerance;
@@ -1365,12 +1362,12 @@ void HighsPostsolveStack::ZeroObjSingletonContinuousCol::undo(
   double col_value = kHighsInf;
   // Detemine whether the row was at its lower or upper bound by
   // virtue of basis status or value
-  bool row_at_lower = (isModelRow && basis.valid &&
-                       basis.row_status[row] == HighsBasisStatus::kLower) ||
-                      static_cast<double>(act - primal_tol) <= new_row_lb;
-  bool row_at_upper = (isModelRow && basis.valid &&
-                       basis.row_status[row] == HighsBasisStatus::kUpper) ||
-                      static_cast<double>(act + primal_tol) >= new_row_ub;
+  bool row_at_lower =
+      (basis.valid && basis.row_status[row] == HighsBasisStatus::kLower) ||
+      static_cast<double>(act - primal_tol) <= new_row_lb;
+  bool row_at_upper =
+      (basis.valid && basis.row_status[row] == HighsBasisStatus::kUpper) ||
+      static_cast<double>(act + primal_tol) >= new_row_ub;
   bool col_at_lower = false;
   bool col_at_upper = false;
   if (row_at_lower) {
@@ -1417,8 +1414,7 @@ void HighsPostsolveStack::ZeroObjSingletonContinuousCol::undo(
   if (col_at_lower || col_at_upper) {
     col_value = col_at_lower ? lb : ub;
     if (solution.dual_valid)
-      solution.col_dual[col] =
-          (isModelRow) ? -coef * solution.row_dual[row] : 0;
+      solution.col_dual[col] = -coef * solution.row_dual[row];
     if (basis.valid)
       basis.col_status[col] =
           col_at_lower ? HighsBasisStatus::kLower : HighsBasisStatus::kUpper;
@@ -1427,12 +1423,11 @@ void HighsPostsolveStack::ZeroObjSingletonContinuousCol::undo(
     // the row
     if (solution.dual_valid) {
       solution.col_dual[col] = 0;
-      if (isModelRow) solution.row_dual[row] = 0;
+      solution.row_dual[row] = 0;
     }
     if (basis.valid) {
-      if (isModelRow)
-        basis.row_status[row] =
-            row_at_lower ? HighsBasisStatus::kLower : HighsBasisStatus::kUpper;
+      basis.row_status[row] =
+          row_at_lower ? HighsBasisStatus::kLower : HighsBasisStatus::kUpper;
       basis.col_status[col] = HighsBasisStatus::kBasic;
     }
   }
