@@ -173,8 +173,8 @@ HighsDomain::ConflictPoolPropagation::~ConflictPoolPropagation() {
 
 void HighsDomain::ConflictPoolPropagation::conflictDeleted(HighsInt conflict) {
   conflictFlag_[conflict] |= 8;
-  unlinkWatchedLiteral(2 * conflict);
-  unlinkWatchedLiteral(2 * conflict + 1);
+  unlinkWatchedLiteral(WatchIdx{conflict, 0});
+  unlinkWatchedLiteral(WatchIdx{conflict, 1});
 }
 
 void HighsDomain::ConflictPoolPropagation::conflictAdded(HighsInt conflict) {
@@ -191,9 +191,9 @@ void HighsDomain::ConflictPoolPropagation::conflictAdded(HighsInt conflict) {
   HighsInt numWatched = 0;
   for (HighsInt i = start; i != end; ++i) {
     if (domain->isActive(conflictEntries[i])) continue;
-    HighsInt watchPos = 2 * conflict + numWatched;
-    watchedLiterals_[watchPos].domchg = conflictEntries[i];
-    linkWatchedLiteral(watchPos);
+    WatchIdx watchIdx{conflict, numWatched};
+    watchedLiterals_[watchIdx].domchg = conflictEntries[i];
+    linkWatchedLiteral(watchIdx);
     if (++numWatched == 2) break;
   }
   switch (numWatched) {
@@ -224,10 +224,10 @@ void HighsDomain::ConflictPoolPropagation::conflictAdded(HighsInt conflict) {
         }
       }
       for (HighsInt i = 0; i < numActive; ++i) {
-        HighsInt watchPos = 2 * conflict + i;
-        watchedLiterals_[watchPos].domchg =
+        WatchIdx watchIdx{conflict, i};
+        watchedLiterals_[watchIdx].domchg =
             conflictEntries[latestActive[i].second];
-        linkWatchedLiteral(watchPos);
+        linkWatchedLiteral(watchIdx);
       }
       break;
     }
@@ -245,9 +245,9 @@ void HighsDomain::ConflictPoolPropagation::conflictAdded(HighsInt conflict) {
         }
       }
       if (latestActive != -1) {
-        HighsInt watchPos = 2 * conflict + 1;
-        watchedLiterals_[watchPos].domchg = conflictEntries[latestActive];
-        linkWatchedLiteral(watchPos);
+        WatchIdx watchIdx{conflict, 1};
+        watchedLiterals_[watchIdx].domchg = conflictEntries[latestActive];
+        linkWatchedLiteral(watchIdx);
       }
       break;
     }
@@ -316,8 +316,8 @@ void HighsDomain::ConflictPoolPropagation::propagateConflict(
       conflictpool_->getConflictEntryVector();
   HighsInt start = conflictpool_->getConflictRanges()[conflict].first;
   if (start == -1) {
-    unlinkWatchedLiteral(2 * conflict);
-    unlinkWatchedLiteral(2 * conflict + 1);
+    unlinkWatchedLiteral(WatchIdx{conflict, 0});
+    unlinkWatchedLiteral(WatchIdx{conflict, 1});
     return;
   }
   HighsInt end = conflictpool_->getConflictRanges()[conflict].second;
@@ -360,15 +360,15 @@ void HighsDomain::ConflictPoolPropagation::propagateConflict(
     }
     case 2: {
       if (watched[0].domchg != entries[inactive[0]]) {
-        unlinkWatchedLiteral(2 * conflict);
+        unlinkWatchedLiteral(WatchIdx{conflict, 0});
         watched[0].domchg = entries[inactive[0]];
-        linkWatchedLiteral(2 * conflict);
+        linkWatchedLiteral(WatchIdx{conflict, 0});
       }
 
       if (watched[1].domchg != entries[inactive[1]]) {
-        unlinkWatchedLiteral(2 * conflict + 1);
+        unlinkWatchedLiteral(WatchIdx{conflict, 1});
         watched[1].domchg = entries[inactive[1]];
-        linkWatchedLiteral(2 * conflict + 1);
+        linkWatchedLiteral(WatchIdx{conflict, 1});
       }
 
       return;

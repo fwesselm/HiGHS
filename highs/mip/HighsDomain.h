@@ -201,6 +201,16 @@ class HighsDomain {
     std::vector<uint8_t> conflictFlag_;
     std::vector<HighsInt> propagateConflictInds_;
 
+    struct WatchIdx {
+      HighsInt conflict;
+      HighsInt slot;
+      operator HighsInt() const {
+        assert(conflict >= 0);
+        assert(slot == 0 || slot == 1);
+        return 2 * conflict + slot;
+      }
+    };
+
     struct WatchedLiteral {
       HighsDomainChange domchg = {0.0, -1, HighsBoundType::kLower};
       HighsInt prev = -1;
