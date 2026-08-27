@@ -8131,6 +8131,11 @@ HPresolve::Result HPresolve::strengthenInequalities(
     const double smallVal =
         std::max(100 * primal_feastol,
                  primal_feastol * static_cast<double>(maxviolation));
+    HighsInt numIter = 0;
+    printf("strengthenInequalities: row %" HIGHSINT_FORMAT
+           " start, maxviolation=%g, indices=%d\n",
+           row, static_cast<double>(maxviolation),
+           static_cast<int>(indices.size()));
     while (true) {
       if (maxviolation - continuouscontribution <= smallVal || indices.empty())
         break;
@@ -8194,7 +8199,16 @@ HPresolve::Result HPresolve::strengthenInequalities(
                                    }),
                     indices.end());
       indices.push_back(slackind);
+      numIter++;
+      if ((numIter & 1023) == 0)
+        printf("  row %" HIGHSINT_FORMAT " iter %" HIGHSINT_FORMAT
+               " maxviolation=%g step=%g indices=%d\n",
+               row, numIter, static_cast<double>(maxviolation),
+               static_cast<double>(step), static_cast<int>(indices.size()));
     }
+    printf("strengthenInequalities: row %" HIGHSINT_FORMAT
+           " done, iters=%" HIGHSINT_FORMAT "\n",
+           row, numIter);
 
     double threshold = static_cast<double>(maxviolation + primal_feastol);
 
