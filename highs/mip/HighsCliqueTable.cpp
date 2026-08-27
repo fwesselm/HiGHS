@@ -1341,9 +1341,9 @@ void HighsCliqueTable::extractCliques(HighsMipSolver& mipsolver,
       entries[col] += val;
     }
 
-    auto checkRow = [&](double rhs, HighsInt direction) {
-      if (direction * rhs == kHighsInf) return;
-      rhs = direction * (rhs - offset);
+    auto checkRow = [&](double rhs_in, HighsInt direction) {
+      if (direction * rhs_in == kHighsInf) return;
+      HighsCDouble rhs = direction * (rhs_in - offset);
       inds.clear();
       vals.clear();
       complementation.clear();
@@ -1365,7 +1365,7 @@ void HighsCliqueTable::extractCliques(HighsMipSolver& mipsolver,
           vals.push_back(-val);
           inds.push_back(col);
           complementation.push_back(-1);
-          rhs -= val * globaldom.col_upper_[col];
+          rhs -= static_cast<HighsCDouble>(val) * globaldom.col_upper_[col];
         } else {
           freevar = globaldom.col_lower_[col] == -kHighsInf;
           if (freevar) break;
@@ -1373,13 +1373,14 @@ void HighsCliqueTable::extractCliques(HighsMipSolver& mipsolver,
           vals.push_back(val);
           inds.push_back(col);
           complementation.push_back(1);
-          rhs -= val * globaldom.col_lower_[col];
+          rhs -= static_cast<HighsCDouble>(val) * globaldom.col_lower_[col];
         }
       }
 
       if (!freevar && nbin != 0) {
-        extractCliques(mipsolver, inds, vals, complementation, rhs, nbin, perm,
-                       clique, mipsolver.mipdata_->feastol);
+        extractCliques(mipsolver, inds, vals, complementation,
+                       static_cast<double>(rhs), nbin, perm, clique,
+                       mipsolver.mipdata_->feastol);
         if (globaldom.infeasible()) return;
       }
     };
