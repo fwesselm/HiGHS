@@ -1232,7 +1232,8 @@ void HighsSparseMatrix::productQuad(vector<double>& result,
     for (HighsInt iCol = 0; iCol < this->num_col_; iCol++) {
       for (HighsInt iEl = this->start_[iCol]; iEl < this->start_[iCol + 1];
            iEl++)
-        value[this->index_[iEl]] += row[iCol] * this->value_[iEl];
+        value[this->index_[iEl]] +=
+            static_cast<HighsCDouble>(row[iCol]) * this->value_[iEl];
     }
     for (HighsInt iRow = 0; iRow < this->num_row_; iRow++)
       result[iRow] = double(value[iRow]);
@@ -1694,7 +1695,8 @@ void HighsSparseMatrix::priceByRowDenseResult(
     for (HighsInt iEl = this->start_[iRow]; iEl < to_iEl; iEl++) {
       HighsInt iCol = this->index_[iEl];
       HighsCDouble value0 = result[iCol];
-      HighsCDouble value1 = value0 + multiplier * this->value_[iEl];
+      HighsCDouble value1 =
+          value0 + static_cast<HighsCDouble>(multiplier) * this->value_[iEl];
       result[iCol] = (fabs((double)value1) < kHighsTiny) ? kHighsZero : value1;
     }
   }

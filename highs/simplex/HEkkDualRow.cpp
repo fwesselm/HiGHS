@@ -390,7 +390,8 @@ bool HEkkDualRow::quadChooseFinalWorkGroupQuad() {
     for (HighsInt i = workCount; i < fullCount; i++) {
       HighsInt iCol = workData[i].first;
       HighsCDouble value = workData[i].second;
-      HighsCDouble dual = workMove[iCol] * workDual[iCol];
+      HighsCDouble dual =
+          static_cast<HighsCDouble>(workMove[iCol]) * workDual[iCol];
       // Tight satisfy
       if (dual <= selectTheta * value) {
         swap(workData[workCount++], workData[i]);

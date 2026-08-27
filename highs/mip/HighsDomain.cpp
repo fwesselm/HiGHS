@@ -778,7 +778,7 @@ void HighsDomain::ObjectivePropagation::getPropagationConstraint(
       }
     }
 
-    tmpRhs += largest * partitionCliqueData[i].rhs;
+    tmpRhs += static_cast<HighsCDouble>(largest) * partitionCliqueData[i].rhs;
     if (partitionCliqueData[i].multiplier != largest) {
       partitionCliqueData[i].multiplier = largest;
       const auto& packedObjVals = objFunc->getObjectiveValuesPacked();

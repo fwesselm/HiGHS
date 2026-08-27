@@ -8099,7 +8099,7 @@ HPresolve::Result HPresolve::strengthenInequalities(
       if (ub <= primal_feastol || weight <= primal_feastol) continue;
 
       if (model->integrality_[col] == HighsVarType::kContinuous) {
-        continuouscontribution += weight * ub;
+        continuouscontribution += static_cast<HighsCDouble>(weight) * ub;
         continue;
       }
 
@@ -8147,7 +8147,8 @@ HPresolve::Result HPresolve::strengthenInequalities(
 
       for (size_t i = indices.size(); i > 0; --i) {
         HighsInt index = indices[i - 1];
-        HighsCDouble delta = upper[index] * reducedcost[index];
+        HighsCDouble delta =
+            static_cast<HighsCDouble>(upper[index]) * reducedcost[index];
 
         if (upper[index] <= 1000.0 && reducedcost[index] > smallVal &&
             lambda - delta <= smallVal)
@@ -8175,7 +8176,7 @@ HPresolve::Result HPresolve::strengthenInequalities(
         coefs[i] =
             static_cast<double>(ceil(min(reducedcost[cover[i]], lambda) / al -
                                      options->small_matrix_value));
-        slackupper += upper[cover[i]] * coefs[i];
+        slackupper += static_cast<HighsCDouble>(upper[cover[i]]) * coefs[i];
         step = min(step, reducedcost[cover[i]] / coefs[i]);
       }
       step = min(step, maxviolation / coverrhs);

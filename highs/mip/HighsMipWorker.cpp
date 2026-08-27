@@ -133,18 +133,7 @@ bool HighsMipWorker::trySolution(const std::vector<double>& solution,
     obj += static_cast<HighsCDouble>(mipsolver_.colCost(i)) * solution[i];
   }
 
-  for (HighsInt i = 0; i != mipsolver_.model_->num_row_; ++i) {
-    double rowactivity = 0.0;
-
-    HighsInt start = mipdata_.ARstart_[i];
-    HighsInt end = mipdata_.ARstart_[i + 1];
-
-    for (HighsInt j = start; j != end; ++j)
-      rowactivity += solution[mipdata_.ARindex_[j]] * mipdata_.ARvalue_[j];
-
-    if (rowactivity > mipsolver_.rowUpper(i) + mipdata_.feastol) return false;
-    if (rowactivity < mipsolver_.rowLower(i) - mipdata_.feastol) return false;
-  }
+  if (!mipdata_.solutionRowFeasible(solution)) return false;
 
   return addIncumbent(solution, static_cast<double>(obj), solution_source);
 }

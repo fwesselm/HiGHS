@@ -767,7 +767,7 @@ bool HighsLpRelaxation::computeDualProof(const HighsDomain& globaldomain,
     } else
       continue;
 
-    proofRhs += sol.col_value[i] * sol.col_dual[i];
+    proofRhs += static_cast<HighsCDouble>(sol.col_value[i]) * sol.col_dual[i];
 
     vals.push_back(sol.col_dual[i]);
     inds.push_back(i);
@@ -807,7 +807,7 @@ bool HighsLpRelaxation::computeDualProof(const HighsDomain& globaldomain,
       else
         remove = sol.col_value[iCol] == globaldomain.col_upper_[iCol];
 
-      if (remove) proofRhs -= vals[i] * sol.col_value[iCol];
+      if (remove) proofRhs -= static_cast<HighsCDouble>(vals[i]) * sol.col_value[iCol];
     }
 
     if (remove) {
@@ -872,7 +872,8 @@ bool HighsLpRelaxation::computeDualProof(const HighsDomain& globaldomain,
     for (HighsInt j = start; j != end; ++j) {
       if (row_dual[lp.a_matrix_.index_[j]] == 0) continue;
       // @FlipRowDual += became -=
-      sum -= lp.a_matrix_.value_[j] * row_dual[lp.a_matrix_.index_[j]];
+      sum -= static_cast<HighsCDouble>(lp.a_matrix_.value_[j]) *
+             row_dual[lp.a_matrix_.index_[j]];
     }
 
     double val = double(sum);
@@ -1079,11 +1080,11 @@ bool HighsLpRelaxation::checkDualProof() const {
     HighsInt col = dualproofinds[i];
     if (dualproofvals[i] > 0) {
       if (lp.col_lower_[col] == -kHighsInf) return false;
-      viol += dualproofvals[i] * lp.col_lower_[col];
+      viol += static_cast<HighsCDouble>(dualproofvals[i]) * lp.col_lower_[col];
     } else {
       assert(dualproofvals[i] < 0);
       if (lp.col_upper_[col] == kHighsInf) return false;
-      viol += dualproofvals[i] * lp.col_upper_[col];
+      viol += static_cast<HighsCDouble>(dualproofvals[i]) * lp.col_upper_[col];
     }
   }
 

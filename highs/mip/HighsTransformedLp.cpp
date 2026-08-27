@@ -173,7 +173,7 @@ bool HighsTransformedLp::transform(std::vector<double>& vals,
     double ub = getUb(col);
 
     if (ub - lb < mip.options_mip_->small_matrix_value) {
-      tmpRhs -= std::min(lb, ub) * vals[i];
+      tmpRhs -= static_cast<HighsCDouble>(std::min(lb, ub)) * vals[i];
       remove(i);
       continue;
     }
@@ -324,7 +324,7 @@ bool HighsTransformedLp::transform(std::vector<double>& vals,
       case BoundType::kSimpleLb:
         if (vals[i] > 0) {
           // relax away using lower bound
-          tmpRhs -= lb * vals[i];
+          tmpRhs -= static_cast<HighsCDouble>(lb) * vals[i];
           boundTypes[col] = oldBoundType;
           remove(i);
           continue;
@@ -333,14 +333,15 @@ bool HighsTransformedLp::transform(std::vector<double>& vals,
       case BoundType::kSimpleUb:
         if (vals[i] < 0) {
           // relax away using upper bound
-          tmpRhs -= ub * vals[i];
+          tmpRhs -= static_cast<HighsCDouble>(ub) * vals[i];
           boundTypes[col] = oldBoundType;
           remove(i);
           continue;
         }
         break;
       case BoundType::kVariableLb:
-        tmpRhs -= bestVlb[col].second.constant * vals[i];
+        tmpRhs -=
+            static_cast<HighsCDouble>(bestVlb[col].second.constant) * vals[i];
         vectorsum.add(bestVlb[col].first, vals[i] * bestVlb[col].second.coef);
         if (vals[i] > 0) {
           boundTypes[col] = oldBoundType;
@@ -349,7 +350,8 @@ bool HighsTransformedLp::transform(std::vector<double>& vals,
         }
         break;
       case BoundType::kVariableUb:
-        tmpRhs -= bestVub[col].second.constant * vals[i];
+        tmpRhs -=
+            static_cast<HighsCDouble>(bestVub[col].second.constant) * vals[i];
         vectorsum.add(bestVub[col].first, vals[i] * bestVub[col].second.coef);
         vals[i] = -vals[i];
         if (vals[i] > 0) {
@@ -450,14 +452,14 @@ bool HighsTransformedLp::transform(std::vector<double>& vals,
       case BoundType::kSimpleLb: {
         // shift (lower bound)
         assert(lb != -kHighsInf);
-        tmpRhs -= lb * vals[j];
+        tmpRhs -= static_cast<HighsCDouble>(lb) * vals[j];
         solval[j] = lbDist[col];
         break;
       }
       case BoundType::kSimpleUb: {
         // complement (upper bound)
         assert(ub != kHighsInf);
-        tmpRhs -= ub * vals[j];
+        tmpRhs -= static_cast<HighsCDouble>(ub) * vals[j];
         vals[j] = -vals[j];
         solval[j] = ubDist[col];
         break;
@@ -503,24 +505,28 @@ bool HighsTransformedLp::untransform(std::vector<double>& vals,
 
     switch (boundTypes[col]) {
       case BoundType::kVariableLb: {
-        tmpRhs += bestVlb[col].second.constant * vals[i];
+        tmpRhs +=
+            static_cast<HighsCDouble>(bestVlb[col].second.constant) * vals[i];
         vectorsum.add(bestVlb[col].first, -vals[i] * bestVlb[col].second.coef);
         vectorsum.add(col, vals[i]);
         break;
       }
       case BoundType::kVariableUb: {
-        tmpRhs -= bestVub[col].second.constant * vals[i];
+        tmpRhs -=
+            static_cast<HighsCDouble>(bestVub[col].second.constant) * vals[i];
         vectorsum.add(bestVub[col].first, vals[i] * bestVub[col].second.coef);
         vectorsum.add(col, -vals[i]);
         break;
       }
       case BoundType::kSimpleLb: {
         if (col < slackOffset) {
-          tmpRhs += vals[i] * globaldom_.col_lower_[col];
+          tmpRhs +=
+              static_cast<HighsCDouble>(vals[i]) * globaldom_.col_lower_[col];
           vectorsum.add(col, vals[i]);
         } else {
           HighsInt row = col - slackOffset;
-          tmpRhs += vals[i] * lprelaxation.slackLower(row, globaldom_);
+          tmpRhs += static_cast<HighsCDouble>(vals[i]) *
+                    lprelaxation.slackLower(row, globaldom_);
 
           HighsInt rowlen;
           const HighsInt* rowinds;
@@ -534,11 +540,13 @@ bool HighsTransformedLp::untransform(std::vector<double>& vals,
       }
       case BoundType::kSimpleUb: {
         if (col < slackOffset) {
-          tmpRhs -= vals[i] * globaldom_.col_upper_[col];
+          tmpRhs -=
+              static_cast<HighsCDouble>(vals[i]) * globaldom_.col_upper_[col];
           vectorsum.add(col, -vals[i]);
         } else {
           HighsInt row = col - slackOffset;
-          tmpRhs -= vals[i] * lprelaxation.slackUpper(row, globaldom_);
+          tmpRhs -= static_cast<HighsCDouble>(vals[i]) *
+                    lprelaxation.slackUpper(row, globaldom_);
           vals[i] = -vals[i];
 
           HighsInt rowlen;
@@ -583,12 +591,14 @@ bool HighsTransformedLp::untransform(std::vector<double>& vals,
           if (globaldom_.col_lower_[col] == -kHighsInf)
             abort = true;
           else
-            tmpRhs -= val * globaldom_.col_lower_[col];
+            tmpRhs -=
+                static_cast<HighsCDouble>(val) * globaldom_.col_lower_[col];
         } else {
           if (globaldom_.col_upper_[col] == kHighsInf)
             abort = true;
           else
-            tmpRhs -= val * globaldom_.col_upper_[col];
+            tmpRhs -=
+                static_cast<HighsCDouble>(val) * globaldom_.col_upper_[col];
         }
         return true;
       }

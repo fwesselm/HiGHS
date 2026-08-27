@@ -4168,7 +4168,7 @@ bool HEkk::proofOfPrimalInfeasibility(HVector& row_ep, const HighsInt move_out,
       }
     }
     // add up lower bound of proof constraint
-    proof_lower += row_ep.array[iRow] * rowBound;
+    proof_lower += static_cast<HighsCDouble>(row_ep.array[iRow]) * rowBound;
   }
   // Form the proof constraint coefficients
   proof_value_.clear();

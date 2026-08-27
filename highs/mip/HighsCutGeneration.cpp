@@ -794,13 +794,13 @@ bool HighsCutGeneration::postprocessCut(const HighsDomain& globaldom) {
         if (ub == kHighsInf)
           return false;
         else
-          rhs -= ub * vals[i];
+          rhs -= static_cast<HighsCDouble>(ub) * vals[i];
       } else {
         double lb = globaldom.col_lower_[inds[i]];
         if (lb == -kHighsInf)
           return false;
         else
-          rhs -= lb * vals[i];
+          rhs -= static_cast<HighsCDouble>(lb) * vals[i];
       }
 
       vals[i] = 0.0;
@@ -858,12 +858,12 @@ bool HighsCutGeneration::postprocessCut(const HighsDomain& globaldom) {
           double ub = globaldom.col_upper_[inds[i]];
           if (ub == kHighsInf) return false;
 
-          rhs -= delta * ub;
+          rhs -= static_cast<HighsCDouble>(delta) * ub;
         } else {
           double lb = globaldom.col_lower_[inds[i]];
           if (lb == -kHighsInf) return false;
 
-          rhs -= delta * lb;
+          rhs -= static_cast<HighsCDouble>(delta) * lb;
         }
       }
 
@@ -915,7 +915,7 @@ bool HighsCutGeneration::preprocessBaseInequality(bool& hasUnboundedInts,
   hasGeneralInts = false;
   HighsInt numZeros = 0;
 
-  double maxact = -feastol;
+  HighsCDouble maxact = -feastol;
   double maxAbsVal = 0;
   for (HighsInt i = 0; i < rowlen; ++i)
     maxAbsVal = std::max(std::abs(vals[i]), maxAbsVal);
@@ -950,7 +950,7 @@ bool HighsCutGeneration::preprocessBaseInequality(bool& hasUnboundedInts,
         // printf("remove: vals[i] = %g  upper[i] = %g\n", vals[i], upper[i]);
         if (vals[i] < 0) {
           if (upper[i] == kHighsInf) return false;
-          rhs -= vals[i] * upper[i];
+          rhs -= static_cast<HighsCDouble>(vals[i]) * upper[i];
         }
 
         ++numZeros;
@@ -967,7 +967,7 @@ bool HighsCutGeneration::preprocessBaseInequality(bool& hasUnboundedInts,
         hasGeneralInts = true;
       }
 
-      if (vals[i] > 0) maxact += vals[i] * upper[i];
+      if (vals[i] > 0) maxact += static_cast<HighsCDouble>(vals[i]) * upper[i];
     }
   }
 
@@ -993,9 +993,9 @@ bool HighsCutGeneration::preprocessBaseInequality(bool& hasUnboundedInts,
       HighsInt j = cancelNzs[i];
 
       if (vals[j] < 0) {
-        rhs -= vals[j] * upper[j];
+        rhs -= static_cast<HighsCDouble>(vals[j]) * upper[j];
       } else
-        maxact -= vals[j] * upper[j];
+        maxact -= static_cast<HighsCDouble>(vals[j]) * upper[j];
 
       vals[j] = 0.0;
     }
@@ -1042,7 +1042,7 @@ static void checkNumerics(const double* vals, HighsInt len, double rhs) {
   double minAbsCoef = kHighsInf;
   HighsCDouble sqrnorm = 0;
   for (HighsInt i = 0; i < len; ++i) {
-    sqrnorm += vals[i] * vals[i];
+    sqrnorm += static_cast<HighsCDouble>(vals[i]) * vals[i];
     maxAbsCoef = std::max(std::abs(vals[i]), maxAbsCoef);
     minAbsCoef = std::min(std::abs(vals[i]), minAbsCoef);
   }
@@ -1215,7 +1215,7 @@ bool HighsCutGeneration::generateConflict(const HighsDomain& localdomain,
   upper.resize(rowlen);
   solval.resize(rowlen);
 
-  double activity = 0.0;
+  HighsCDouble activity = 0.0;
   for (HighsInt i = 0; i != rowlen; ++i) {
     HighsInt col = inds[i];
 
@@ -1226,22 +1226,22 @@ bool HighsCutGeneration::generateConflict(const HighsDomain& localdomain,
             ? std::min(globaldom.col_upper_[col], localdomain.col_upper_[col])
             : std::max(globaldom.col_lower_[col], localdomain.col_lower_[col]);
     if (vals[i] < 0 && globaldom.col_upper_[col] != kHighsInf) {
-      rhs -= globaldom.col_upper_[col] * vals[i];
+      rhs -= static_cast<HighsCDouble>(globaldom.col_upper_[col]) * vals[i];
       vals[i] = -vals[i];
       complementation[i] = true;
 
       solval[i] = globaldom.col_upper_[col] - solval[i];
     } else {
-      rhs -= globaldom.col_lower_[col] * vals[i];
+      rhs -= static_cast<HighsCDouble>(globaldom.col_lower_[col]) * vals[i];
       complementation[i] = false;
       solval[i] = solval[i] - globaldom.col_lower_[col];
     }
 
-    activity += solval[i] * vals[i];
+    activity += static_cast<HighsCDouble>(solval[i]) * vals[i];
   }
 
   if (activity > rhs) {
-    double solScale = double(rhs) / activity;
+    double solScale = static_cast<double>(rhs / activity);
     for (HighsInt i = 0; i != rowlen; ++i) solval[i] *= solScale;
   }
 
@@ -1262,10 +1262,12 @@ bool HighsCutGeneration::generateConflict(const HighsDomain& localdomain,
   if (!complementation.empty()) {
     for (HighsInt i = 0; i != rowlen; ++i) {
       if (complementation[i]) {
-        rhs -= globaldom.col_upper_[inds[i]] * vals[i];
+        rhs -=
+            static_cast<HighsCDouble>(globaldom.col_upper_[inds[i]]) * vals[i];
         vals[i] = -vals[i];
       } else
-        rhs += globaldom.col_lower_[inds[i]] * vals[i];
+        rhs +=
+            static_cast<HighsCDouble>(globaldom.col_lower_[inds[i]]) * vals[i];
     }
   }
 
@@ -1357,7 +1359,7 @@ void HighsCutGeneration::flipComplementation(HighsInt index) {
   // flip complementation
   complementation[index] = !complementation[index];
   solval[index] = upper[index] - solval[index];
-  rhs -= upper[index] * vals[index];
+  rhs -= static_cast<HighsCDouble>(upper[index]) * vals[index];
   vals[index] = -vals[index];
 }
 
