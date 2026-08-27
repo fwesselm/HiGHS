@@ -302,12 +302,14 @@ HighsCDouble HighsHessian::objectiveCDoubleValue(
     HighsInt iEl = this->start_[iCol];
     // Assumes Hessian format is triangular
     assert(this->index_[iEl] == iCol);
-    objective_function_value +=
-        0.5 * solution[iCol] * this->value_[iEl] * solution[iCol];
+    objective_function_value += 0.5 *
+                                static_cast<HighsCDouble>(solution[iCol]) *
+                                this->value_[iEl] * solution[iCol];
     for (HighsInt iEl = this->start_[iCol] + 1; iEl < this->start_[iCol + 1];
          iEl++)
-      objective_function_value +=
-          solution[iCol] * this->value_[iEl] * solution[this->index_[iEl]];
+      objective_function_value += static_cast<HighsCDouble>(solution[iCol]) *
+                                  this->value_[iEl] *
+                                  solution[this->index_[iEl]];
   }
   return objective_function_value;
 }

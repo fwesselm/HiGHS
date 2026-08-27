@@ -53,7 +53,7 @@ bool HighsCutGeneration::determineCover(bool lpSol) {
 
       assert(solval[j] >= upper[j] - feastol);
 
-      coverweight += vals[j] * upper[j];
+      coverweight += static_cast<HighsCDouble>(vals[j]) * upper[j];
     }
 
     // sort the remaining variables by the contribution to the rows activity in
@@ -113,7 +113,7 @@ bool HighsCutGeneration::determineCover(bool lpSol) {
     if (lambda > minlambda) break;
 
     HighsInt j = cover[coversize];
-    coverweight += vals[j] * upper[j];
+    coverweight += static_cast<HighsCDouble>(vals[j]) * upper[j];
   }
   if (coversize == 0) return false;
 
@@ -490,7 +490,7 @@ bool HighsCutGeneration::separateLiftedMixedIntegerCover() {
 
     if (coverflag[i]) {
       vals[i] = -phi_l(-vals[i]);
-      rhs += vals[i] * upper[i];
+      rhs += static_cast<HighsCDouble>(vals[i]) * upper[i];
     } else {
       vals[i] = gamma_l(vals[i]);
     }
@@ -1179,7 +1179,8 @@ bool HighsCutGeneration::generateCut(HighsTransformedLp& transLp,
   // finally determine the violation of the cut in the original space
   HighsCDouble violation = -rhs_;
   const auto& sol = lpRelaxation.getSolution().col_value;
-  for (HighsInt i = 0; i != rowlen; ++i) violation += sol[inds[i]] * vals_[i];
+  for (HighsInt i = 0; i != rowlen; ++i)
+    violation += static_cast<HighsCDouble>(sol[inds[i]]) * vals_[i];
 
   if (violation <= 10 * feastol) return false;
 
@@ -1331,7 +1332,8 @@ bool HighsCutGeneration::finalizeAndAddCut(const HighsDomain& globaldom,
   // finally determine the violation of the cut in the original space
   HighsCDouble violation = -rhs_;
   const auto& sol = lpRelaxation.getSolution().col_value;
-  for (HighsInt i = 0; i != rowlen; ++i) violation += sol[inds[i]] * vals_[i];
+  for (HighsInt i = 0; i != rowlen; ++i)
+    violation += static_cast<HighsCDouble>(sol[inds[i]]) * vals_[i];
 
   if (violation <= 10 * feastol) return false;
 

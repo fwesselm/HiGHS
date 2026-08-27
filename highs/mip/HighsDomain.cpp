@@ -2667,11 +2667,11 @@ void HighsDomain::tightenCoefficients(HighsInt* inds, double* vals,
     if (vals[i] > 0) {
       if (col_upper_[inds[i]] == kHighsInf) return;
 
-      maxactivity += col_upper_[inds[i]] * vals[i];
+      maxactivity += static_cast<HighsCDouble>(col_upper_[inds[i]]) * vals[i];
     } else {
       if (col_lower_[inds[i]] == -kHighsInf) return;
 
-      maxactivity += col_lower_[inds[i]] * vals[i];
+      maxactivity += static_cast<HighsCDouble>(col_lower_[inds[i]]) * vals[i];
     }
   }
 

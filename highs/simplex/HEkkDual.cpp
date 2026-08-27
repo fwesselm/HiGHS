@@ -2916,7 +2916,7 @@ double HEkkDual::computeExactDualObjectiveValue(HVector& dual_col,
           "Col %4" HIGHSINT_FORMAT
           ": ExactDual = %11.4g; WorkDual = %11.4g; Residual = %11.4g\n",
           iCol, exact_dual, info.workDual_[iCol], residual);
-    dual_objective += active_value * exact_dual;
+    dual_objective += static_cast<HighsCDouble>(active_value) * exact_dual;
   }
 
   for (HighsInt iVar = lp.num_col_; iVar < numTot; iVar++) {
@@ -2949,7 +2949,7 @@ double HEkkDual::computeExactDualObjectiveValue(HVector& dual_col,
           "Row %4" HIGHSINT_FORMAT
           ": ExactDual = %11.4g; WorkDual = %11.4g; Residual = %11.4g\n",
           iRow, exact_dual, info.workDual_[iVar], residual);
-    dual_objective += active_value * exact_dual;
+    dual_objective += static_cast<HighsCDouble>(active_value) * exact_dual;
   }
   double relative_delta = norm_delta_dual / std::max(norm_dual, 1.0);
   if (relative_delta > 1e-3)

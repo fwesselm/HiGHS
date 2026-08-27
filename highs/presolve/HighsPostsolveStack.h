@@ -62,6 +62,21 @@ class HighsPostsolveStack {
     Nonzero() = default;
   };
 
+  static HighsCDouble dotProduct(const std::vector<Nonzero>& nzs,
+                                 const std::vector<double>& vec,
+                                 HighsInt skipIndex = -1,
+                                 double* skipValue = nullptr) {
+    HighsCDouble result = 0;
+    for (const auto& nz : nzs) {
+      if (nz.index == skipIndex) {
+        if (skipValue != nullptr) *skipValue = nz.value;
+        continue;
+      }
+      result += static_cast<HighsCDouble>(nz.value) * vec[nz.index];
+    }
+    return result;
+  }
+
   size_t debug_prev_numreductions = 0;
   double debug_prev_col_lower = 0;
   double debug_prev_col_upper = 0;

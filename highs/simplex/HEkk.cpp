@@ -4222,14 +4222,14 @@ bool HEkk::proofOfPrimalInfeasibility(HVector& row_ep, const HighsInt move_out,
         // Commented out unreachable code
         //        if (value <= options_->small_matrix_value) continue;
       }
-      implied_upper += value * lp.col_upper_[iCol];
+      implied_upper += static_cast<HighsCDouble>(value) * lp.col_upper_[iCol];
     } else {
       if (highs_isInfinity(-lp.col_lower_[iCol])) {
         sumInf += -value;
         if (sumInf > options_->small_matrix_value) break;
         continue;
       }
-      implied_upper += value * lp.col_lower_[iCol];
+      implied_upper += static_cast<HighsCDouble>(value) * lp.col_lower_[iCol];
     }
   }
   bool infinite_implied_upper = sumInf > options_->small_matrix_value;

@@ -83,14 +83,8 @@ void HighsPostsolveStack::FreeColSubstitution::undo(
     HighsBasis& basis) {
   // compute primal values
   double colCoef = 0;
-  HighsCDouble rowValue = 0;
-  for (const auto& rowVal : rowValues) {
-    if (rowVal.index == col)
-      colCoef = rowVal.value;
-    else
-      rowValue += rowVal.value * solution.col_value[rowVal.index];
-  }
-
+  HighsCDouble rowValue =
+      dotProduct(rowValues, solution.col_value, col, &colCoef);
   assert(colCoef != 0);
   // Row values aren't fully postsolved, so why do this?
   solution.row_value[row] =
@@ -102,10 +96,7 @@ void HighsPostsolveStack::FreeColSubstitution::undo(
 
   // compute the row dual value such that reduced cost of basic column is 0
   solution.row_dual[row] = 0;
-  HighsCDouble dualval = colCost;
-  for (const auto& colVal : colValues) {
-    dualval -= colVal.value * solution.row_dual[colVal.index];
-  }
+  HighsCDouble dualval = colCost - dotProduct(colValues, solution.row_dual);
   solution.row_dual[row] = static_cast<double>(dualval / colCoef);
 
   solution.col_dual[col] = 0;
@@ -162,11 +153,8 @@ void HighsPostsolveStack::DoubletonEquation::undo(
   // doubleton equation row with scale -a_i/substCoef. Therefore the dual
   // multiplier of this row i implicitly increases the dual multiplier of this
   // doubleton equation row with that scale.
-  HighsCDouble rowDual = 0.0;
   solution.row_dual[row] = 0;
-  for (const auto& colVal : colValues) {
-    rowDual -= colVal.value * solution.row_dual[colVal.index];
-  }
+  HighsCDouble rowDual = -dotProduct(colValues, solution.row_dual);
   rowDual /= coefSubst;
   solution.row_dual[row] = static_cast<double>(rowDual);
   // the equation was also added to the objective, so the current values need
@@ -317,9 +305,7 @@ void HighsPostsolveStack::ForcingColumnRemovedRow::undo(
     HighsSolution& solution, HighsBasis& basis) const {
   // we use the row value as storage for the scaled value implied on the
   // column dual
-  HighsCDouble val = rhs;
-  for (const auto& rowVal : rowValues)
-    val -= rowVal.value * solution.col_value[rowVal.index];
+  HighsCDouble val = rhs - dotProduct(rowValues, solution.col_value);
 
   // Row values aren't fully postsolved, so why do this?
   solution.row_value[row] = static_cast<double>(val);
@@ -397,10 +383,7 @@ void HighsPostsolveStack::FixedCol::undo(const HighsOptions& options,
 
   // compute reduced cost
 
-  HighsCDouble reducedCost = colCost;
-  for (const auto& colVal : colValues) {
-    reducedCost -= colVal.value * solution.row_dual[colVal.index];
-  }
+  HighsCDouble reducedCost = colCost - dotProduct(colValues, solution.row_dual);
 
   solution.col_dual[col] = static_cast<double>(reducedCost);
 
@@ -1294,14 +1277,8 @@ void HighsPostsolveStack::SlackColSubstitution::undo(
 
   // compute primal values
   double colCoef = 0;
-  HighsCDouble rowValue = 0;
-  for (const auto& rowVal : rowValues) {
-    if (rowVal.index == col)
-      colCoef = rowVal.value;
-    else
-      rowValue += rowVal.value * solution.col_value[rowVal.index];
-  }
-
+  HighsCDouble rowValue =
+      dotProduct(rowValues, solution.col_value, col, &colCoef);
   assert(colCoef != 0);
   // Row values aren't fully postsolved, so why do this?
   solution.row_value[row] =
@@ -1353,10 +1330,8 @@ void HighsPostsolveStack::ZeroObjSingletonContinuousCol::undo(
   const double primal_tol = options.primal_feasibility_tolerance;
   const double dual_tol = options.dual_feasibility_tolerance;
   // Get activity of row without removed singleton
-  HighsCDouble act = 0;
   solution.col_value[col] = 0.0;
-  for (const auto& rowVal : rowValues)
-    act += rowVal.value * solution.col_value[rowVal.index];
+  HighsCDouble act = dotProduct(rowValues, solution.col_value);
 
   // Find a suitable bound within the domain
   double col_value = kHighsInf;

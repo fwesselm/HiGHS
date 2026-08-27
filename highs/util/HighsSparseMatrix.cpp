@@ -1241,7 +1241,8 @@ void HighsSparseMatrix::productQuad(vector<double>& result,
       HighsCDouble value = 0.0;
       for (HighsInt iEl = this->start_[iRow]; iEl < this->start_[iRow + 1];
            iEl++)
-        value += row[this->index_[iEl]] * this->value_[iEl];
+        value += static_cast<HighsCDouble>(row[this->index_[iEl]]) *
+                 this->value_[iEl];
       result[iRow] = double(value);
     }
   }
@@ -1258,7 +1259,8 @@ void HighsSparseMatrix::productTransposeQuad(
       HighsCDouble value = 0.0;
       for (HighsInt iEl = this->start_[iCol]; iEl < this->start_[iCol + 1];
            iEl++)
-        value += row[this->index_[iEl]] * this->value_[iEl];
+        value += static_cast<HighsCDouble>(row[this->index_[iEl]]) *
+                 this->value_[iEl];
       result[iCol] = double(value);
     }
   } else {
@@ -1266,7 +1268,8 @@ void HighsSparseMatrix::productTransposeQuad(
     for (HighsInt iRow = 0; iRow < this->num_row_; iRow++) {
       for (HighsInt iEl = this->start_[iRow]; iEl < this->start_[iRow + 1];
            iEl++)
-        value[this->index_[iEl]] += row[iRow] * this->value_[iEl];
+        value[this->index_[iEl]] +=
+            static_cast<HighsCDouble>(row[iRow]) * this->value_[iEl];
     }
     for (HighsInt iCol = 0; iCol < this->num_col_; iCol++)
       result[iCol] = double(value[iCol]);
@@ -1285,7 +1288,8 @@ void HighsSparseMatrix::productTransposeQuad(
       HighsCDouble value = 0.0;
       for (HighsInt iEl = this->start_[iCol]; iEl < this->start_[iCol + 1];
            iEl++)
-        value += column.array[this->index_[iEl]] * this->value_[iEl];
+        value += static_cast<HighsCDouble>(column.array[this->index_[iEl]]) *
+                 this->value_[iEl];
 
       if (abs(value) - kHighsTiny > 0.0) {
         result_value.push_back(double(value));
@@ -1426,7 +1430,9 @@ void HighsSparseMatrix::priceByColumn(const bool quad_precision,
       HighsCDouble quad_value = 0.0;
       for (HighsInt iEl = this->start_[iCol]; iEl < this->start_[iCol + 1];
            iEl++)
-        quad_value += column.array[this->index_[iEl]] * this->value_[iEl];
+        quad_value +=
+            static_cast<HighsCDouble>(column.array[this->index_[iEl]]) *
+            this->value_[iEl];
       value = (double)quad_value;
     } else {
       for (HighsInt iEl = this->start_[iCol]; iEl < this->start_[iCol + 1];

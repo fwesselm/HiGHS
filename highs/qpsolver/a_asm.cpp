@@ -114,7 +114,7 @@ void assessQpPrimalFeasibility(
     for (HighsInt iEl = instance.A.mat.start[iVar];
          iEl < instance.A.mat.start[iVar + 1]; iEl++) {
       con_value_quad[instance.A.mat.index[iEl]] +=
-          primal * instance.A.mat.value[iEl];
+          static_cast<HighsCDouble>(primal) * instance.A.mat.value[iEl];
     }
   }
   for (HighsInt iCon = 0; iCon < instance.num_con; iCon++) {
