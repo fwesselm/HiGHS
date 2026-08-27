@@ -492,7 +492,7 @@ void HighsPathSeparator::separateLpSolution(HighsLpRelaxation& lpRelaxation,
                   double gjdown = std::floor(gj);
                   double hj = gj - gjdown;
                   maxFrac[i] = std::max(maxFrac[i], hj);
-                  downSum[i] += static_cast<HighsCDouble>(fDiff) * gjdown;
+                  downSum[i] += fDiff * gjdown;
                   fSum[i] += fDiff;
 
                   if (fSum[i] < maxFrac[i]) {
