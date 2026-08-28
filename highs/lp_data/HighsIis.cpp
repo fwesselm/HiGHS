@@ -167,7 +167,7 @@ bool HighsIis::trivial(const HighsLp& lp, const HighsOptions& options) {
           break;
         }
       }
-      if (static_cast<HighsInt>(this->col_index_.size()) > 0) break;
+      if (this->col_index_.size() > 0) break;
     } else {
       // Loop over rows first
       for (HighsInt iRow = 0; iRow < lp.num_row_; iRow++) {
@@ -177,7 +177,7 @@ bool HighsIis::trivial(const HighsLp& lp, const HighsOptions& options) {
           break;
         }
       }
-      if (static_cast<HighsInt>(this->row_index_.size()) > 0) break;
+      if (this->row_index_.size() > 0) break;
     }
   }
   HighsInt num_iis_col = static_cast<HighsInt>(this->col_index_.size());
@@ -206,7 +206,7 @@ bool HighsIis::trivial(const HighsLp& lp, const HighsOptions& options) {
       count.push_back(lp.a_matrix_.start_[iRow + 1] -
                       lp.a_matrix_.start_[iRow]);
   }
-  assert(static_cast<HighsInt>(this->row_index_.size()) == 0);
+  assert(this->row_index_.size() == 0);
   for (HighsInt iRow = 0; iRow < lp.num_row_; iRow++) {
     if (count[iRow] > 0) continue;
     if (lp.row_lower_[iRow] > options.primal_feasibility_tolerance) {
@@ -214,7 +214,7 @@ bool HighsIis::trivial(const HighsLp& lp, const HighsOptions& options) {
     } else if (lp.row_upper_[iRow] < -options.primal_feasibility_tolerance) {
       this->addRow(iRow, kIisBoundStatusUpper);
     }
-    if (static_cast<HighsInt>(this->row_index_.size()) > 0) {
+    if (this->row_index_.size() > 0) {
       // If one is found then we've found an IIS
       this->valid_ = true;
       this->status_ = kIisModelStatusIrreducible;
@@ -288,7 +288,7 @@ bool HighsIis::rowValueBounds(const HighsLp& lp, const HighsOptions& options) {
       break;
     }
   }
-  if (static_cast<HighsInt>(this->row_index_.size()) == 0) {
+  if (this->row_index_.size() == 0) {
     // Nothing found, but IIS data still valid
     this->clear();
     this->valid_ = true;
@@ -356,11 +356,9 @@ bool HighsIis::rowValueBounds(const HighsLp& lp, const HighsOptions& options) {
   }
 
   // There must be at least one column in the IIS
-  assert(static_cast<HighsInt>(this->col_index_.size()) > 0);
-  assert(static_cast<HighsInt>(this->col_index_.size()) ==
-         this->col_bound_.size());
-  assert(static_cast<HighsInt>(this->row_index_.size()) ==
-         this->row_bound_.size());
+  assert(this->col_index_.size() > 0);
+  assert(this->col_index_.size() == this->col_bound_.size());
+  assert(this->row_index_.size() == this->row_bound_.size());
   this->valid_ = true;
   this->status_ = kIisModelStatusIrreducible;
   this->strategy_ = options.iis_strategy;
@@ -371,7 +369,7 @@ HighsStatus HighsIis::deduce(const HighsLp& lp, const HighsOptions& options,
                              const HighsCallback& callback,
                              const HighsBasis& basis) {
   // The number of infeasible rows must be positive
-  assert(static_cast<HighsInt>(this->row_index_.size()) > 0);
+  assert(this->row_index_.size() > 0);
   // Identify the LP corresponding to the set of infeasible rows
   std::vector<HighsInt> from_row = this->row_index_;
   std::vector<HighsInt> from_col;
@@ -386,7 +384,7 @@ HighsStatus HighsIis::deduce(const HighsLp& lp, const HighsOptions& options,
   assert(lp.a_matrix_.isColwise());
   // Determine how to detect whether a row is in from_row and (then)
   // gather information about it
-  for (HighsInt iX = 0; iX < HighsInt(from_row.size()); iX++)
+  for (HighsInt iX = 0; iX < static_cast<HighsInt>(from_row.size()); iX++)
     to_row[from_row[iX]] = iX;
   // Identify the columns (from_col) with nonzeros in the infeasible
   // rows
