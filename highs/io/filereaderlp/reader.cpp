@@ -312,8 +312,9 @@ Model readinstance(std::string filename) {
 
 // convert string to lower-case, modifies string
 static inline void tolower(std::string& s) {
-  std::transform(s.begin(), s.end(), s.begin(),
-                 [](unsigned char c) { return std::tolower(c); });
+  std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c) {
+    return static_cast<char>(std::tolower(c));
+  });
 }
 
 static inline bool iskeyword(const std::string& str,
@@ -917,9 +918,9 @@ void Reader::processtokens() {
   while (!rawtokens[0].istype(RawTokenType::FLEND)) {
     if (rawtokens[0].type == RawTokenType::STR) {
       if (parsesectionkeyword(rawtokens[0].svalue) != LpSectionKeyword::NONE) {
-	// Found an LP section keyword so check it's not a constraint name!
-	if (rawtokens[1].type == RawTokenType::COLON)
-	  rawtokens[0].type = RawTokenType::CONS;
+        // Found an LP section keyword so check it's not a constraint name!
+        if (rawtokens[1].type == RawTokenType::COLON)
+          rawtokens[0].type = RawTokenType::CONS;
       }
     }
     // Slash + asterisk: comment, skip everything up to next asterisk + slash
@@ -1337,7 +1338,8 @@ bool Reader::readnexttoken(RawToken& t) {
     // Extract the string corresponding to the double, in case the
     // double is a constraint name
     size_t double_len = endptr - startptr;
-    std::string double_name = this->linebuffer.substr(this->linebufferpos, double_len);
+    std::string double_name =
+        this->linebuffer.substr(this->linebufferpos, double_len);
     // t = constant;
     t = std::make_pair(constant, double_name);
     this->linebufferpos += endptr - startptr;

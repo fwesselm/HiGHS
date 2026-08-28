@@ -16,8 +16,9 @@
 
 // convert string to lower-case, modifies string
 static inline void tolower(std::string& s) {
-  std::transform(s.begin(), s.end(), s.begin(),
-                 [](unsigned char c) { return std::tolower(c); });
+  std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c) {
+    return static_cast<char>(std::tolower(c));
+  });
 }
 
 Filereader* Filereader::getFilereader(const HighsLogOptions& log_options,

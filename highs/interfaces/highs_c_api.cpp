@@ -1679,7 +1679,7 @@ HighsInt Highs_runQuiet(void* highs) {
   return (HighsInt)((Highs*)highs)->setOptionValue("output_flag", false);
 }
 
-HighsInt Highs_setHighsLogfile(void* highs, const void* logfile) {
+HighsInt Highs_setHighsLogfile(void* highs, const void* /*logfile*/) {
   ((Highs*)highs)->deprecationMessage("Highs_setHighsLogfile", "None");
   return (HighsInt)((Highs*)highs)->setOptionValue("output_flag", false);
 }

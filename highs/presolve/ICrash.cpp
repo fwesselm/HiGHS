@@ -31,8 +31,9 @@ bool parseICrashStrategy(const std::string& strategy,
                          ICrashStrategy& icrash_strategy) {
   std::string lower = strategy;
   trim(lower);
-  std::transform(lower.begin(), lower.end(), lower.begin(),
-                 [](unsigned char c) { return std::tolower(c); });
+  std::transform(
+      lower.begin(), lower.end(), lower.begin(),
+      [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
 
   if (lower == "penalty")
     icrash_strategy = ICrashStrategy::kPenalty;

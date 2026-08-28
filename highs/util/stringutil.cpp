@@ -63,19 +63,22 @@ void strTrim(char* str) {
 
 // std::string& str_tolower(std::string str) {
 //   std::transform(str.begin(), str.end(), str.begin(),
-//                  [](unsigned char c) { return std::tolower(c); }  // correct
+//                  [](unsigned char c) { return
+//                  static_cast<char>(std::tolower(c)); }  // correct
 //   );
 //   return str;
 // }
 
 void tolower(std::string& str) {
-  std::transform(str.begin(), str.end(), str.begin(),
-                 [](unsigned char c) { return std::tolower(c); });
+  std::transform(str.begin(), str.end(), str.begin(), [](unsigned char c) {
+    return static_cast<char>(std::tolower(c));
+  });
 }
 
 void toupper(std::string& str) {
-  std::transform(str.begin(), str.end(), str.begin(),
-                 [](unsigned char c) { return std::toupper(c); });
+  std::transform(str.begin(), str.end(), str.begin(), [](unsigned char c) {
+    return static_cast<char>(std::toupper(c));
+  });
 }
 
 std::string& ltrim(std::string& str, const std::string& chars) {

@@ -105,7 +105,7 @@ const HighsOptions& Highs::getHighsOptions() const {
   return getOptions();
 }
 
-HighsStatus Highs::setHighsLogfile(FILE* logfile) {
+HighsStatus Highs::setHighsLogfile(FILE* /*logfile*/) {
   deprecationMessage("setHighsLogfile", "None");
   options_.output_flag = false;
   return HighsStatus::kOk;

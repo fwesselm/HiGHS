@@ -222,8 +222,9 @@ bool optionHipoFactorOk(const HighsLogOptions& report_log_options,
 }
 
 bool boolFromString(std::string value, bool& bool_value) {
-  std::transform(value.begin(), value.end(), value.begin(),
-                 [](unsigned char c) { return std::tolower(c); });
+  std::transform(
+      value.begin(), value.end(), value.begin(),
+      [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
   if (value == "t" || value == "true" || value == "1" ||
       value == kHighsOnString) {
     bool_value = true;
@@ -753,8 +754,9 @@ void possibleLowerCaseOptionValue(const std::string& name, std::string& value) {
       name == kMipImprovingSolutionFileString)
     return;
   // Transform other options to lower case
-  std::transform(value.begin(), value.end(), value.begin(),
-                 [](unsigned char c) { return std::tolower(c); });
+  std::transform(
+      value.begin(), value.end(), value.begin(),
+      [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
 }
 
 OptionStatus passLocalOptions(const HighsLogOptions& report_log_options,
