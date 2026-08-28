@@ -13,7 +13,7 @@ static SparseMatrix PermutedMatrix(const Int* Bbegin, const Int* Bend,
                                    const std::vector<Int>& rowperm,
                                    const std::vector<Int>& colperm,
                                    const std::vector<Int>& dependent_cols) {
-    Int dim = rowperm.size();
+    Int dim = static_cast<Int>(rowperm.size());
     std::vector<Int> permuted_row = InversePerm(rowperm);
     std::vector<HighsBool> dependent(dim, false);
     for (Int k : dependent_cols)
@@ -38,7 +38,7 @@ static SparseMatrix PermutedMatrix(const Int* Bbegin, const Int* Bend,
 // lhs = U\(L+I)\rhs.
 static void SolveForward(const SparseMatrix& L, const SparseMatrix& U,
                          Vector& rhs, Vector& lhs) {
-    Int dim = rhs.size();
+    Int dim = static_cast<Int>(rhs.size());
     lhs = 0.0;
     for (Int i = 0; i < dim; i++) {
         rhs[i] = lhs[i] >= 0.0 ? 1.0 : -1.0;
@@ -53,7 +53,7 @@ static void SolveForward(const SparseMatrix& L, const SparseMatrix& U,
 // lhs = (L+I)'\U'\rhs.
 static void SolveBackward(const SparseMatrix& L, const SparseMatrix& U,
                           Vector& rhs, Vector& lhs) {
-    Int dim = rhs.size();
+    Int dim = static_cast<Int>(rhs.size());
     lhs = 0.0;
     for (Int j = 0; j < dim; j++) {
         lhs[j] -= DotColumn(U, j, lhs);
@@ -88,7 +88,7 @@ static double StabilityEstimate(const Int* Bbegin, const Int* Bend,
                                 const std::vector<Int>& rowperm,
                                 const std::vector<Int>& colperm,
                                 const std::vector<Int>& dependent_cols) {
-    Int dim = rowperm.size();
+    Int dim = static_cast<Int>(rowperm.size());
     Vector rhs(dim), lhs(dim);
 
     // Compute 1-norm and infinity-norm of B.

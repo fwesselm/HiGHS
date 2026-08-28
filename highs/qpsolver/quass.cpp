@@ -157,7 +157,8 @@ static QpSolverStatus reduce(Runtime& rt, Basis& basis,
   if (idx != -1) {
     maxabsd = idx;
     constrainttodrop = newactivecon;
-    QpVector::unit(basis.getinactive().size(), idx, buffer_d);
+    QpVector::unit(static_cast<HighsInt>(basis.getinactive().size()), idx,
+                   buffer_d);
     return QpSolverStatus::OK;
     // return NullspaceReductionResult(true);
   }

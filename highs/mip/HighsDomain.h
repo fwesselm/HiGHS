@@ -485,7 +485,7 @@ class HighsDomain {
 
   void markInfeasible(Reason reason = Reason::unspecified()) {
     infeasible_ = true;
-    infeasible_pos = domchgstack_.size();
+    infeasible_pos = static_cast<HighsInt>(domchgstack_.size());
     infeasible_reason = reason;
   }
 
@@ -557,17 +557,21 @@ class HighsDomain {
 
   void getCutoffConstraint(const double*& vals, const HighsInt*& inds,
                            HighsInt& len, double& rhs) {
-    objProp_.getPropagationConstraint(domchgstack_.size(), vals, inds, len,
-                                      rhs);
+    objProp_.getPropagationConstraint(
+        static_cast<HighsInt>(domchgstack_.size()), vals, inds, len, rhs);
   }
 
-  HighsInt getNumDomainChanges() const { return domchgstack_.size(); }
+  HighsInt getNumDomainChanges() const {
+    return static_cast<HighsInt>(domchgstack_.size());
+  }
 
   bool colBoundsAreGlobal(HighsInt col) const {
     return colLowerPos_[col] == -1 && colUpperPos_[col] == -1;
   }
 
-  HighsInt getBranchDepth() const { return branchPos_.size(); }
+  HighsInt getBranchDepth() const {
+    return static_cast<HighsInt>(branchPos_.size());
+  }
 
   std::vector<HighsDomainChange> getReducedDomainChangeStack(
       std::vector<HighsInt>& branchingPositions) const {
@@ -583,13 +587,15 @@ class HighsDomain {
         continue;
 
       if (domchgreason_[i].type == Reason::kBranching)
-        branchingPositions.push_back(reducedstack.size());
+        branchingPositions.push_back(
+            static_cast<HighsInt>(reducedstack.size()));
       else {
         HighsInt k = i;
         while (prevboundval_[k].second != -1) {
           k = prevboundval_[k].second;
           if (domchgreason_[k].type == Reason::kBranching) {
-            branchingPositions.push_back(reducedstack.size());
+            branchingPositions.push_back(
+                static_cast<HighsInt>(reducedstack.size()));
             break;
           }
         }

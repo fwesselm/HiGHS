@@ -92,7 +92,8 @@ void HFactor::addRows(const HighsSparseMatrix* ar_matrix) {
       new_lr_rows.value_.push_back(rhs.array[iCol]);
       //      printf("   %4d, %11.4g\n", (int)iCol, rhs.array[iCol]);
     }
-    new_lr_rows.start_.push_back(new_lr_rows.index_.size());
+    new_lr_rows.start_.push_back(
+        static_cast<HighsInt>(new_lr_rows.index_.size()));
     new_lr_rows.num_row_++;
 
     //
@@ -102,7 +103,7 @@ void HFactor::addRows(const HighsSparseMatrix* ar_matrix) {
       lr_index.push_back(iCol);
       lr_value.push_back(rhs.array[iCol]);
     }
-    lr_start.push_back(lr_index.size());
+    lr_start.push_back(static_cast<HighsInt>(lr_index.size()));
     //    reportLu(kReportLuJustL);
   }
   // Now create a column-wise copy of the new rows
@@ -117,7 +118,7 @@ void HFactor::addRows(const HighsSparseMatrix* ar_matrix) {
     l_pivot_index[iCol] = iCol;
   //
   // Add starts for the identity columns
-  HighsInt l_matrix_new_num_nz = lr_index.size();
+  HighsInt l_matrix_new_num_nz = static_cast<HighsInt>(lr_index.size());
   assert(l_matrix_new_num_nz ==
          (HighsInt)(l_index.size() + new_lr_cols.index_.size()));
   l_start.resize(new_num_row + 1);
@@ -159,8 +160,9 @@ void HFactor::addRows(const HighsSparseMatrix* ar_matrix) {
   // are no non-pivotal entries
   //
 
-  HighsInt u_countX = u_index.size();
-  HighsInt u_pivot_lookup_offset = u_pivot_index.size() - num_row;
+  HighsInt u_countX = static_cast<HighsInt>(u_index.size());
+  HighsInt u_pivot_lookup_offset =
+      static_cast<HighsInt>(u_pivot_index.size()) - num_row;
   for (HighsInt iRow = num_row; iRow < new_num_row; iRow++) {
     u_pivot_lookup.push_back(u_pivot_lookup_offset + iRow);
     u_pivot_index.push_back(iRow);
@@ -175,13 +177,13 @@ void HFactor::addRows(const HighsSparseMatrix* ar_matrix) {
   //
   // Borrowing names from buildFinish()
   HighsInt ur_stuff_size = update_method == kUpdateMethodFt ? 5 : 0;
-  HighsInt ur_size = ur_index.size();
+  HighsInt ur_size = static_cast<HighsInt>(ur_index.size());
   HighsInt ur_count_size = ur_size + ur_stuff_size * num_new_row;
   ur_index.resize(ur_count_size);
   ur_value.resize(ur_count_size);
 
   // Need to refer to just the new UR vectors
-  HighsInt ur_cur_num_vec = ur_start.size();
+  HighsInt ur_cur_num_vec = static_cast<HighsInt>(ur_start.size());
   HighsInt ur_new_num_vec = ur_cur_num_vec + num_new_row;
   printf("\nUpdating UR vectors %d - %d\n", (int)ur_cur_num_vec,
          (int)ur_new_num_vec - 1);

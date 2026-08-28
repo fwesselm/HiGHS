@@ -54,7 +54,7 @@ Int Gmres(const AbstractMatrix* M, const AbstractMatrix* P,
   // https://en.wikipedia.org/wiki/Generalized_minimal_residual_method#Example_code
 
   // sizes
-  const Int n = x.size();
+  const Int n = static_cast<Int>(x.size());
   const Int m = maxit;
 
   // vectors
@@ -146,7 +146,7 @@ Int Cg(const AbstractMatrix* M, const AbstractMatrix* P,
   // Attempt to solve M * x = b using CG, with the preconditioner P.
   // Return the number of iterations taken.
 
-  Int n = b.size();
+  Int n = static_cast<Int>(b.size());
 
   std::vector<double> w(n);
 

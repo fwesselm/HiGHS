@@ -15,8 +15,8 @@ void testGFkSolve(const std::vector<HighsInt>& Avalue,
   GFkSolve.fromCSC<k>(Avalue, Aindex, Astart, numRow);
   GFkSolve.setRhs<k>(numRow - 1, k - 1);
 
-  HighsInt numCol = Astart.size() - 1;
-  HighsInt nnz = Avalue.size();
+  HighsInt numCol = static_cast<HighsInt>(Astart.size()) - 1;
+  HighsInt nnz = static_cast<HighsInt>(Avalue.size());
   for (HighsInt i = 0; i != numCol; ++i) {
     for (HighsInt j = Astart[i]; j != Astart[i + 1]; ++j) {
       HighsInt val = Avalue[j] % k;
@@ -41,7 +41,7 @@ void testGFkSolve(const std::vector<HighsInt>& Avalue,
       [&](const std::vector<HighsGFkSolve::SolutionEntry>& solution,
           int rhsIndex) {
         REQUIRE(rhsIndex == 0);
-        HighsInt numSolutionNnz = solution.size();
+        HighsInt numSolutionNnz = static_cast<HighsInt>(solution.size());
         if (dev_run)
           printf("solution (k=%d) has %" HIGHSINT_FORMAT " nonzeros\n", k,
                  numSolutionNnz);
@@ -81,7 +81,7 @@ TEST_CASE("GFkSolve", "[mip]") {
   Astart.push_back(0);
 
   for (HighsInt i = 0; i != numCol; ++i) {
-    randgen.shuffle(rowInds.data(), rowInds.size());
+    randgen.shuffle(rowInds.data(), static_cast<HighsInt>(rowInds.size()));
     HighsInt numentry = randgen.integer(5, 11);
 
     for (HighsInt j = 0; j != numentry; ++j) {
@@ -91,7 +91,7 @@ TEST_CASE("GFkSolve", "[mip]") {
       Aindex.push_back(rowInds[j]);
     }
 
-    Astart.push_back(Avalue.size());
+    Astart.push_back(static_cast<HighsInt>(Avalue.size()));
   }
 
   testGFkSolve<2>(Avalue, Aindex, Astart, numRow);

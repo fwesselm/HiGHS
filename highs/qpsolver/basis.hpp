@@ -103,10 +103,12 @@ class Basis {
 
   HighsInt getnupdatessinceinvert() { return updatessinceinvert; }
 
-  HighsInt getnumactive() const { return active_constraint_index.size(); };
+  HighsInt getnumactive() const {
+    return static_cast<HighsInt>(active_constraint_index.size());
+  };
 
   HighsInt getnuminactive() const {
-    return non_active_constraint_index.size();
+    return static_cast<HighsInt>(non_active_constraint_index.size());
   };
 
   const std::vector<HighsInt>& getactive() const {

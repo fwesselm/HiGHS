@@ -330,7 +330,9 @@ class HighsCliqueTable {
 
   void buildFrom(const HighsLp* origModel, const HighsCliqueTable& init);
 
-  HighsInt numCliques() const { return cliques.size() - freeslots.size(); }
+  HighsInt numCliques() const {
+    return static_cast<HighsInt>(cliques.size() - freeslots.size());
+  }
 
   HighsInt numCliques(CliqueVar v) const { return numcliquesvar[v.index()]; }
 

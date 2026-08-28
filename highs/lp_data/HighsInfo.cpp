@@ -166,7 +166,7 @@ InfoStatus getInfoIndex(const HighsLogOptions& report_log_options,
                         const std::string& name,
                         const std::vector<InfoRecord*>& info_records,
                         HighsInt& index) {
-  HighsInt num_info = info_records.size();
+  HighsInt num_info = static_cast<HighsInt>(info_records.size());
   for (index = 0; index < num_info; index++)
     if (info_records[index]->name == name) return InfoStatus::kOk;
   highsLogUser(report_log_options, HighsLogType::kError,
@@ -177,7 +177,7 @@ InfoStatus getInfoIndex(const HighsLogOptions& report_log_options,
 InfoStatus checkInfo(const HighsLogOptions& report_log_options,
                      const std::vector<InfoRecord*>& info_records) {
   bool error_found = false;
-  HighsInt num_info = info_records.size();
+  HighsInt num_info = static_cast<HighsInt>(info_records.size());
   for (HighsInt index = 0; index < num_info; index++) {
     std::string name = info_records[index]->name;
     HighsInfoType type = info_records[index]->type;
@@ -378,7 +378,7 @@ HighsStatus writeInfoToFile(FILE* file, const bool valid,
 
 void reportInfo(FILE* file, const std::vector<InfoRecord*>& info_records,
                 const HighsFileType file_type) {
-  HighsInt num_info = info_records.size();
+  HighsInt num_info = static_cast<HighsInt>(info_records.size());
   for (HighsInt index = 0; index < num_info; index++) {
     HighsInfoType type = info_records[index]->type;
     if (type == HighsInfoType::kInt64) {

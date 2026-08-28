@@ -63,7 +63,7 @@ TEST_CASE("HSet", "[highs_test_hset]") {
   set.print();
   const HighsInt& count = set.count();
   const vector<HighsInt>& entry = set.entry();
-  HighsInt entry_size = entry.size();
+  HighsInt entry_size = static_cast<HighsInt>(entry.size());
   REQUIRE(count == 4);
   REQUIRE(entry_size == 8);
   REQUIRE(entry[0] == 3);

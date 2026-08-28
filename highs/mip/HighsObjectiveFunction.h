@@ -54,7 +54,7 @@ class HighsObjectiveFunction {
   }
 
   HighsInt getNumCliquePartitions() const {
-    return cliquePartitionStart.size() - 1;
+    return static_cast<HighsInt>(cliquePartitionStart.size()) - 1;
   }
 
   HighsInt getColCliquePartition(HighsInt col) const {

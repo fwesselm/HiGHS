@@ -85,7 +85,7 @@ void ForrestTomlin::_FtranForUpdate(Int nb, const Int* bi, const double* bx,
     TriangularSolve(U_, work_, 'n', "upper", 0);
 
     // Move extra variables from updates to replaced positions.
-    Int num_updates = replaced_.size();
+    Int num_updates = static_cast<Int>(replaced_.size());
     for (Int k = num_updates-1; k >= 0; k--)
         work_[replaced_[k]] = work_[dim_+k];
 
@@ -103,7 +103,7 @@ void ForrestTomlin::_BtranForUpdate(Int j, IndexedVector& lhs) {
     ComputeEta(j);
 
     // Apply update etas and solve with L'.
-    Int num_updates = replaced_.size();
+    Int num_updates = static_cast<Int>(replaced_.size());
     for (Int k = num_updates-1; k >= 0; k--) {
         ScatterColumn(R_, k, -work_[dim_+k], work_);
         work_[replaced_[k]] = work_[dim_+k];
@@ -141,7 +141,7 @@ static double SparseDot(const SparseMatrix& A1, const SparseMatrix& A2) {
 }
 
 Int ForrestTomlin::_Update(double pivot) {
-    Int num_updates = replaced_.size();
+    Int num_updates = static_cast<Int>(replaced_.size());
     assert(have_ftran_);
     assert(have_btran_);
 
@@ -210,7 +210,7 @@ Int ForrestTomlin::_Update(double pivot) {
 }
 
 bool ForrestTomlin::_NeedFreshFactorization() {
-    Int num_updates = replaced_.size();
+    Int num_updates = static_cast<Int>(replaced_.size());
     Int Rnz = R_.entries();        // nnz in accumulated row etas
     Int Lnz = L_.entries() + dim_; // nnz(L) incl. diagonal
     Int Unz = U_.entries();        // nnz(U) incl. zeroed out columns
@@ -256,7 +256,7 @@ void ForrestTomlin::_timeLimit(double new_time_limit) {
 }
 
 void ForrestTomlin::SolvePermuted(Vector& lhs, char trans) {
-    Int num_updates = replaced_.size();
+    Int num_updates = static_cast<Int>(replaced_.size());
     assert(U_.cols() == dim_+num_updates);
 
     // Require num_updates elements workspace at end of lhs.
@@ -308,7 +308,7 @@ void ForrestTomlin::SolvePermuted(Vector& lhs, char trans) {
 }
 
 void ForrestTomlin::ComputeSpike(Int nb, const Int* bi, const double* bx) {
-    Int num_updates = replaced_.size();
+    Int num_updates = static_cast<Int>(replaced_.size());
 
     // Solve L*lhs=b.
     work_ = 0.0;
@@ -333,7 +333,7 @@ void ForrestTomlin::ComputeSpike(Int nb, const Int* bi, const double* bx) {
 }
 
 void ForrestTomlin::ComputeEta(Int j) {
-    Int num_updates = replaced_.size();
+    Int num_updates = static_cast<Int>(replaced_.size());
     assert(U_.cols() == dim_+num_updates);
 
     // Find permuted position of j.

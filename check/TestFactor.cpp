@@ -168,7 +168,7 @@ TEST_CASE("Factor-get-set-invert", "[highs_test_factor]") {
   InvertibleRepresentation invert = factor.getInvert();
   std::vector<InvertibleRepresentation> invert_set;
   from_basis_change = to_basis_change;
-  to_basis_change = variable_out.size();
+  to_basis_change = static_cast<HighsInt>(variable_out.size());
   for (basis_change = from_basis_change; basis_change < to_basis_change;
        basis_change++) {
     REQUIRE(iterate(variable_out[basis_change], variable_in[basis_change]));

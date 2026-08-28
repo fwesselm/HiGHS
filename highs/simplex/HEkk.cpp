@@ -605,8 +605,8 @@ HighsStatus HEkk::dualize() {
   HighsSparseMatrix extra_columns;
   extra_columns.ensureColwise();
   extra_columns.num_row_ = original_num_col_;
-  HighsInt num_upper_bound_col = upper_bound_col_.size();
-  HighsInt num_upper_bound_row = upper_bound_row_.size();
+  HighsInt num_upper_bound_col = static_cast<HighsInt>(upper_bound_col_.size());
+  HighsInt num_upper_bound_row = static_cast<HighsInt>(upper_bound_row_.size());
   double one = 1;
   for (HighsInt iX = 0; iX < num_upper_bound_col; iX++) {
     HighsInt iCol = upper_bound_col_[iX];
@@ -960,7 +960,8 @@ HighsStatus HEkk::undualize() {
   assert(lp_.num_col_ == original_num_col_);
   assert(lp_.num_row_ == original_num_row_);
   assert(lp_.numNz() == original_num_nz_);
-  HighsInt num_basic_variables = primal_basic_index.size();
+  HighsInt num_basic_variables =
+      static_cast<HighsInt>(primal_basic_index.size());
   bool num_basic_variables_ok = num_basic_variables == original_num_row_;
   if (!num_basic_variables_ok)
     printf("HEkk::undualize: Have %d basic variables, not %d\n",
@@ -3955,7 +3956,8 @@ HighsInt HEkk::addBadBasisChange(const HighsInt row_out,
     assert(variable_in == -1);
   }
   // Check that this is not already on the list
-  const HighsInt num_bad_basis_change = bad_basis_change_.size();
+  const HighsInt num_bad_basis_change =
+      static_cast<HighsInt>(bad_basis_change_.size());
   HighsInt bad_basis_change_num = -1;
   for (HighsInt Ix = 0; Ix < num_bad_basis_change; Ix++) {
     HighsSimplexBadBasisChangeRecord& record = bad_basis_change_[Ix];
@@ -3974,7 +3976,7 @@ HighsInt HEkk::addBadBasisChange(const HighsInt row_out,
     record.variable_in = variable_in;
     record.reason = reason;
     bad_basis_change_.push_back(record);
-    bad_basis_change_num = bad_basis_change_.size() - 1;
+    bad_basis_change_num = static_cast<HighsInt>(bad_basis_change_.size()) - 1;
   } else {
     // On the list so just update whether it is taboo
     bad_basis_change_[bad_basis_change_num].taboo = taboo;
@@ -4183,7 +4185,7 @@ bool HEkk::proofOfPrimalInfeasibility(HVector& row_ep, const HighsInt move_out,
                                       debug_product_report);
   }
 
-  HighsInt proof_num_nz = proof_index.size();
+  HighsInt proof_num_nz = static_cast<HighsInt>(proof_index.size());
   if (debug_rows_report) {
     simplex_nla_.reportArray("Row e_p", lp.num_col_, &row_ep, true);
     simplex_nla_.reportVector("Proof", proof_num_nz, proof_value, proof_index,

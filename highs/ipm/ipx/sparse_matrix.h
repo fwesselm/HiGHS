@@ -15,14 +15,14 @@ public:
     SparseMatrix(Int nrow, Int ncol, Int min_capacity);
 
     Int rows() const { return nrow_; }
-    Int cols() const { return colptr_.size()-1; }
+    Int cols() const { return static_cast<Int>(colptr_.size())-1; }
     Int entries() const { return colptr_.back(); }
 
     // # entries in column j
     Int entries(Int j) const { return end(j)-begin(j); }
 
     // Maximum # entries that can be stored in the matrix.
-    Int capacity() const { return rowidx_.size(); }
+    Int capacity() const { return static_cast<Int>(rowidx_.size()); }
 
     // Increases capacity if necessary such that capacity() >= min_capacity.
     // Matrix remains unchanged, pointers are invalidated.
@@ -75,7 +75,7 @@ public:
     }
 
     // Returns # entries in the queue.
-    Int queue_size() const { return rowidx_queue_.size(); }
+    Int queue_size() const { return static_cast<Int>(rowidx_queue_.size()); }
 
     // Accesses entry at position @pos in the queue by value.
     Int qindex(Int pos) const { return rowidx_queue_[pos]; }

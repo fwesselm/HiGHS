@@ -129,7 +129,7 @@ void HighsModkSeparator::separateLpSolution(HighsLpRelaxation& lpRelaxation,
                            true))
       continue;
 
-    rowlen = inds.size();
+    rowlen = static_cast<HighsInt>(inds.size());
     if (rowlen > maxIntRowLen) {
       HighsInt intRowLen = 0;
       for (HighsInt i = 0; i < rowlen; ++i) {
@@ -189,7 +189,7 @@ void HighsModkSeparator::separateLpSolution(HighsLpRelaxation& lpRelaxation,
 
     intSystemIndex.push_back(lp.num_col_);
     intSystemValue.push_back(intrhs);
-    intSystemStart.push_back(intSystemValue.size());
+    intSystemStart.push_back(static_cast<HighsInt>(intSystemValue.size()));
     integralScales.emplace_back(row, intscale);
   }
 

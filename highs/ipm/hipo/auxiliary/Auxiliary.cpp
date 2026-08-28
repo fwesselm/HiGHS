@@ -17,7 +17,7 @@ void inversePerm(const std::vector<Int>& perm, std::vector<Int>& iperm) {
 void subtreeSize(const std::vector<Int>& parent, std::vector<Int>& sizes) {
   // Compute sizes of subtrees of the tree given by parent
 
-  Int n = parent.size();
+  Int n = static_cast<Int>(parent.size());
   sizes.assign(n, 1);
 
   for (Int i = 0; i < n; ++i) {
@@ -53,7 +53,7 @@ void transpose(Int n, Int nz, const Int* ptr, const Int* rows, Int* ptrT,
 
 void transpose(const std::vector<Int>& ptr, const std::vector<Int>& rows,
                std::vector<Int>& ptrT, std::vector<Int>& rowsT) {
-  transpose(ptr.size() - 1, rows.size(), ptr.data(), rows.data(), ptrT.data(),
+  transpose(static_cast<Int>(ptr.size()) - 1, static_cast<Int>(rows.size()), ptr.data(), rows.data(), ptrT.data(),
             rowsT.data());
 }
 
@@ -86,7 +86,7 @@ void transpose(Int n, Int nz, const Int* ptr, const Int* rows,
 void transpose(const std::vector<Int>& ptr, const std::vector<Int>& rows,
                const std::vector<double>& val, std::vector<Int>& ptrT,
                std::vector<Int>& rowsT, std::vector<double>& valT) {
-  transpose(ptr.size() - 1, rows.size(), ptr.data(), rows.data(), val.data(),
+  transpose(static_cast<Int>(ptr.size()) - 1, static_cast<Int>(rows.size()), ptr.data(), rows.data(), val.data(),
             ptrT.data(), rowsT.data(), valT.data());
 }
 
@@ -96,7 +96,7 @@ void permuteSym(const std::vector<Int>& iperm, std::vector<Int>& ptr,
   // inverse permutation iperm. The resulting matrix is lower (upper)
   // triangular, regardless of the input matrix.
 
-  const Int n = ptr.size() - 1;
+  const Int n = static_cast<Int>(ptr.size()) - 1;
   std::vector<Int> work(n, 0);
   const bool use_val = !val.empty();
 
@@ -170,7 +170,7 @@ void childrenLinkedList(const std::vector<Int>& parent, std::vector<Int>& head,
   // next[next[head[node]]] is the third child...
   // until -1 is reached.
 
-  Int n = parent.size();
+  Int n = static_cast<Int>(parent.size());
   head.assign(n, -1);
   next.assign(n, -1);
   for (Int node = n - 1; node >= 0; --node) {
@@ -185,7 +185,7 @@ void reverseLinkedList(std::vector<Int>& head, std::vector<Int>& next) {
   // If a node has children (a -> b -> c -> -1), the reverse list contains
   // children (c -> b -> a -> -1).
 
-  const Int n = head.size();
+  const Int n = static_cast<Int>(head.size());
 
   for (Int node = 0; node < n; ++node) {
     Int prev_node = -1;
@@ -289,7 +289,7 @@ Int64 getDiagStart(Int n, Int k, Int nb, Int n_blocks,
 
 Int maxDepthTree(const std::vector<Int>& parent) {
   Int max_depth = 0;
-  Int n = parent.size();
+  Int n = static_cast<Int>(parent.size());
   std::vector<Int> depth(n, -1);
   for (Int i = 0; i < n; ++i) {
     Int node = i;

@@ -27,7 +27,7 @@ bool HighsImplications::computeImplications(HighsInt col, bool val) {
   const auto& domchgreason = globaldomain.getDomainChangeReason();
   size_t changedend = globaldomain.getChangedCols().size();
 
-  HighsInt stackimplicstart = domchgstack.size() + 1;
+  HighsInt stackimplicstart = static_cast<HighsInt>(domchgstack.size()) + 1;
   HighsInt numImplications = -stackimplicstart;
   if (val)
     globaldomain.changeBound(HighsBoundType::kLower, col, 1);
@@ -65,7 +65,7 @@ bool HighsImplications::computeImplications(HighsInt col, bool val) {
 
   if (isInfeasible(col, val)) return true;
 
-  HighsInt stackimplicend = domchgstack.size();
+  HighsInt stackimplicend = static_cast<HighsInt>(domchgstack.size());
   numImplications += stackimplicend;
   mipsolver.mipdata_->getPseudoCost().addInferenceObservation(
       col, numImplications, val);
@@ -529,7 +529,7 @@ void HighsImplications::rebuild(HighsInt ncols,
   vlbs.resize(ncols);
   numImplications = 0;
   numVarBounds = 0;
-  HighsInt oldncols = oldvubs.size();
+  HighsInt oldncols = static_cast<HighsInt>(oldvubs.size());
 
   nextCleanupCall = mipsolver.numNonzero();
 

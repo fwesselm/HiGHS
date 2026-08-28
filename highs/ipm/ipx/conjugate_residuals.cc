@@ -12,7 +12,7 @@ ConjugateResiduals::ConjugateResiduals(const Control& control) :
 void ConjugateResiduals::Solve(LinearOperator& C, const Vector& rhs,
                               double tol, const double* resscale, Int maxiter,
                               Vector& lhs) {
-    const Int m = rhs.size();
+    const Int m = static_cast<Int>(rhs.size());
     Vector residual(m);  // rhs - C*lhs
     Vector step(m);      // update to lhs
     Vector Cresidual(m); // C * residual
@@ -88,7 +88,7 @@ void ConjugateResiduals::Solve(LinearOperator& C, const Vector& rhs,
 void ConjugateResiduals::Solve(LinearOperator& C, LinearOperator& P,
                               const Vector& rhs, double tol,
                               const double* resscale, Int maxiter, Vector& lhs){
-    const Int m = rhs.size();
+    const Int m = static_cast<Int>(rhs.size());
     Vector residual(m);   // rhs - C*lhs
     Vector sresidual(m);  // preconditioned residual
     Vector step(m);       // update to lhs

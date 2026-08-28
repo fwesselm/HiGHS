@@ -129,8 +129,8 @@ void HighsPathSeparator::separateLpSolution(HighsLpRelaxation& lpRelaxation,
     if (transLp.boundDistance(col) == 0.0) continue;
     if (colSubstitutions[col].first != -1) continue;
 
-    colInArcs[col].first = inArcRows.size();
-    colOutArcs[col].first = outArcRows.size();
+    colInArcs[col].first = static_cast<HighsInt>(inArcRows.size());
+    colOutArcs[col].first = static_cast<HighsInt>(outArcRows.size());
     for (HighsInt i = lp.a_matrix_.start_[col];
          i != lp.a_matrix_.start_[col + 1]; ++i) {
       switch (rowtype[lp.a_matrix_.index_[i]]) {
@@ -160,8 +160,8 @@ void HighsPathSeparator::separateLpSolution(HighsLpRelaxation& lpRelaxation,
       }
     }
 
-    colInArcs[col].second = inArcRows.size();
-    colOutArcs[col].second = outArcRows.size();
+    colInArcs[col].second = static_cast<HighsInt>(inArcRows.size());
+    colOutArcs[col].second = static_cast<HighsInt>(outArcRows.size());
   }
 
   HighsCutGeneration cutGen(lpRelaxation, cutpool);
@@ -297,7 +297,7 @@ void HighsPathSeparator::separateLpSolution(HighsLpRelaxation& lpRelaxation,
 
       while (currPathLen != maxPathLen) {
         lpAggregator.getCurrentAggregation(baseRowInds, baseRowVals, false);
-        HighsInt baseRowLen = baseRowInds.size();
+        HighsInt baseRowLen = static_cast<HighsInt>(baseRowInds.size());
         bool addedSubstitutionRows = false;
 
         HighsInt bestOutArcCol = -1;
@@ -392,7 +392,7 @@ void HighsPathSeparator::separateLpSolution(HighsLpRelaxation& lpRelaxation,
       }
 
       // if the path has length at least 2 try to separate a path mixing cut
-      HighsInt pathLen = aggregatedPath.size();
+      HighsInt pathLen = static_cast<HighsInt>(aggregatedPath.size());
       if (pathLen > 1) {
         // generate path mixing cut
         HighsHashTable<HighsInt, HighsInt> indexPos;
@@ -437,7 +437,7 @@ void HighsPathSeparator::separateLpSolution(HighsLpRelaxation& lpRelaxation,
 
           delta = std::max(std::abs(rhs[k]), delta);
 
-          HighsInt len = aggregatedPath[k].first.size();
+          HighsInt len = static_cast<HighsInt>(aggregatedPath[k].first.size());
           for (HighsInt j = 0; j < len; ++j) {
             HighsInt index = aggregatedPath[k].first[j];
             HighsInt* pos = &indexPos[index];
@@ -448,7 +448,7 @@ void HighsPathSeparator::separateLpSolution(HighsLpRelaxation& lpRelaxation,
               isIntegral.push_back(lpRelaxation.isColIntegral(index));
               if (isIntegral.back())
                 delta = std::max(std::abs(aggregatedPath[k].second[j]), delta);
-              *pos = inds.size();
+              *pos = static_cast<HighsInt>(inds.size());
             } else {
               assert(inds[*pos - 1] == index);
               assert(solval[*pos - 1] == tmpSolval[j]);
@@ -462,7 +462,7 @@ void HighsPathSeparator::separateLpSolution(HighsLpRelaxation& lpRelaxation,
         if (pathLen > 1) {
           delta = std::exp2(std::ceil(std::log2(delta + 1.0)));
 
-          HighsInt numInds = inds.size();
+          HighsInt numInds = static_cast<HighsInt>(inds.size());
 
           HighsCDouble cutRhs = 0.0;
           std::vector<double> cutVals(numInds);
@@ -476,7 +476,8 @@ void HighsPathSeparator::separateLpSolution(HighsLpRelaxation& lpRelaxation,
           for (HighsInt k = 0; k < pathLen; ++k) {
             double f = rhs[k] * scale;
             HighsCDouble fDiff = HighsCDouble(f) - fLast;
-            HighsInt len = aggregatedPath[k].first.size();
+            HighsInt len =
+                static_cast<HighsInt>(aggregatedPath[k].first.size());
             cutRhs += fDiff;
             for (HighsInt j = 0; j < len; ++j) {
               HighsInt i = indexPos[aggregatedPath[k].first[j]] - 1;

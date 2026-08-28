@@ -133,7 +133,7 @@ TEST_CASE("LP-717-full0", "[highs_data]") {
   std::vector<double> row_block_value;
 
   for (HighsInt iRow = 0; iRow < row_block_num_row; iRow++) {
-    row_block_start.push_back(row_block_index.size());
+    row_block_start.push_back(static_cast<HighsInt>(row_block_index.size()));
     for (HighsInt iEl = lp.a_matrix_.start_[iRow];
          iEl < lp.a_matrix_.start_[iRow + 1]; iEl++) {
       HighsInt iCol = lp.a_matrix_.index_[iEl];
@@ -143,7 +143,7 @@ TEST_CASE("LP-717-full0", "[highs_data]") {
       }
     }
   }
-  row_block_num_nz = row_block_index.size();
+  row_block_num_nz = static_cast<HighsInt>(row_block_index.size());
 
   REQUIRE(highs.addCols(row_block_num_col, row_block_col_cost.data(),
                         row_block_col_lower.data(), row_block_col_upper.data(),
@@ -244,7 +244,7 @@ TEST_CASE("LP-717-full1", "[highs_data]") {
   std::vector<double> row_block_value;
 
   for (HighsInt iRow = 0; iRow < row_block_num_row; iRow++) {
-    row_block_start.push_back(row_block_index.size());
+    row_block_start.push_back(static_cast<HighsInt>(row_block_index.size()));
     for (HighsInt iEl = lp.a_matrix_.start_[iRow];
          iEl < lp.a_matrix_.start_[iRow + 1]; iEl++) {
       HighsInt iCol = lp.a_matrix_.index_[iEl];
@@ -254,7 +254,7 @@ TEST_CASE("LP-717-full1", "[highs_data]") {
       }
     }
   }
-  row_block_num_nz = row_block_index.size();
+  row_block_num_nz = static_cast<HighsInt>(row_block_index.size());
 
   REQUIRE(highs.addCols(row_block_num_col, row_block_col_cost.data(),
                         row_block_col_lower.data(), row_block_col_upper.data(),
@@ -363,7 +363,7 @@ TEST_CASE("LP-717-full2", "[highs_data]") {
   std::vector<double> row_block_value;
 
   for (HighsInt iRow = 0; iRow < row_block_num_row; iRow++) {
-    row_block_start.push_back(row_block_index.size());
+    row_block_start.push_back(static_cast<HighsInt>(row_block_index.size()));
     for (HighsInt iEl = lp.a_matrix_.start_[iRow];
          iEl < lp.a_matrix_.start_[iRow + 1]; iEl++) {
       HighsInt iCol = lp.a_matrix_.index_[iEl];
@@ -373,7 +373,7 @@ TEST_CASE("LP-717-full2", "[highs_data]") {
       }
     }
   }
-  row_block_num_nz = row_block_index.size();
+  row_block_num_nz = static_cast<HighsInt>(row_block_index.size());
 
   REQUIRE(highs.addCols(row_block_num_col, row_block_col_cost.data(),
                         row_block_col_lower.data(), row_block_col_upper.data(),
@@ -2029,7 +2029,7 @@ void testAvgasGetRow(Highs& h) {
   std::vector<HighsInt> mask(avgas_num_row);
   for (HighsInt row = 0; row < avgas_num_row; row++) {
     avgas.getRow(row, lower, upper, index, value);
-    HighsInt avgas_nnz = index.size();
+    HighsInt avgas_nnz = static_cast<HighsInt>(index.size());
     h.getRows(row, row, get_num, lp_lower.data(), lp_upper.data(), lp_nnz,
               lp_start.data(), lp_index.data(), lp_value.data());
     REQUIRE(lp_lower[0] == lower);
@@ -2052,7 +2052,7 @@ void testAvgasGetRow(Highs& h) {
   for (HighsInt row = 0; row < num_row; row++) {
     HighsInt avgas_row = from_row + row;
     avgas.getRow(avgas_row, lower, upper, index, value);
-    HighsInt avgas_nnz = index.size();
+    HighsInt avgas_nnz = static_cast<HighsInt>(index.size());
     REQUIRE(lp_lower[row] == lower);
     REQUIRE(lp_upper[row] == upper);
     HighsInt from_el = lp_start[row];
@@ -2063,7 +2063,7 @@ void testAvgasGetRow(Highs& h) {
                                &lp_value[from_el]));
   }
   set = {1, 2, 3, 6, 7};
-  num_row = set.size();
+  num_row = static_cast<HighsInt>(set.size());
   lp_lower.resize(num_row);
   lp_upper.resize(num_row);
   lp_start.resize(num_row);
@@ -2075,7 +2075,7 @@ void testAvgasGetRow(Highs& h) {
   for (HighsInt row = 0; row < num_row; row++) {
     HighsInt avgas_row = set[row];
     avgas.getRow(avgas_row, lower, upper, index, value);
-    HighsInt avgas_nnz = index.size();
+    HighsInt avgas_nnz = static_cast<HighsInt>(index.size());
     REQUIRE(lp_lower[row] == lower);
     REQUIRE(lp_upper[row] == upper);
     HighsInt from_el = lp_start[row];
@@ -2104,7 +2104,7 @@ void testAvgasGetRow(Highs& h) {
     if (!mask[iRow]) continue;
     HighsInt avgas_row = iRow;
     avgas.getRow(avgas_row, lower, upper, index, value);
-    HighsInt avgas_nnz = index.size();
+    HighsInt avgas_nnz = static_cast<HighsInt>(index.size());
     REQUIRE(lp_lower[row] == lower);
     REQUIRE(lp_upper[row] == upper);
     HighsInt from_el = lp_start[row];
@@ -2137,7 +2137,7 @@ void testAvgasGetCol(Highs& h) {
   mask.assign(avgas_num_col, 0);
   for (HighsInt col = 0; col < avgas_num_col; col++) {
     avgas.getCol(col, cost, lower, upper, index, value);
-    HighsInt avgas_nnz = index.size();
+    HighsInt avgas_nnz = static_cast<HighsInt>(index.size());
     h.getCols(col, col, get_num, lp_cost.data(), lp_lower.data(),
               lp_upper.data(), lp_nnz, lp_start.data(), lp_index.data(),
               lp_value.data());
@@ -2185,7 +2185,7 @@ void testAvgasGetCol(Highs& h) {
   for (HighsInt col = 0; col < num_col; col++) {
     HighsInt avgas_col = from_col + col;
     avgas.getCol(avgas_col, cost, lower, upper, index, value);
-    HighsInt avgas_nnz = index.size();
+    HighsInt avgas_nnz = static_cast<HighsInt>(index.size());
     REQUIRE(lp_cost[col] == cost);
     REQUIRE(lp_lower[col] == lower);
     REQUIRE(lp_upper[col] == upper);
@@ -2197,7 +2197,7 @@ void testAvgasGetCol(Highs& h) {
                                &lp_value[from_el]));
   }
   set = {1, 2, 3, 6, 7};
-  num_col = set.size();
+  num_col = static_cast<HighsInt>(set.size());
   lp_cost.resize(num_col);
   lp_lower.resize(num_col);
   lp_upper.resize(num_col);
@@ -2211,7 +2211,7 @@ void testAvgasGetCol(Highs& h) {
   for (HighsInt col = 0; col < num_col; col++) {
     HighsInt avgas_col = set[col];
     avgas.getCol(avgas_col, cost, lower, upper, index, value);
-    HighsInt avgas_nnz = index.size();
+    HighsInt avgas_nnz = static_cast<HighsInt>(index.size());
     REQUIRE(lp_cost[col] == cost);
     REQUIRE(lp_lower[col] == lower);
     REQUIRE(lp_upper[col] == upper);
@@ -2243,7 +2243,7 @@ void testAvgasGetCol(Highs& h) {
     if (!mask[iCol]) continue;
     HighsInt avgas_col = iCol;
     avgas.getCol(avgas_col, cost, lower, upper, index, value);
-    HighsInt avgas_nnz = index.size();
+    HighsInt avgas_nnz = static_cast<HighsInt>(index.size());
     REQUIRE(lp_cost[col] == cost);
     REQUIRE(lp_lower[col] == lower);
     REQUIRE(lp_upper[col] == upper);
@@ -2277,7 +2277,7 @@ TEST_CASE("row-wise-get-row-avgas", "[highs_data]") {
   }
   for (HighsInt row = 0; row < avgas_num_row; row++) {
     avgas.getRow(row, lower, upper, index, value);
-    HighsInt avgas_nnz = index.size();
+    HighsInt avgas_nnz = static_cast<HighsInt>(index.size());
     REQUIRE(h.addRow(lower, upper, avgas_nnz, index.data(), value.data()) ==
             HighsStatus::kOk);
   }
@@ -2394,7 +2394,7 @@ TEST_CASE("hot-start-after-delete", "[highs_data]") {
     REQUIRE(info.simplex_iteration_count < ieration_count0);
   }
   std::vector<HighsInt> set = {1, 3, 4};
-  HighsInt num_set_en = set.size();
+  HighsInt num_set_en = static_cast<HighsInt>(set.size());
   cost.resize(num_set_en);
   lower.resize(num_set_en);
   upper.resize(num_set_en);
@@ -2467,7 +2467,7 @@ TEST_CASE("hot-start-after-delete", "[highs_data]") {
   mask[5] = 1;
   mask[8] = 1;
   mask[9] = 1;
-  HighsInt num_mask_en = mask.size();
+  HighsInt num_mask_en = static_cast<HighsInt>(mask.size());
   cost.resize(num_mask_en);
   lower.resize(num_mask_en);
   upper.resize(num_mask_en);

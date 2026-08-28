@@ -72,7 +72,7 @@ void Scaling::applyRuizScaling() {
 
       if (!col_values.empty()) {
         current_col_scaling[col] = std::sqrt(computeNorm(
-            col_values.data(), col_values.size(), params_->ruiz_norm));
+            col_values.data(), static_cast<HighsInt>(col_values.size()), params_->ruiz_norm));
       }
 
       if (current_col_scaling[col] == 0.0) {

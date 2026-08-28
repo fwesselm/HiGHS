@@ -28,7 +28,7 @@ HighsInt HighsDynamicRowMatrix::addRow(HighsInt* Rindex, double* Rvalue,
   std::set<std::pair<HighsInt, HighsInt>>::iterator it;
   if (freespaces_.empty() || (it = freespaces_.lower_bound(std::make_pair(
                                   Rlen, HighsInt{-1}))) == freespaces_.end()) {
-    start = ARindex_.size();
+    start = static_cast<HighsInt>(ARindex_.size());
     end = start + Rlen;
 
     ARindex_.resize(end);
@@ -53,7 +53,7 @@ HighsInt HighsDynamicRowMatrix::addRow(HighsInt* Rindex, double* Rvalue,
 
   // register the range of values for this row with a reused or a new index
   if (deletedrows_.empty()) {
-    rowindex = ARrange_.size();
+    rowindex = static_cast<HighsInt>(ARrange_.size());
     ARrange_.emplace_back(start, end);
     colsLinked.push_back(linkCols);
   } else {

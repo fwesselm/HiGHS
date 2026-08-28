@@ -76,7 +76,8 @@ void HighsObjectiveFunction::setupCliquePartition(
   }
 
   cliqueTable.cliquePartition(model->col_cost_, clqvars, cliquePartitionStart);
-  HighsInt numPartitions = cliquePartitionStart.size() - 1;
+  HighsInt numPartitions =
+      static_cast<HighsInt>(cliquePartitionStart.size()) - 1;
   if (numPartitions == numBinary)
     cliquePartitionStart.resize(1);
   else {

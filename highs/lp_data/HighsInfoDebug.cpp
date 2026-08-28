@@ -135,7 +135,7 @@ HighsDebugStatus debugNoInfo(const HighsInfo& info) {
   bool error_found = false;
   const std::vector<InfoRecord*>& info_records = info.records;
   const std::vector<InfoRecord*>& no_info_records = no_info.records;
-  HighsInt num_info = info_records.size();
+  HighsInt num_info = static_cast<HighsInt>(info_records.size());
   for (HighsInt index = 0; index < num_info; index++) {
     HighsInfoType type = info_records[index]->type;
     if (type == HighsInfoType::kInt64) {

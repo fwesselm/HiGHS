@@ -205,7 +205,9 @@ class HighsSearch {
 
   double getCurrentLowerBound() const { return nodestack.back().lower_bound; }
 
-  HighsInt getCurrentDepth() const { return nodestack.size() + depthoffset; }
+  HighsInt getCurrentDepth() const {
+    return static_cast<HighsInt>(nodestack.size()) + depthoffset;
+  }
 
   void stashOpenNodes();
 

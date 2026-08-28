@@ -39,7 +39,7 @@ HighsDebugStatus debugWorseStatus(const HighsDebugStatus status0,
 
 bool debugVectorRightSize(const std::vector<double>& v,
                           const HighsInt right_size) {
-  const HighsInt v_size = v.size();
+  const HighsInt v_size = static_cast<HighsInt>(v.size());
   const bool is_right_size = v_size == right_size;
   assert(is_right_size);
   return is_right_size;
@@ -47,7 +47,7 @@ bool debugVectorRightSize(const std::vector<double>& v,
 
 bool debugVectorRightSize(const std::vector<HighsInt>& v,
                           const HighsInt right_size) {
-  const HighsInt v_size = v.size();
+  const HighsInt v_size = static_cast<HighsInt>(v.size());
   const bool is_right_size = v_size == right_size;
   assert(is_right_size);
   return is_right_size;

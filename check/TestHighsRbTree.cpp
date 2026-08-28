@@ -42,7 +42,7 @@ class MyRbTree : public RbTree<MyRbTree> {
 
     if (p.second) return false;
 
-    HighsInt newNode = nodes.size();
+    HighsInt newNode = static_cast<HighsInt>(nodes.size());
     nodes.emplace_back();
     nodes.back().key = x;
     link(newNode, p.first);
@@ -85,25 +85,25 @@ TEST_CASE("HighsRbTree", "[util]") {
   std::iota(keys.begin(), keys.end(), 0);
 
   HighsRandom rand;
-  rand.shuffle(keys.data(), keys.size());
+  rand.shuffle(keys.data(), static_cast<HighsInt>(keys.size()));
   MyRbTree rbTree;
 
   for (size_t i = 0; i < keys.size(); ++i) {
     HighsInt x = keys[i];
     bool inserted = rbTree.insert(x);
     REQUIRE(inserted);
-    checkRbTree(rbTree, keys.data(), i + 1);
+    checkRbTree(rbTree, keys.data(), static_cast<HighsInt>(i + 1));
   }
 
   // randomly delete half of the elements and check the tree after each deletion
 
   for (size_t i = keys.size() - 1; i > keys.size() / 2; --i) {
-    HighsInt k = rand.integer(i + 1);
+    HighsInt k = rand.integer(static_cast<HighsInt>(i + 1));
     std::swap(keys[k], keys[i]);
     HighsInt x = keys[i];
     std::pair<HighsInt, bool> node = rbTree.find(x);
     REQUIRE(node.second);
     rbTree.erase(node.first);
-    checkRbTree(rbTree, keys.data(), i);
+    checkRbTree(rbTree, keys.data(), static_cast<HighsInt>(i));
   }
 }

@@ -319,7 +319,7 @@ void PDLPSolver::preprocessLp() {
       processed_matrix.value_.push_back(entry.second);
     }
 
-    processed_matrix.start_[col + 1] = processed_matrix.index_.size();
+    processed_matrix.start_[col + 1] = static_cast<HighsInt>(processed_matrix.index_.size());
   }
 
   // Add slack variable columns
@@ -330,7 +330,7 @@ void PDLPSolver::preprocessLp() {
       processed_matrix.index_.push_back(row_idx);
       processed_matrix.value_.push_back(-1.0);
       processed_matrix.start_[current_slack_col + 1] =
-          processed_matrix.index_.size();
+          static_cast<HighsInt>(processed_matrix.index_.size());
       current_slack_col++;
     }
   }
@@ -824,16 +824,16 @@ bool PDLPSolver::runConvergenceCheck(size_t iter, std::vector<double>& output_x,
     linalg::ax(lp_, x_next_, Ax_pdhg);
     linalg::aTy(lp_, y_next_, ATy_pdhg);
     current_converged = checkConvergence(
-        iter, x_next_, y_next_, Ax_pdhg, ATy_pdhg, params_.tolerance,
+        static_cast<HighsInt>(iter), x_next_, y_next_, Ax_pdhg, ATy_pdhg, params_.tolerance,
         current_results, "[L]", dSlackPos_, dSlackNeg_);
   } else {
     current_converged = checkConvergence(
-        iter, x_current_, y_current_, Ax_cache_, ATy_cache_, params_.tolerance,
+        static_cast<HighsInt>(iter), x_current_, y_current_, Ax_cache_, ATy_cache_, params_.tolerance,
         current_results, "[L]", dSlackPos_, dSlackNeg_);
   }
   if (!params_.use_halpern_restart) {
     average_converged = checkConvergence(
-        iter, x_avg_, y_avg_, Ax_avg_, ATy_avg_, params_.tolerance,
+        static_cast<HighsInt>(iter), x_avg_, y_avg_, Ax_avg_, ATy_avg_, params_.tolerance,
         average_results, "[A]", dSlackPosAvg_, dSlackNegAvg_);
   }
 #endif
@@ -878,7 +878,7 @@ bool PDLPSolver::runConvergenceCheck(size_t iter, std::vector<double>& output_x,
     }
 #endif
 
-    final_iter_count_ = iter;
+    final_iter_count_ = static_cast<HighsInt>(iter);
     results_ = prefer_avg ? average_results : current_results;
     // Final logging on optimality
     const bool forced = true;
@@ -891,7 +891,7 @@ bool PDLPSolver::runConvergenceCheck(size_t iter, std::vector<double>& output_x,
     return true;  // Stop
   } else {
     // Log the iteration if not converged
-    logger_.printIterationStats(iter, current_results, primal_weight_);
+    logger_.printIterationStats(static_cast<HighsInt>(iter), current_results, primal_weight_);
   }
 
   results_ = current_results;
@@ -1025,7 +1025,7 @@ void PDLPSolver::accumulateAverages(size_t iter) {
   hipdlpTimerStart(kHipdlpClockAverageIterate);
 #endif
 
-  HighsInt inner_iter = iter - restart_scheme_.getLastRestartIter();
+  HighsInt inner_iter = static_cast<HighsInt>(iter) - restart_scheme_.getLastRestartIter();
   double dMeanStepSize = std::sqrt(stepsize_.primal_step * stepsize_.dual_step);
 
 #ifdef CUPDLP_GPU

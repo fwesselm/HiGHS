@@ -283,7 +283,7 @@ TEST_CASE("check-set-mip-solution", "[highs_check_solution]") {
     value.push_back(1);
     index.push_back(0);
     value.push_back(2);
-    HighsInt num_entries = index.size();
+    HighsInt num_entries = static_cast<HighsInt>(index.size());
     return_status = highs.setSolution(num_entries, index.data(), value.data());
     REQUIRE(return_status == HighsStatus::kWarning);
 
@@ -303,7 +303,7 @@ TEST_CASE("check-set-mip-solution", "[highs_check_solution]") {
       value.push_back(optimal_solution.col_value[iCol]);
       iSet++;
     }
-    num_entries = index.size();
+    num_entries = static_cast<HighsInt>(index.size());
     assert(num_entries == num_to_set);
     return_status = highs.setSolution(num_entries, index.data(), value.data());
     REQUIRE(return_status == HighsStatus::kOk);

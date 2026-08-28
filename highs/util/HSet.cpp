@@ -52,7 +52,7 @@ bool HSet::add(const HighsInt entry) {
     return false;
   }
   // New entry
-  HighsInt size = entry_.size();
+  HighsInt size = static_cast<HighsInt>(entry_.size());
   if (count_ == size) {
     size++;
     entry_.resize(size);
@@ -108,7 +108,7 @@ bool HSet::debug() const {
     if (allow_assert_) assert(max_entry_ok);
     return false;
   }
-  HighsInt size = entry_.size();
+  HighsInt size = static_cast<HighsInt>(entry_.size());
   bool size_count_ok = size >= count_;
   if (!size_count_ok) {
     if (output_flag_) {
@@ -171,7 +171,7 @@ bool HSet::debug() const {
 void HSet::print() const {
   if (!setup_) return;
   if (log_file_ == NULL) return;
-  HighsInt size = entry_.size();
+  HighsInt size = static_cast<HighsInt>(entry_.size());
   fprintf(log_file_, "\nSet(%" HIGHSINT_FORMAT ", %" HIGHSINT_FORMAT "):\n",
           size, max_entry_);
   fprintf(log_file_, "Pointers: Pointers|");

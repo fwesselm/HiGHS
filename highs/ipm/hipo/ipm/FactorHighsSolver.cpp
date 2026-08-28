@@ -132,7 +132,7 @@ Int FactorHighsSolver::solveAS(const std::vector<double>& rhs_x,
   assert(this->valid_);
   assert(kkt_.isAS());
 
-  Int n = rhs_x.size();
+  Int n = static_cast<Int>(rhs_x.size());
 
   Clock clock;
   as_buffer_.resize(rhs_x.size() + rhs_y.size());
@@ -374,7 +374,7 @@ Int FactorHighsSolver::chooseOrdering(const std::vector<Int>& rows,
     // rcm is much worse in general, so no point in trying for now
   }
 
-  const Int k = orderings_to_try.size();
+  const Int k = static_cast<Int>(orderings_to_try.size());
 
   std::vector<HighsBool> failure(k, false);
 
@@ -387,9 +387,9 @@ Int FactorHighsSolver::chooseOrdering(const std::vector<Int>& rows,
 
   // compute full-format matrix without diagonal entries
   std::vector<Int> full_ptr, full_rows;
-  fullFromLower(ptr.size() - 1, rows.size(), ptr.data(), rows.data(), full_ptr,
+  fullFromLower(static_cast<Int>(ptr.size()) - 1, static_cast<Int>(rows.size()), ptr.data(), rows.data(), full_ptr,
                 full_rows);
-  Int n = full_ptr.size() - 1;
+  Int n = static_cast<Int>(full_ptr.size()) - 1;
   std::vector<Int> perm(n), iperm(n);
 
   std::vector<std::vector<Int>> permutations(k, std::vector<Int>(n));
@@ -402,19 +402,19 @@ Int FactorHighsSolver::chooseOrdering(const std::vector<Int>& rows,
 
     if (orderings_to_try[i] == kHipoMetisString) {
       Int status =
-          FH_.reorderMetis(n, rows.size(), full_rows.data(), full_ptr.data(),
+          FH_.reorderMetis(n, static_cast<Int>(rows.size()), full_rows.data(), full_ptr.data(),
                            permutations[i].data(), true, options_.random_seed);
       if (status) failure[i] = true;
 
     } else if (orderings_to_try[i] == kHipoAmdString) {
       Int status =
-          FH_.reorderAmd(n, rows.size(), full_rows.data(), full_ptr.data(),
+          FH_.reorderAmd(n, static_cast<Int>(rows.size()), full_rows.data(), full_ptr.data(),
                          permutations[i].data(), true);
       if (status) failure[i] = true;
 
     } else if (orderings_to_try[i] == kHipoRcmString) {
       Int status =
-          FH_.reorderRcm(n, rows.size(), full_rows.data(), full_ptr.data(),
+          FH_.reorderRcm(n, static_cast<Int>(rows.size()), full_rows.data(), full_ptr.data(),
                          permutations[i].data(), true);
       if (status) failure[i] = true;
 
@@ -432,7 +432,7 @@ Int FactorHighsSolver::chooseOrdering(const std::vector<Int>& rows,
     }
 
     failure[i] =
-        FH_.analyse(symbolics[i], ptr.size() - 1, rows.size(), rows.data(),
+        FH_.analyse(symbolics[i], static_cast<Int>(ptr.size()) - 1, static_cast<Int>(rows.size()), rows.data(),
                     ptr.data(), signs.data(), permutations[i].data());
 
     if (failure[i] && logger_.debug(2)) {

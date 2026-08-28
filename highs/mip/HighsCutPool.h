@@ -28,7 +28,7 @@ struct HighsCutSet {
   std::vector<double> lower_;  // Currently only ever contains -kHighsInf
   std::vector<double> upper_;
 
-  HighsInt numCuts() const { return cutindices.size(); }
+  HighsInt numCuts() const { return static_cast<HighsInt>(cutindices.size()); }
 
   void resize(HighsInt nnz) {
     HighsInt ncuts = numCuts();
@@ -134,7 +134,8 @@ class HighsCutPool {
   }
 
   void removePropagationDomain(HighsDomain::CutpoolPropagation* domain) {
-    for (HighsInt k = propagationDomains.size() - 1; k >= 0; --k) {
+    for (HighsInt k = static_cast<HighsInt>(propagationDomains.size()) - 1;
+         k >= 0; --k) {
       if (propagationDomains[k] == domain) {
         propagationDomains.erase(propagationDomains.begin() + k);
         return;

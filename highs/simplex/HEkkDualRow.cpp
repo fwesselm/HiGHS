@@ -500,7 +500,7 @@ void HEkkDualRow::chooseFinalLargeAlpha(
   for (HighsInt i = 0; i < pass_workCount; i++)
     finalCompare = max(finalCompare, pass_workData[i].second);
   finalCompare = min(0.1 * finalCompare, 1.0);
-  HighsInt countGroup = pass_workGroup.size() - 1;
+  HighsInt countGroup = static_cast<HighsInt>(pass_workGroup.size()) - 1;
   breakGroup = -1;
   breakIndex = -1;
   for (HighsInt iGroup = countGroup - 1; iGroup >= 0; iGroup--) {

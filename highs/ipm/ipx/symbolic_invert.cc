@@ -8,7 +8,7 @@
 namespace ipx {
 
 static std::vector<Int> RandomPermute(const std::vector<Int>& basis) {
-    const Int m = basis.size();
+    const Int m = static_cast<Int>(basis.size());
     std::default_random_engine re;
     std::uniform_int_distribution<Int> dist(0,m-1);
     std::vector<Int> permuted_basis(basis);
@@ -95,7 +95,7 @@ static SparseMatrix
 CoarsenedGraph(const SparseMatrix& BT,
                const std::vector<std::vector<Int> >& blocks) {
     const Int m = BT.rows();
-    const Int nb = blocks.size();
+    const Int nb = static_cast<Int>(blocks.size());
 
     std::vector<Int> map2block(m, -1);
     for (Int b = 0; b < nb; b++) {
@@ -140,7 +140,7 @@ void SymbolicInvert(const Model& model, const std::vector<Int>& basis,
     std::vector<std::vector<Int> > blocks = Blockperm(AI, jmatch, BT);
     SparseMatrix C = CoarsenedGraph(BT, blocks);
 
-    const Int nb = blocks.size();
+    const Int nb = static_cast<Int>(blocks.size());
     std::vector<Int> stack(nb), marked(nb), work(nb);
 
     if (rowcounts) {

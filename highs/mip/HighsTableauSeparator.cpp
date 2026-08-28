@@ -208,8 +208,8 @@ void HighsTableauSeparator::separateLpSolution(HighsLpRelaxation& lpRelaxation,
       continue;
     }
 
-    HighsInt len = baseRowInds.size();
-    if (len > (HighsInt)fracvar.row_ep.size()) {
+    HighsInt len = static_cast<HighsInt>(baseRowInds.size());
+    if (len > static_cast<HighsInt>(fracvar.row_ep.size())) {
       double maxAbsVal = 0.0;
       double minAbsVal = kHighsInf;
       for (HighsInt i = 0; i < len; ++i) {
@@ -226,7 +226,7 @@ void HighsTableauSeparator::separateLpSolution(HighsLpRelaxation& lpRelaxation,
 
     mip.mipdata_->debugSolution.checkRowAggregation(
         lpSolver.getLp(), baseRowInds.data(), baseRowVals.data(),
-        baseRowInds.size());
+        static_cast<HighsInt>(baseRowInds.size()));
 
     double rhs = 0;
     cutGen.generateCut(transLp, baseRowInds, baseRowVals, rhs);

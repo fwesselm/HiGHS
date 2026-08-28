@@ -338,7 +338,7 @@ class HighsLpRelaxation {
     inds = dualproofinds.data();
     vals = dualproofvals.data();
     rhs = dualproofrhs;
-    len = dualproofinds.size();
+    len = static_cast<HighsInt>(dualproofinds.size());
   }
 
   bool computeDualProof(const HighsDomain& globaldomain, double upperbound,

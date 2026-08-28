@@ -667,7 +667,7 @@ void Model::LoadPrimal() {
 
 void Model::LoadDual() {
     num_rows_ = num_var_;
-    num_cols_ = num_constr_ + boxed_vars_.size();
+    num_cols_ = num_constr_ + static_cast<Int>(boxed_vars_.size());
     dualized_ = true;
 
     // Check that every variable with finite scaled_ubuser_ has finite
@@ -1102,7 +1102,7 @@ void Model::DualizeBasicSolution(const Vector& x_user,
         y_solver = -x_user;
         for (Int i = 0; i < num_constr_; i++)
             z_solver[i] = -slack_user[i];
-        for (size_t k = 0; k < boxed_vars_.size(); k++) {
+        for (Int k = 0; k < static_cast<Int>(boxed_vars_.size()); k++) {
             Int j = boxed_vars_[k];
             z_solver[num_constr_+k] = c(num_constr_+k) + y_solver[j];
         }

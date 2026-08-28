@@ -125,7 +125,9 @@ class HighsGFkSolve {
   const std::vector<HighsInt>& getArow() const { return Arow; }
   const std::vector<HighsInt>& getAcol() const { return Acol; }
   const std::vector<unsigned>& getAvalue() const { return Avalue; }
-  HighsInt numNonzeros() const { return int(Avalue.size() - freeslots.size()); }
+  HighsInt numNonzeros() const {
+    return static_cast<HighsInt>(Avalue.size() - freeslots.size());
+  }
   HighsInt findNonzero(HighsInt row, HighsInt col);
 
   template <unsigned int k, int kNumRhs = 1, typename T>
@@ -137,7 +139,7 @@ class HighsGFkSolve {
 
     freeslots = decltype(freeslots)();
 
-    numCol = Astart.size() - 1;
+    numCol = static_cast<HighsInt>(Astart.size()) - 1;
     this->numRow = numRow;
 
     colhead.assign(numCol, -1);
@@ -166,7 +168,7 @@ class HighsGFkSolve {
       }
     }
 
-    HighsInt nnz = Avalue.size();
+    HighsInt nnz = static_cast<HighsInt>(Avalue.size());
     Anext.resize(nnz);
     Aprev.resize(nnz);
     ARleft.resize(nnz);
@@ -343,7 +345,7 @@ class HighsGFkSolve {
     for (int rhsIndex = 0; rhsIndex < kNumRhs; ++rhsIndex)
       if (hasSolution[rhsIndex]) solution[rhsIndex].reserve(numCol);
 
-    HighsInt numFactorRows = factorRowPerm.size();
+    HighsInt numFactorRows = static_cast<HighsInt>(factorRowPerm.size());
 
     // create vector for swapping different columns into the basis
     // For each column we want to iterate one basic solution where the

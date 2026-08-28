@@ -315,7 +315,8 @@ class HeuristicNeighbourhood {
     for (HighsInt i : mipsolver.mipdata_->integral_cols)
       if (localdom.col_lower_[i] == localdom.col_upper_[i]) ++numFixed;
 
-    numTotal = mipsolver.mipdata_->integral_cols.size() - numFixed;
+    numTotal = static_cast<HighsInt>(mipsolver.mipdata_->integral_cols.size()) -
+               numFixed;
   }
 
   double getFixingRate() {
@@ -964,7 +965,7 @@ bool HighsPrimalHeuristics::tryRoundedPoint(HighsMipWorker& worker,
   HighsDomain localdom = worker.getGlobalDomain();
   bool integerFeasible = true;
 
-  HighsInt numintcols = intcols.size();
+  HighsInt numintcols = static_cast<HighsInt>(intcols.size());
   for (HighsInt i = 0; i != numintcols; ++i) {
     HighsInt col = intcols[i];
     double intval = point[col];
@@ -1053,7 +1054,7 @@ bool HighsPrimalHeuristics::linesearchRounding(
     const std::vector<double>& point2, const int solution_source) {
   std::vector<double> roundedpoint;
 
-  HighsInt numintcols = intcols.size();
+  HighsInt numintcols = static_cast<HighsInt>(intcols.size());
   roundedpoint.resize(mipsolver.numCol());
 
   double alpha = 0.0;
@@ -1259,7 +1260,8 @@ void HighsPrimalHeuristics::shifting(HighsMipWorker& worker,
       HighsInt row_index = rIndex - 1;
       if (!fractionalIntegerFound) {
         // otherwise select a random infeasible row
-        row_index = randgen.integer(current_infeasible_rows.size());
+        row_index = randgen.integer(
+            static_cast<HighsInt>(current_infeasible_rows.size()));
       }
 
       HighsInt row = std::get<0>(current_infeasible_rows[row_index]);
@@ -1629,8 +1631,8 @@ void HighsPrimalHeuristics::feasibilityPump(HighsMipWorker& worker) {
     bool havecycle = !referencepoints.emplace(referencepoint).second;
     for (HighsInt k = 0; havecycle && k < 2; ++k) {
       for (HighsInt i = 0; i != 10; ++i) {
-        HighsInt flippos =
-            randgen.integer(mipsolver.mipdata_->integer_cols.size());
+        HighsInt flippos = randgen.integer(
+            static_cast<HighsInt>(mipsolver.mipdata_->integer_cols.size()));
         HighsInt col = mipsolver.mipdata_->integer_cols[flippos];
         if (roundedsol[col] > lpsol[col])
           roundedsol[col] = (HighsInt)std::floor(lpsol[col]);

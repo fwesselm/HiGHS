@@ -231,8 +231,9 @@ HighsCallbackFunctionType userkMipUserSetSolution =
               data_out->mip_primal_bound,
               callback_data.optimal_objective_value);
 
-        data_in->setSolution(callback_data.optimal_solution.size(),
-                             callback_data.optimal_solution.data());
+        data_in->setSolution(
+            static_cast<HighsInt>(callback_data.optimal_solution.size()),
+            callback_data.optimal_solution.data());
       }
     };
 
@@ -266,7 +267,8 @@ HighsCallbackFunctionType userkMipUserSetPartialSolution =
           }
         }
 
-        data_in->setSolution(index.size(), index.data(), value.data());
+        data_in->setSolution(static_cast<HighsInt>(index.size()), index.data(),
+                             value.data());
         data_in->repairSolution();
       }
     };

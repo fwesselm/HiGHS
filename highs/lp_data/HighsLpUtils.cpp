@@ -96,9 +96,9 @@ HighsStatus assessLp(HighsLp& lp, const HighsOptions& options) {
   // If entries have been removed from the matrix, resize the index
   // and value vectors to prevent bug in presolve
   HighsInt lp_num_nz = lp.numNz();
-  if ((HighsInt)lp.a_matrix_.index_.size() > lp_num_nz)
+  if (static_cast<HighsInt>(lp.a_matrix_.index_.size()) > lp_num_nz)
     lp.a_matrix_.index_.resize(lp_num_nz);
-  if ((HighsInt)lp.a_matrix_.value_.size() > lp_num_nz)
+  if (static_cast<HighsInt>(lp.a_matrix_.value_.size()) > lp_num_nz)
     lp.a_matrix_.value_.resize(lp_num_nz);
   if (return_status != HighsStatus::kOk)
     highsLogDev(options.log_options, HighsLogType::kInfo,
@@ -124,9 +124,9 @@ bool lpDimensionsOk(const std::string& message, const HighsLp& lp,
   ok = num_row >= 0 && ok;
   if (!ok) return ok;
 
-  HighsInt col_cost_size = lp.col_cost_.size();
-  HighsInt col_lower_size = lp.col_lower_.size();
-  HighsInt col_upper_size = lp.col_upper_.size();
+  HighsInt col_cost_size = static_cast<HighsInt>(lp.col_cost_.size());
+  HighsInt col_lower_size = static_cast<HighsInt>(lp.col_lower_.size());
+  HighsInt col_upper_size = static_cast<HighsInt>(lp.col_upper_.size());
   bool legal_col_cost_size = col_cost_size >= num_col;
   bool legal_col_lower_size = col_lower_size >= num_col;
   bool legal_col_upper_size = col_upper_size >= num_col;
@@ -175,8 +175,8 @@ bool lpDimensionsOk(const std::string& message, const HighsLp& lp,
                  message.c_str());
   ok = legal_matrix_dimensions && ok;
 
-  HighsInt row_lower_size = lp.row_lower_.size();
-  HighsInt row_upper_size = lp.row_upper_.size();
+  HighsInt row_lower_size = static_cast<HighsInt>(lp.row_lower_.size());
+  HighsInt row_upper_size = static_cast<HighsInt>(lp.row_upper_.size());
   bool legal_row_lower_size = row_lower_size >= num_row;
   bool legal_row_upper_size = row_upper_size >= num_row;
   if (!legal_row_lower_size)
@@ -215,8 +215,8 @@ bool lpDimensionsOk(const std::string& message, const HighsLp& lp,
         "LP dimension validation (%s) fails on scale_.scale_strategy\n",
         message.c_str());
   ok = legal_scale_strategy && ok;
-  HighsInt scale_row_size = (HighsInt)lp.scale_.row.size();
-  HighsInt scale_col_size = (HighsInt)lp.scale_.col.size();
+  HighsInt scale_row_size = static_cast<HighsInt>(lp.scale_.row.size());
+  HighsInt scale_col_size = static_cast<HighsInt>(lp.scale_.col.size());
   bool legal_scale_num_col = false;
   bool legal_scale_num_row = false;
   bool legal_scale_row_size = false;
@@ -488,7 +488,7 @@ HighsStatus assessSemiVariables(HighsLp& lp, const HighsOptions& options,
   made_semi_variable_mods = false;
   HighsStatus return_status = HighsStatus::kOk;
   if (!lp.integrality_.size()) return return_status;
-  assert((HighsInt)lp.integrality_.size() == lp.num_col_);
+  assert(lp.integrality_.size() == static_cast<size_t>(lp.num_col_));
   HighsInt num_illegal_lower = 0;
   HighsInt num_illegal_upper = 0;
   HighsInt num_tightened_upper = 0;
@@ -513,7 +513,7 @@ HighsStatus assessSemiVariables(HighsLp& lp, const HighsOptions& options,
   std::vector<double>& tightened_semi_variable_upper_bound_value =
       lp.mods_.save_tightened_semi_variable_upper_bound_value;
 
-  assert(int(lp.mods_.save_inconsistent_semi_variable_index.size()) == 0);
+  assert(lp.mods_.save_inconsistent_semi_variable_index.size() == 0);
   for (HighsInt iCol = 0; iCol < lp.num_col_; iCol++) {
     if (lp.integrality_[iCol] == HighsVarType::kSemiContinuous ||
         lp.integrality_[iCol] == HighsVarType::kSemiInteger) {
@@ -681,7 +681,7 @@ void relaxSemiVariables(HighsLp& lp, bool& made_semi_variable_mods) {
   // zero
   made_semi_variable_mods = false;
   if (!lp.integrality_.size()) return;
-  assert((HighsInt)lp.integrality_.size() == lp.num_col_);
+  assert(lp.integrality_.size() == static_cast<size_t>(lp.num_col_));
   std::vector<HighsInt>& relaxed_semi_variable_lower_index =
       lp.mods_.save_relaxed_semi_variable_lower_bound_index;
   std::vector<double>& relaxed_semi_variable_lower_value =
@@ -703,7 +703,7 @@ bool activeModifiedUpperBounds(const HighsOptions& options, const HighsLp& lp,
   const std::vector<HighsInt>& tightened_semi_variable_upper_bound_index =
       lp.mods_.save_tightened_semi_variable_upper_bound_index;
   const HighsInt num_tightened_upper =
-      tightened_semi_variable_upper_bound_index.size();
+      static_cast<HighsInt>(tightened_semi_variable_upper_bound_index.size());
   HighsInt num_active_modified_upper = 0;
   double min_semi_variable_margin = kHighsInf;
   for (HighsInt k = 0; k < num_tightened_upper; k++) {
@@ -807,9 +807,9 @@ void userScaleCosts(const vector<HighsVarType>& integrality, double& offset,
   const HighsInt user_bound_scale = data.user_bound_scale;
   const HighsInt user_objective_scale = data.user_objective_scale;
   if (!user_bound_scale && !user_objective_scale) return;
-  const HighsInt num_col = cost.size();
+  const HighsInt num_col = static_cast<HighsInt>(cost.size());
   if (num_col <= 0) return;
-  const HighsInt integrality_size = HighsInt(integrality.size());
+  const HighsInt integrality_size = static_cast<HighsInt>(integrality.size());
   const bool has_integrality = integrality_size > 0;
   double bound_scale_value = std::pow(2, user_bound_scale);
   double objective_scale_value = std::pow(2, user_objective_scale);
@@ -831,9 +831,9 @@ void userScaleColBounds(const vector<HighsVarType>& integrality,
   data.num_infinite_col_bounds = 0;
   const HighsInt user_bound_scale = data.user_bound_scale;
   if (!user_bound_scale) return;
-  const HighsInt num_col = lower.size();
+  const HighsInt num_col = static_cast<HighsInt>(lower.size());
   if (num_col <= 0) return;
-  const HighsInt integrality_size = HighsInt(integrality.size());
+  const HighsInt integrality_size = static_cast<HighsInt>(integrality.size());
   const bool has_integrality = integrality_size > 0;
   assert(!has_integrality || integrality_size >= num_col);
   double bound_scale_value = std::pow(2, user_bound_scale);
@@ -860,7 +860,7 @@ void userScaleRowBounds(vector<double>& lower, vector<double>& upper,
   data.num_infinite_row_bounds = 0;
   const HighsInt user_bound_scale = data.user_bound_scale;
   if (!user_bound_scale) return;
-  const HighsInt num_row = lower.size();
+  const HighsInt num_row = static_cast<HighsInt>(lower.size());
   if (num_row <= 0) return;
   double bound_scale_value = std::pow(2, user_bound_scale);
   for (HighsInt iRow = 0; iRow < num_row; iRow++) {
@@ -889,7 +889,7 @@ void userScaleMatrix(const vector<HighsVarType>& integrality,
   if (num_col <= 0) return;
   const HighsInt num_row = matrix.num_row_;
   if (num_row <= 0) return;
-  assert(HighsInt(integrality.size()) >= num_col);
+  assert(static_cast<HighsInt>(integrality.size()) >= num_col);
   double bound_scale_value = std::pow(2, user_bound_scale);
   if (matrix.isColwise()) {
     for (HighsInt iCol = 0; iCol < num_col; iCol++) {
@@ -1612,7 +1612,7 @@ void appendColsToLpVectors(HighsLp& lp, const HighsInt num_new_col,
   lp.col_upper_.resize(new_num_col);
   const bool have_integrality = (lp.integrality_.size() != 0);
   if (have_integrality) {
-    assert(HighsInt(lp.integrality_.size()) == lp.num_col_);
+    assert(lp.integrality_.size() == static_cast<size_t>(lp.num_col_));
     lp.integrality_.resize(new_num_col);
   }
   bool have_names = (lp.col_names_.size() != 0);
@@ -1672,7 +1672,7 @@ void deleteScale(vector<double>& scale,
     if (delete_to_col >= col_dim - 1) break;
     assert(delete_to_col < col_dim);
     for (HighsInt col = keep_from_col; col <= keep_to_col; col++) {
-      assert((HighsInt)scale.size() > new_num_col);
+      assert(scale.size() > static_cast<size_t>(new_num_col));
       scale[new_num_col] = scale[col];
       new_num_col++;
     }
@@ -1754,7 +1754,7 @@ HighsStatus changeLpIntegrality(HighsLp& lp,
   if (lp.integrality_.size() == 0)
     lp.integrality_.assign(lp.num_col_, HighsVarType::kContinuous);
 
-  assert(HighsInt(lp.integrality_.size()) == lp.num_col_);
+  assert(lp.integrality_.size() == static_cast<size_t>(lp.num_col_));
   for (HighsInt k = from_k; k < to_k + 1; k++) {
     if (interval || mask) {
       lp_col = k;
@@ -2946,8 +2946,10 @@ HighsStatus readBasisStream(const HighsLogOptions& log_options, HighsLp& lp,
       basis.valid = false;
       return return_status;
     }
-    const HighsInt basis_num_col = (HighsInt)basis.col_status.size();
-    const HighsInt basis_num_row = (HighsInt)basis.row_status.size();
+    const HighsInt basis_num_col =
+        static_cast<HighsInt>(basis.col_status.size());
+    const HighsInt basis_num_row =
+        static_cast<HighsInt>(basis.row_status.size());
     HighsInt int_status;
     std::string name;
     assert(keyword == "Valid");
@@ -3030,7 +3032,8 @@ HighsStatus readBasisStream(const HighsLogOptions& log_options, HighsLp& lp,
 }
 
 HighsStatus calculateColDualsQuad(const HighsLp& lp, HighsSolution& solution) {
-  const bool correct_size = int(solution.row_dual.size()) == lp.num_row_;
+  const bool correct_size =
+      static_cast<HighsInt>(solution.row_dual.size()) == lp.num_row_;
   const bool is_colwise = lp.a_matrix_.isColwise();
   const bool data_error = !correct_size || !is_colwise;
   assert(!data_error);
@@ -3064,7 +3067,8 @@ HighsStatus calculateRowValuesQuad(const HighsLp& lp,
                                    const std::vector<double>& col_value,
                                    std::vector<double>& row_value,
                                    const HighsInt report_row) {
-  const bool correct_size = int(col_value.size()) == lp.num_col_;
+  const bool correct_size =
+      static_cast<HighsInt>(col_value.size()) == lp.num_col_;
   const bool is_colwise = lp.a_matrix_.isColwise();
   const bool data_error = !correct_size || !is_colwise;
   assert(!data_error);
@@ -3313,12 +3317,12 @@ HighsLp withoutSemiVariables(const HighsLp& lp_, HighsSolution& solution,
   const bool have_solution = solution.value_valid;
   if (have_solution) {
     // Create zeroed row values for the new rows
-    assert((HighsInt)solution.row_value.size() == lp_.num_row_);
+    assert(solution.row_value.size() == static_cast<size_t>(lp_.num_row_));
     for (HighsInt iCol = 0; iCol < 2 * num_semi_variables; iCol++)
       solution.row_value.push_back(0);
-    assert((HighsInt)solution.col_value.size() == lp_.num_col_);
-    assert((HighsInt)solution.row_value.size() ==
-           lp_.num_row_ + 2 * num_semi_variables);
+    assert(solution.col_value.size() == static_cast<size_t>(lp_.num_col_));
+    assert(solution.row_value.size() ==
+           static_cast<size_t>(lp_.num_row_ + 2 * num_semi_variables));
   }
   for (HighsInt iCol = 0; iCol < num_col; iCol++) {
     if (lp.integrality_[iCol] == HighsVarType::kSemiContinuous ||
@@ -3371,7 +3375,7 @@ HighsLp withoutSemiVariables(const HighsLp& lp_, HighsSolution& solution,
           for (HighsInt iEl = start[iCol]; iEl < start[iCol + 1]; iEl++)
             solution.row_value[index[iEl]] += dl_primal * value[iEl];
         }
-        const HighsInt new_col = lp.col_cost_.size() - 1;
+        const HighsInt new_col = static_cast<HighsInt>(lp.col_cost_.size()) - 1;
         const double binary_value = solution.col_value[new_col];
         solution.row_value[row_num - 1] =
             solution.col_value[iCol] - semi_lower_bound * binary_value;
@@ -3390,7 +3394,7 @@ HighsLp withoutSemiVariables(const HighsLp& lp_, HighsSolution& solution,
       index.push_back(row_num++);
       value.push_back(-semi_upper_bound);
       // Add the next start
-      start.push_back(index.size());
+      start.push_back(static_cast<HighsInt>(index.size()));
       lp.integrality_.push_back(HighsVarType::kInteger);
       if (lp.integrality_[iCol] == HighsVarType::kSemiContinuous) {
         lp.integrality_[iCol] = HighsVarType::kContinuous;
@@ -3406,7 +3410,7 @@ HighsLp withoutSemiVariables(const HighsLp& lp_, HighsSolution& solution,
   num_col += num_semi_variables;
   lp.num_col_ += num_semi_variables;
   lp.num_row_ += 2 * num_semi_variables;
-  assert((HighsInt)index.size() == new_num_nz);
+  assert(index.size() == static_cast<size_t>(new_num_nz));
   // Ensure that the matrix dimensions are consistent with the LP
   // dimensions
   lp.a_matrix_.num_col_ = lp.num_col_;
@@ -3669,7 +3673,7 @@ void getSubVectorsTranspose(const HighsIndexCollection& index_collection,
   vector<HighsInt> sub_matrix_length;
   sub_matrix_length.assign(num_sub_vector, 0);
   // Identify the lengths of the vectors in the sub-matrix to be extracted
-  HighsInt num_vector = matrix.start_.size() - 1;
+  HighsInt num_vector = static_cast<HighsInt>(matrix.start_.size()) - 1;
   for (HighsInt vector = 0; vector < num_vector; vector++) {
     for (HighsInt iEl = matrix.start_[vector]; iEl < matrix.start_[vector + 1];
          iEl++) {

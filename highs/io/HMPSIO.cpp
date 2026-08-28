@@ -168,7 +168,7 @@ FilereaderRetcode readMps(
       // over-written and (generally) corrupted.
       colIndex[data[1]] = ++numCol;
       colCost.push_back(0);
-      Astart.push_back(Aindex.size());
+      Astart.push_back(static_cast<HighsInt>(Aindex.size()));
       integerColumn.push_back(integerCol);
       std::string name(&line[field_2_start],
                        &line[field_2_start] + field_2_width);
@@ -206,7 +206,7 @@ FilereaderRetcode readMps(
     }
     save_flag1 = flag[1];
   }
-  Astart.push_back(Aindex.size());
+  Astart.push_back(static_cast<HighsInt>(Aindex.size()));
 
   if (num_alien_entries) {
     warning_issued = true;
@@ -496,7 +496,7 @@ bool load_mpsLine(std::istream& file, HighsVarType& integerVar, HighsInt lmax,
       return false;
 
     // Line trim   -- to delete tailing white spaces
-    HighsInt lcnt = strlen(line) - 1;
+    HighsInt lcnt = static_cast<HighsInt>(strlen(line)) - 1;
     // if file.get() did not stop because it reached the lmax-1 limit,
     // then because it reached a newline char (or eof); lets consume this
     // newline (or do nothing if eof)

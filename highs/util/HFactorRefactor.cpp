@@ -80,10 +80,10 @@ HighsInt HFactor::rebuild(HighsTimerClock* factor_timer_clock_pointer) {
         basis_matrix_num_el++;
       }
       // 1.3 Record unit column
-      l_start.push_back(l_index.size());
+      l_start.push_back(static_cast<HighsInt>(l_index.size()));
       u_pivot_index.push_back(iRow);
       u_pivot_value.push_back(1);
-      u_start.push_back(u_index.size());
+      u_start.push_back(static_cast<HighsInt>(u_index.size()));
     } else if (pivot_type == kPivotRowSingleton ||
                pivot_type == kPivotColSingleton) {
       //
@@ -135,13 +135,13 @@ HighsInt HFactor::rebuild(HighsTimerClock* factor_timer_clock_pointer) {
             }
           }
         }
-        l_start.push_back(l_index.size());
+        l_start.push_back(static_cast<HighsInt>(l_index.size()));
         if (report_singletons)
           printf("Row singleton: U Pv (%4d, %11.4g)\n", (int)iRow,
                  a_value[pivot_k]);
         u_pivot_index.push_back(iRow);
         u_pivot_value.push_back(a_value[pivot_k]);
-        u_start.push_back(u_index.size());
+        u_start.push_back(static_cast<HighsInt>(u_index.size()));
       } else {
         //
         // 2.3 Deal with column singleton
@@ -160,13 +160,13 @@ HighsInt HFactor::rebuild(HighsTimerClock* factor_timer_clock_pointer) {
           u_index.push_back(a_index[k]);
           u_value.push_back(a_value[k]);
         }
-        l_start.push_back(l_index.size());
+        l_start.push_back(static_cast<HighsInt>(l_index.size()));
         if (report_singletons)
           printf("Col singleton: U Pv (%4d, %11.4g)\n", (int)iRow,
                  a_value[pivot_k]);
         u_pivot_index.push_back(iRow);
         u_pivot_value.push_back(a_value[pivot_k]);
-        u_start.push_back(u_index.size());
+        u_start.push_back(static_cast<HighsInt>(u_index.size()));
       }
     } else {
       assert(pivot_type == kPivotMarkowitz);
@@ -283,10 +283,10 @@ HighsInt HFactor::rebuild(HighsTimerClock* factor_timer_clock_pointer) {
           }
         }
       }
-      l_start[iK + 1] = l_index.size();
+      l_start[iK + 1] = static_cast<HighsInt>(l_index.size());
       u_pivot_index.push_back(iRow);
       u_pivot_value.push_back(column.array[iRow]);
-      u_start.push_back(u_index.size());
+      u_start.push_back(static_cast<HighsInt>(u_index.size()));
       basic_index[iRow] = iVar;
       has_pivot[iRow] = true;
       if (report_lu) {

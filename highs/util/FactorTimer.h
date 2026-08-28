@@ -143,7 +143,8 @@ class FactorTimer {
                              std::vector<HighsInt> factor_clock_list) {
     HighsTimer* timer_pointer = factor_timer_clock.timer_pointer_;
     std::vector<HighsInt>& clock = factor_timer_clock.clock_;
-    HighsInt factor_clock_list_size = factor_clock_list.size();
+    HighsInt factor_clock_list_size =
+        static_cast<HighsInt>(factor_clock_list.size());
     std::vector<HighsInt> clockList;
     clockList.resize(factor_clock_list_size);
     for (HighsInt en = 0; en < factor_clock_list_size; en++) {

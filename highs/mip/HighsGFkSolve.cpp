@@ -85,7 +85,7 @@ void HighsGFkSolve::addNonzero(HighsInt row, HighsInt col, unsigned int val) {
   assert(findNonzero(row, col) == -1);
   HighsInt pos;
   if (freeslots.empty()) {
-    pos = Avalue.size();
+    pos = static_cast<HighsInt>(Avalue.size());
     Avalue.push_back(val);
     Arow.push_back(row);
     Acol.push_back(col);

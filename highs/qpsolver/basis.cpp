@@ -71,7 +71,7 @@ void Basis::build() {
   for (size_t i = 0;
        i < active_constraint_index.size() + non_active_constraint_index.size();
        i++) {
-    constraintindexinbasisfactor[baseindex[i]] = i;
+    constraintindexinbasisfactor[baseindex[i]] = static_cast<HighsInt>(i);
   }
 }
 
@@ -90,7 +90,7 @@ void Basis::rebuild() {
   for (size_t i = 0;
        i < active_constraint_index.size() + non_active_constraint_index.size();
        i++) {
-    constraintindexinbasisfactor[baseindex[i]] = i;
+    constraintindexinbasisfactor[baseindex[i]] = static_cast<HighsInt>(i);
   }
   reinversion_hint = false;
 }
@@ -130,8 +130,10 @@ void Basis::report() {
   //
   const HighsInt qp_num_var = Atran.num_row;
   const HighsInt qp_num_con = Atran.num_col;
-  const HighsInt num_active_in_basis = active_constraint_index.size();
-  const HighsInt num_inactive_in_basis = non_active_constraint_index.size();
+  const HighsInt num_active_in_basis =
+      static_cast<HighsInt>(active_constraint_index.size());
+  const HighsInt num_inactive_in_basis =
+      static_cast<HighsInt>(non_active_constraint_index.size());
 
   HighsInt num_var_inactive = 0;
   HighsInt num_var_active_at_lower = 0;

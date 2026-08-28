@@ -614,7 +614,7 @@ void LpSolver::RunCrossover() {
     basis_->ComputeBasicSolution(x_crossover_, y_crossover_, z_crossover_);
     basic_statuses_.resize(n+m);
     for (size_t j = 0; j < basic_statuses_.size(); j++) {
-        if (basis_->IsBasic(j)) {
+        if (basis_->IsBasic(static_cast<Int>(j))) {
             basic_statuses_[j] = IPX_basic;
         } else {
             if (lb[j] == ub[j])

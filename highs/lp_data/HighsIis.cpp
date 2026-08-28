@@ -60,8 +60,8 @@ std::string HighsIis::iisModelStatusToString(HighsInt model_status) const {
 }
 
 void HighsIis::report(const std::string& message, const HighsLp& lp) const {
-  HighsInt num_iis_col = this->col_index_.size();
-  HighsInt num_iis_row = this->row_index_.size();
+  HighsInt num_iis_col = static_cast<HighsInt>(this->col_index_.size());
+  HighsInt num_iis_row = static_cast<HighsInt>(this->row_index_.size());
   if (num_iis_col > 10 || num_iis_row > 10) return;
   printf("\nIIS %s\n===\n", message.c_str());
   printf("Column: ");
@@ -141,14 +141,14 @@ void HighsIis::addRow(const HighsInt row, const HighsInt status) {
 }
 
 void HighsIis::removeCol(const HighsInt col) {
-  HighsInt num_col = this->col_index_.size();
+  HighsInt num_col = static_cast<HighsInt>(this->col_index_.size());
   assert(col < num_col);
   this->col_index_[col] = this->col_index_[num_col - 1];
   this->col_index_.resize(num_col - 1);
 }
 
 void HighsIis::removeRow(const HighsInt row) {
-  HighsInt num_row = this->row_index_.size();
+  HighsInt num_row = static_cast<HighsInt>(this->row_index_.size());
   assert(row < num_row);
   this->row_index_[row] = this->row_index_[num_row - 1];
   this->row_index_.resize(num_row - 1);
@@ -167,7 +167,7 @@ bool HighsIis::trivial(const HighsLp& lp, const HighsOptions& options) {
           break;
         }
       }
-      if (this->col_index_.size() > 0) break;
+      if (static_cast<HighsInt>(this->col_index_.size()) > 0) break;
     } else {
       // Loop over rows first
       for (HighsInt iRow = 0; iRow < lp.num_row_; iRow++) {
@@ -177,11 +177,11 @@ bool HighsIis::trivial(const HighsLp& lp, const HighsOptions& options) {
           break;
         }
       }
-      if (this->row_index_.size() > 0) break;
+      if (static_cast<HighsInt>(this->row_index_.size()) > 0) break;
     }
   }
-  HighsInt num_iis_col = this->col_index_.size();
-  HighsInt num_iis_row = this->row_index_.size();
+  HighsInt num_iis_col = static_cast<HighsInt>(this->col_index_.size());
+  HighsInt num_iis_row = static_cast<HighsInt>(this->row_index_.size());
   // If one is found then we've found an IIS
   if (num_iis_col + num_iis_row > 0) {
     // Should have found exactly 1
@@ -206,7 +206,7 @@ bool HighsIis::trivial(const HighsLp& lp, const HighsOptions& options) {
       count.push_back(lp.a_matrix_.start_[iRow + 1] -
                       lp.a_matrix_.start_[iRow]);
   }
-  assert(this->row_index_.size() == 0);
+  assert(static_cast<HighsInt>(this->row_index_.size()) == 0);
   for (HighsInt iRow = 0; iRow < lp.num_row_; iRow++) {
     if (count[iRow] > 0) continue;
     if (lp.row_lower_[iRow] > options.primal_feasibility_tolerance) {
@@ -214,7 +214,7 @@ bool HighsIis::trivial(const HighsLp& lp, const HighsOptions& options) {
     } else if (lp.row_upper_[iRow] < -options.primal_feasibility_tolerance) {
       this->addRow(iRow, kIisBoundStatusUpper);
     }
-    if (this->row_index_.size() > 0) {
+    if (static_cast<HighsInt>(this->row_index_.size()) > 0) {
       // If one is found then we've found an IIS
       this->valid_ = true;
       this->status_ = kIisModelStatusIrreducible;
@@ -288,7 +288,7 @@ bool HighsIis::rowValueBounds(const HighsLp& lp, const HighsOptions& options) {
       break;
     }
   }
-  if (this->row_index_.size() == 0) {
+  if (static_cast<HighsInt>(this->row_index_.size()) == 0) {
     // Nothing found, but IIS data still valid
     this->clear();
     this->valid_ = true;
@@ -356,9 +356,11 @@ bool HighsIis::rowValueBounds(const HighsLp& lp, const HighsOptions& options) {
   }
 
   // There must be at least one column in the IIS
-  assert(this->col_index_.size() > 0);
-  assert(this->col_index_.size() == this->col_bound_.size());
-  assert(this->row_index_.size() == this->row_bound_.size());
+  assert(static_cast<HighsInt>(this->col_index_.size()) > 0);
+  assert(static_cast<HighsInt>(this->col_index_.size()) ==
+         this->col_bound_.size());
+  assert(static_cast<HighsInt>(this->row_index_.size()) ==
+         this->row_bound_.size());
   this->valid_ = true;
   this->status_ = kIisModelStatusIrreducible;
   this->strategy_ = options.iis_strategy;
@@ -369,7 +371,7 @@ HighsStatus HighsIis::deduce(const HighsLp& lp, const HighsOptions& options,
                              const HighsCallback& callback,
                              const HighsBasis& basis) {
   // The number of infeasible rows must be positive
-  assert(this->row_index_.size() > 0);
+  assert(static_cast<HighsInt>(this->row_index_.size()) > 0);
   // Identify the LP corresponding to the set of infeasible rows
   std::vector<HighsInt> from_row = this->row_index_;
   std::vector<HighsInt> from_col;
@@ -395,8 +397,8 @@ HighsStatus HighsIis::deduce(const HighsLp& lp, const HighsOptions& options,
       use_col = use_col || to_row[lp.a_matrix_.index_[iEl]] >= 0;
     if (use_col) from_col.push_back(iCol);
   }
-  HighsInt to_num_col = from_col.size();
-  HighsInt to_num_row = from_row.size();
+  HighsInt to_num_col = static_cast<HighsInt>(from_col.size());
+  HighsInt to_num_row = static_cast<HighsInt>(from_row.size());
   HighsLp to_lp;
   to_lp.num_col_ = to_num_col;
   to_lp.num_row_ = to_num_row;
@@ -417,7 +419,8 @@ HighsStatus HighsIis::deduce(const HighsLp& lp, const HighsOptions& options,
         to_lp.a_matrix_.value_.push_back(lp.a_matrix_.value_[iEl]);
       }
     }
-    to_lp.a_matrix_.start_.push_back(to_lp.a_matrix_.index_.size());
+    to_lp.a_matrix_.start_.push_back(
+        static_cast<HighsInt>(to_lp.a_matrix_.index_.size()));
   }
   const bool has_row_names = lp.row_names_.size() > 0;
   for (HighsInt iRow = 0; iRow < to_num_row; iRow++) {
@@ -437,8 +440,8 @@ HighsStatus HighsIis::deduce(const HighsLp& lp, const HighsOptions& options,
 void HighsIis::setLp(const HighsLp& lp) {
   HighsLp& iis_lp = this->model_.lp_;
   iis_lp.clear();
-  HighsInt iis_num_col = this->col_index_.size();
-  HighsInt iis_num_row = this->row_index_.size();
+  HighsInt iis_num_col = static_cast<HighsInt>(this->col_index_.size());
+  HighsInt iis_num_row = static_cast<HighsInt>(this->row_index_.size());
   const bool colwise = lp.a_matrix_.isColwise();
   // Scatter the IIS rows (cols) into a full-length vector to identify
   // IIS rows (cols) with LP rows (cols) according to whether the
@@ -521,10 +524,11 @@ void HighsIis::setLp(const HighsLp& lp) {
         }
       }
     }
-    iis_lp.a_matrix_.start_.push_back(iis_lp.a_matrix_.index_.size());
+    iis_lp.a_matrix_.start_.push_back(
+        static_cast<HighsInt>(iis_lp.a_matrix_.index_.size()));
   }
-  iis_lp.num_col_ = iis_lp.col_cost_.size();
-  iis_lp.num_row_ = iis_lp.row_lower_.size();
+  iis_lp.num_col_ = static_cast<HighsInt>(iis_lp.col_cost_.size());
+  iis_lp.num_row_ = static_cast<HighsInt>(iis_lp.row_lower_.size());
   // The IIS LP matrix will have the same format as the incumbent LP
   iis_lp.a_matrix_.format_ = lp.a_matrix_.format_;
   iis_lp.a_matrix_.num_col_ = iis_lp.num_col_;
@@ -534,7 +538,8 @@ void HighsIis::setLp(const HighsLp& lp) {
 
 HighsInt HighsIis::nonIsStatus() const {
   const bool is_feasible = this->status_ == kIisModelStatusFeasible;
-  const bool has_is = this->col_index_.size() || this->row_index_.size();
+  const bool has_is = static_cast<HighsInt>(this->col_index_.size()) ||
+                      static_cast<HighsInt>(this->row_index_.size());
   // If the model is known to be feasible, then there should be no IS,
   // and all columns and rows are kIisStatusNotInConflict
   if (is_feasible) assert(!has_is);
@@ -555,8 +560,8 @@ void HighsIis::setStatus(const HighsLp& lp) {
                                     : kIisStatusMaybeInConflict;
   this->col_status_.assign(lp.num_col_, non_is_status);
   this->row_status_.assign(lp.num_row_, non_is_status);
-  const HighsInt iis_num_col = this->col_index_.size();
-  const HighsInt iis_num_row = this->row_index_.size();
+  const HighsInt iis_num_col = static_cast<HighsInt>(this->col_index_.size());
+  const HighsInt iis_num_row = static_cast<HighsInt>(this->row_index_.size());
   for (HighsInt iisCol = 0; iisCol < iis_num_col; iisCol++)
     this->col_status_[this->col_index_[iisCol]] = in_is_status;
   for (HighsInt iisRow = 0; iisRow < iis_num_row; iisRow++)
@@ -989,8 +994,8 @@ bool HighsIis::indexStatusOk(const HighsLp& lp) const {
   assert(row_status_size_ok);
   if (!col_status_size_ok) return indexStatusOkReturn(false);
   if (!row_status_size_ok) return indexStatusOkReturn(false);
-  HighsInt num_iis_col = this->col_index_.size();
-  HighsInt num_iis_row = this->row_index_.size();
+  HighsInt num_iis_col = static_cast<HighsInt>(this->col_index_.size());
+  HighsInt num_iis_row = static_cast<HighsInt>(this->row_index_.size());
   // Determine whether this is an IIS or just an IS
   bool true_iis = false;
   for (HighsInt iCol = 0; iCol < num_col; iCol++) {
@@ -1041,8 +1046,8 @@ bool HighsIis::indexStatusOk(const HighsLp& lp) const {
 
 bool HighsIis::lpDataOk(const HighsLp& lp, const HighsOptions& options) const {
   const HighsLp& iis_lp = this->model_.lp_;
-  HighsInt iis_num_col = this->col_index_.size();
-  HighsInt iis_num_row = this->row_index_.size();
+  HighsInt iis_num_col = static_cast<HighsInt>(this->col_index_.size());
+  HighsInt iis_num_row = static_cast<HighsInt>(this->row_index_.size());
   if (!(iis_lp.num_col_ == iis_num_col)) return lpDataOkReturn(false);
   if (!(iis_lp.num_row_ == iis_num_row)) return lpDataOkReturn(false);
 
@@ -1200,8 +1205,8 @@ bool HighsIis::lpOk(const HighsOptions& options) const {
   // Check that the IIS LP is OK (infeasible and optimal if
   // any bound is relaxed)
   if (!this->valid_) return lpOkReturn(true);
-  HighsInt num_iis_col = this->col_index_.size();
-  HighsInt num_iis_row = this->row_index_.size();
+  HighsInt num_iis_col = static_cast<HighsInt>(this->col_index_.size());
+  HighsInt num_iis_row = static_cast<HighsInt>(this->row_index_.size());
   // If an LP has a row with inconsistent bounds, or an empty row with
   // a positive lower bound or negative upper bound, then it is
   // infeasible, but the IIS contains no columns

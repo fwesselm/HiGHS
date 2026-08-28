@@ -153,8 +153,8 @@ void getKktFailures(const HighsOptions& options, const bool is_qp,
   if (have_primal_solution) {
     // There's a primal solution, so check its size and initialise the
     // infeasibility counts
-    assert((int)solution.col_value.size() >= lp.num_col_);
-    assert((int)solution.row_value.size() >= lp.num_row_);
+    assert(solution.col_value.size() >= static_cast<size_t>(lp.num_col_));
+    assert(solution.row_value.size() >= static_cast<size_t>(lp.num_row_));
     num_primal_infeasibility = 0;
     max_primal_infeasibility = 0;
     sum_primal_infeasibility = 0;
@@ -173,8 +173,8 @@ void getKktFailures(const HighsOptions& options, const bool is_qp,
   if (have_dual_solution) {
     // There's a dual solution, so check its size and initialise the
     // infeasibility counts
-    assert((int)solution.col_dual.size() >= lp.num_col_);
-    assert((int)solution.row_dual.size() >= lp.num_row_);
+    assert(solution.col_dual.size() >= static_cast<size_t>(lp.num_col_));
+    assert(solution.row_dual.size() >= static_cast<size_t>(lp.num_row_));
     num_dual_infeasibility = 0;
     max_dual_infeasibility = 0;
     sum_dual_infeasibility = 0;
@@ -713,15 +713,15 @@ void getPrimalDualGlpsolErrors(const HighsOptions& options, const HighsLp& lp,
   if (have_primal_solution) {
     // There's a primal solution, so check its size and initialise the
     // infeasibility counts
-    assert((int)solution.col_value.size() >= lp.num_col_);
-    assert((int)solution.row_value.size() >= lp.num_row_);
+    assert(solution.col_value.size() >= static_cast<size_t>(lp.num_col_));
+    assert(solution.row_value.size() >= static_cast<size_t>(lp.num_row_));
     max_primal_infeasibility = 0;
     primal_dual_errors.glpsol_max_primal_infeasibility.reset();
     if (have_dual_solution) {
       // There's a dual solution, so check its size and initialise the
       // infeasibility counts
-      assert((int)solution.col_dual.size() >= lp.num_col_);
-      assert((int)solution.row_dual.size() >= lp.num_row_);
+      assert(solution.col_dual.size() >= static_cast<size_t>(lp.num_col_));
+      assert(solution.row_dual.size() >= static_cast<size_t>(lp.num_row_));
       max_dual_infeasibility = 0;
       primal_dual_errors.glpsol_max_dual_infeasibility.reset();
     }
@@ -1918,8 +1918,8 @@ void accommodateAlienBasis(HighsLpSolverObject& solver_object) {
   assert(basis.alien);
   HighsInt num_row = lp.num_row_;
   HighsInt num_col = lp.num_col_;
-  assert((int)basis.col_status.size() >= num_col);
-  assert((int)basis.row_status.size() >= num_row);
+  assert(basis.col_status.size() >= static_cast<size_t>(num_col));
+  assert(basis.row_status.size() >= static_cast<size_t>(num_row));
   std::vector<HighsInt> basic_index;
   for (HighsInt iCol = 0; iCol < num_col; iCol++) {
     if (basis.col_status[iCol] == HighsBasisStatus::kBasic)
@@ -1929,7 +1929,7 @@ void accommodateAlienBasis(HighsLpSolverObject& solver_object) {
     if (basis.row_status[iRow] == HighsBasisStatus::kBasic)
       basic_index.push_back(num_col + iRow);
   }
-  HighsInt num_basic_variables = basic_index.size();
+  HighsInt num_basic_variables = static_cast<HighsInt>(basic_index.size());
   HFactor factor;
   factor.setupGeneral(&lp.a_matrix_, num_basic_variables, basic_index.data(),
                       kDefaultPivotThreshold, kDefaultPivotTolerance,
@@ -2167,8 +2167,8 @@ void HighsSolution::clear() {
 
 void HighsSolution::print(const std::string& prefix,
                           const std::string& message) const {
-  HighsInt num_col = this->col_value.size();
-  HighsInt num_row = this->row_value.size();
+  HighsInt num_col = static_cast<HighsInt>(this->col_value.size());
+  HighsInt num_row = static_cast<HighsInt>(this->row_value.size());
   printf("%s HighsSolution(num_col = %d, num_row = %d): %s\n", prefix.c_str(),
          int(num_col), int(num_row), message.c_str());
   for (HighsInt iCol = 0; iCol < num_col; iCol++)
@@ -2178,8 +2178,8 @@ void HighsSolution::print(const std::string& prefix,
     printf("%s row_value[%3d] = %11.4g\n", prefix.c_str(), int(iRow),
            this->row_value[iRow]);
 
-  num_col = this->col_dual.size();
-  num_row = this->row_dual.size();
+  num_col = static_cast<HighsInt>(this->col_dual.size());
+  num_row = static_cast<HighsInt>(this->row_dual.size());
   printf("%s HighsSolution(num_col = %d, num_row = %d): %s\n", prefix.c_str(),
          int(num_col), int(num_row), message.c_str());
   for (HighsInt iCol = 0; iCol < num_col; iCol++)
@@ -2196,18 +2196,20 @@ void HighsBasis::print(const std::string& prefix,
                        const std::string& message) const {
   this->printScalars(prefix, message);
   if (!this->useful) return;
-  for (HighsInt iCol = 0; iCol < HighsInt(this->col_status.size()); iCol++)
+  for (HighsInt iCol = 0; iCol < static_cast<HighsInt>(this->col_status.size());
+       iCol++)
     printf("%s HighsBasis: col_status[%2d] = %d\n", prefix.c_str(), int(iCol),
            int(this->col_status[iCol]));
-  for (HighsInt iRow = 0; iRow < HighsInt(this->row_status.size()); iRow++)
+  for (HighsInt iRow = 0; iRow < static_cast<HighsInt>(this->row_status.size());
+       iRow++)
     printf("%s HighsBasis: row_status[%2d] = %d\n", prefix.c_str(), int(iRow),
            int(this->row_status[iRow]));
 }
 
 void HighsBasis::printScalars(const std::string& prefix,
                               const std::string& message) const {
-  HighsInt num_col = this->col_status.size();
-  HighsInt num_row = this->row_status.size();
+  HighsInt num_col = static_cast<HighsInt>(this->col_status.size());
+  HighsInt num_row = static_cast<HighsInt>(this->row_status.size());
   printf("\n%s HighsBasis(num_col = %d, num_row = %d): %s\n", prefix.c_str(),
          int(num_col), int(num_row), message.c_str());
   printf("%s valid = %d\n", prefix.c_str(), this->valid);

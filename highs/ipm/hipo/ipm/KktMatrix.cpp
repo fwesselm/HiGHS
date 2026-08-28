@@ -325,13 +325,13 @@ void KktMatrix::freeNEmemory() {
 }
 
 Int KktMatrix::n() const {
-  if (isNE()) return ptrNE.size() - 1;
-  if (isAS()) return ptrAS.size() - 1;
+  if (isNE()) return static_cast<Int>(ptrNE.size()) - 1;
+  if (isAS()) return static_cast<Int>(ptrAS.size()) - 1;
   return -1;
 }
 Int KktMatrix::nz() const {
-  if (isNE()) return rowsNE.size();
-  if (isAS()) return rowsAS.size();
+  if (isNE()) return static_cast<Int>(rowsNE.size());
+  if (isAS()) return static_cast<Int>(rowsAS.size());
   return -1;
 }
 std::string KktMatrix::nla() const {

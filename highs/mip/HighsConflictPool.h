@@ -101,7 +101,8 @@ class HighsConflictPool {
   }
 
   void removePropagationDomain(HighsDomain::ConflictPoolPropagation* domain) {
-    for (HighsInt k = propagationDomains.size() - 1; k >= 0; --k) {
+    for (HighsInt k = static_cast<HighsInt>(propagationDomains.size()) - 1;
+         k >= 0; --k) {
       if (propagationDomains[k] == domain) {
         propagationDomains.erase(propagationDomains.begin() + k);
         return;
@@ -118,7 +119,8 @@ class HighsConflictPool {
   }
 
   HighsInt getNumConflicts() const {
-    return conflictRanges_.size() - deletedConflicts_.size();
+    return static_cast<HighsInt>(conflictRanges_.size() -
+                                 deletedConflicts_.size());
   }
 
   void setAgeLock(const bool ageLock) { age_lock_ = ageLock; }

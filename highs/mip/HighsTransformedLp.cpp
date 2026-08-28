@@ -143,7 +143,7 @@ bool HighsTransformedLp::transform(std::vector<double>& vals,
   const HighsMipSolver& mip = lprelaxation.getMipSolver();
   const HighsInt slackOffset = lprelaxation.numCols();
 
-  HighsInt numNz = inds.size();
+  HighsInt numNz = static_cast<HighsInt>(inds.size());
 
   auto getLb = [&](HighsInt col) {
     return (col < slackOffset
@@ -385,7 +385,7 @@ bool HighsTransformedLp::transform(std::vector<double>& vals,
     }
 
     inds = vectorsum.getNonzeros();
-    numNz = inds.size();
+    numNz = static_cast<HighsInt>(inds.size());
 
     vals.resize(numNz);
     for (HighsInt j = 0; j != numNz; ++j) vals[j] = vectorsum.getValue(inds[j]);
@@ -495,7 +495,7 @@ bool HighsTransformedLp::untransform(std::vector<double>& vals,
   const HighsMipSolver& mip = lprelaxation.getMipSolver();
   const HighsInt slackOffset = mip.numCol();
 
-  HighsInt numNz = inds.size();
+  HighsInt numNz = static_cast<HighsInt>(inds.size());
 
   for (HighsInt i = 0; i != numNz; ++i) {
     if (vals[i] == 0.0) continue;
@@ -604,7 +604,7 @@ bool HighsTransformedLp::untransform(std::vector<double>& vals,
   }
 
   inds = vectorsum.getNonzeros();
-  numNz = inds.size();
+  numNz = static_cast<HighsInt>(inds.size());
   vals.resize(numNz);
 
   if (integral)

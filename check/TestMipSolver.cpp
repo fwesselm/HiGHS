@@ -597,7 +597,8 @@ TEST_CASE("MIP-get-saved-solutions", "[highs_test_mip_solver]") {
   highs.run();
   const std::vector<HighsObjectiveSolution> saved_objective_and_solution =
       highs.getSavedMipSolutions();
-  const HighsInt num_saved_solution = saved_objective_and_solution.size();
+  const HighsInt num_saved_solution =
+      static_cast<HighsInt>(saved_objective_and_solution.size());
   REQUIRE(num_saved_solution > 0);
   const HighsInt last_saved_solution = num_saved_solution - 1;
   REQUIRE(saved_objective_and_solution[last_saved_solution].objective ==
@@ -683,7 +684,8 @@ TEST_CASE("MIP-get-saved-solutions-presolve", "[highs_test_mip_solver]") {
   highs.run();
   const std::vector<HighsObjectiveSolution> saved_objective_and_solution =
       highs.getSavedMipSolutions();
-  const HighsInt num_saved_solution = saved_objective_and_solution.size();
+  const HighsInt num_saved_solution =
+      static_cast<HighsInt>(saved_objective_and_solution.size());
   REQUIRE(num_saved_solution == 1);
   const HighsInt last_saved_solution = num_saved_solution - 1;
   REQUIRE(saved_objective_and_solution[last_saved_solution].objective ==
@@ -1210,7 +1212,7 @@ TEST_CASE("get-fixed-lp", "[highs_test_mip_solver]") {
     }
   }
   h.clearIntegrality();
-  HighsInt num_set_entries = col_set.size();
+  HighsInt num_set_entries = static_cast<HighsInt>(col_set.size());
   h.changeColsBounds(num_set_entries, col_set.data(), fixed_value.data(),
                      fixed_value.data());
   h.setOptionValue("presolve", kHighsOffString);

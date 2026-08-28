@@ -377,11 +377,12 @@ void HighsCutPool::separate(const std::vector<double>& sol,
                        }) -
       efficacious_cuts.begin();
 
-  HighsInt lowerThreshold = efficacious_cuts.size() / 20;
-  HighsInt upperThreshold = efficacious_cuts.size() - 1;
+  HighsInt lowerThreshold = static_cast<HighsInt>(efficacious_cuts.size()) / 20;
+  HighsInt upperThreshold = static_cast<HighsInt>(efficacious_cuts.size()) - 1;
 
   if (numefficacious <= lowerThreshold) {
-    numefficacious = std::max(efficacious_cuts.size() / 2, size_t{1});
+    numefficacious =
+        static_cast<HighsInt>(std::max(efficacious_cuts.size() / 2, size_t{1}));
     minScoreFactor_ =
         efficacious_cuts[numefficacious - 1].first / bestObservedScore_;
   } else if (numefficacious > upperThreshold) {
@@ -392,7 +393,7 @@ void HighsCutPool::separate(const std::vector<double>& sol,
   efficacious_cuts.resize(numefficacious);
 
   HighsInt orignumcuts = cutset.numCuts();
-  HighsInt origselectednnz = cutset.ARindex_.size();
+  HighsInt origselectednnz = static_cast<HighsInt>(cutset.ARindex_.size());
   HighsInt selectednnz = origselectednnz;
 
   for (const std::pair<double, HighsInt>& p : efficacious_cuts) {
@@ -467,7 +468,7 @@ void HighsCutPool::separateLpCutsAfterRestart(HighsCutSet& cutset) {
   cutset.cutindices.resize(numcuts);
   cutset.cutpools.resize(numcuts, index_);
   std::iota(cutset.cutindices.begin(), cutset.cutindices.end(), 0);
-  cutset.resize(matrix_.nonzeroCapacity());
+  cutset.resize(static_cast<HighsInt>(matrix_.nonzeroCapacity()));
 
   HighsInt offset = 0;
   const HighsInt* ARindex = matrix_.getARindex();

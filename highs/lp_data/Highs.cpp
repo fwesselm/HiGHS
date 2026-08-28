@@ -2158,8 +2158,8 @@ HighsStatus Highs::getStandardFormLp(HighsInt& num_col, HighsInt& num_row,
     assert(status == HighsStatus::kOk);
     if (status != HighsStatus::kOk) return status;
   }
-  num_col = this->standard_form_cost_.size();
-  num_row = this->standard_form_rhs_.size();
+  num_col = static_cast<HighsInt>(this->standard_form_cost_.size());
+  num_row = static_cast<HighsInt>(this->standard_form_rhs_.size());
   num_nz = this->standard_form_matrix_.start_[num_col];
   offset = this->standard_form_offset_;
   for (HighsInt iCol = 0; iCol < num_col; iCol++) {
@@ -2647,8 +2647,8 @@ HighsStatus Highs::getColOrRowName(const HighsLp& lp, const bool is_col,
                  int(num_index));
     return HighsStatus::kError;
   }
-  const HighsInt num_index_name =
-      is_col ? lp.col_names_.size() : lp.row_names_.size();
+  const HighsInt num_index_name = static_cast<HighsInt>(
+      is_col ? lp.col_names_.size() : lp.row_names_.size());
   if (index >= num_index_name) {
     highsLogUser(options_.log_options, HighsLogType::kError,
                  "Index %d for %s name is outside the range [0, "

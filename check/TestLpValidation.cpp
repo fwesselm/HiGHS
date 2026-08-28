@@ -402,10 +402,10 @@ TEST_CASE("LP-row-index-duplication", "[highs_data]") {
   for (HighsInt iCol = 0; iCol < num_col; iCol++) highs.addVar(0, 1);
   std::vector<HighsInt> start = {0, 6, 8};
   std::vector<HighsInt> index = {0, 1, 4, 5, 6, 7, 0, 1, 0, 1, 4, 5, 6, 7, 4};
-  std::vector<double> value = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
-  std::vector<double> lower = {0, 0, 0};
-  std::vector<double> upper = {inf, inf, inf};
-  HighsInt num_nz = index.size();
+  std::vector<double> value(15, 1.0);
+  std::vector<double> lower(3, 0.0);
+  std::vector<double> upper(3, inf);
+  HighsInt num_nz = static_cast<HighsInt>(index.size());
   REQUIRE(highs.addRows(3, lower.data(), upper.data(), num_nz, start.data(),
                         index.data(), value.data()) == HighsStatus::kError);
 }

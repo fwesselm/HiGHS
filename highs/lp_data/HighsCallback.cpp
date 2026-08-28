@@ -116,13 +116,13 @@ HighsCallbackOutput::operator HighsCallbackDataOut() const {
   data.mip_primal_bound = mip_primal_bound;
   data.mip_dual_bound = mip_dual_bound;
   data.mip_gap = mip_gap;
-  data.mip_solution_size = mip_solution.size();
+  data.mip_solution_size = static_cast<HighsInt>(mip_solution.size());
   data.mip_solution =
       mip_solution.empty() ? nullptr : const_cast<double*>(mip_solution.data());
 
   data.cutpool_num_col = cutpool_num_col;
-  data.cutpool_num_cut = cutpool_lower.size();
-  data.cutpool_num_nz = cutpool_value.size();
+  data.cutpool_num_cut = static_cast<HighsInt>(cutpool_lower.size());
+  data.cutpool_num_nz = static_cast<HighsInt>(cutpool_value.size());
   data.cutpool_start = cutpool_start.empty()
                            ? nullptr
                            : const_cast<HighsInt*>(cutpool_start.data());
@@ -139,7 +139,7 @@ HighsCallbackOutput::operator HighsCallbackDataOut() const {
                            ? nullptr
                            : const_cast<double*>(cutpool_upper.data());
 
-  data.qp_solution_size = qp_solution.size();
+  data.qp_solution_size = static_cast<HighsInt>(qp_solution.size());
   data.qp_solution =
       qp_solution.empty() ? nullptr : const_cast<double*>(qp_solution.data());
 
@@ -154,7 +154,7 @@ HighsCallbackInput::operator HighsCallbackDataIn() const {
   data.cbdata = static_cast<void*>(const_cast<HighsCallbackInput*>(this));
   data.user_interrupt = user_interrupt ? 1 : 0;
   data.user_has_solution = user_has_solution ? 1 : 0;
-  data.user_solution_size = user_solution.size();
+  data.user_solution_size = static_cast<HighsInt>(user_solution.size());
   data.user_solution = user_solution.empty()
                            ? nullptr
                            : const_cast<double*>(user_solution.data());

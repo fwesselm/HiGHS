@@ -37,7 +37,7 @@ class CholeskyFactor {
     std::vector<double> L_old = L;
     L.clear();
     L.resize((new_k_max) * (new_k_max));
-    const HighsInt l_size = L.size();
+    const HighsInt l_size = static_cast<HighsInt>(L.size());
     // Driven by #958, changes made in following lines to avoid array
     // bound error when new_k_max < current_k_max
     HighsInt min_k_max = min(new_k_max, current_k_max);
@@ -61,7 +61,7 @@ class CholeskyFactor {
 
   QpSolverStatus recompute() {
     std::vector<std::vector<double>> orig;
-    HighsInt dim_ns = basis.getinactive().size();
+    HighsInt dim_ns = static_cast<HighsInt>(basis.getinactive().size());
     numberofreduces = 0;
 
     orig.assign(dim_ns, std::vector<double>(dim_ns, 0.0));

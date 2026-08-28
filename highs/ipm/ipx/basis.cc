@@ -457,7 +457,7 @@ double Basis::mean_fill() const {
     if (fill_factors_.empty())
         return 0.0;
     double mean = 1.0;
-    Int num_factors = fill_factors_.size();
+    Int num_factors = static_cast<Int>(fill_factors_.size());
     for (double f : fill_factors_)
         mean *= std::pow(f, 1.0/num_factors);
     return mean;
@@ -490,7 +490,7 @@ Int Basis::AdaptToSingularFactorization() {
         if (jb >= 0)
             map2basis_[jb] = -1; // now NONBASIC
     }
-    return dependent_cols.size();
+    return static_cast<Int>(dependent_cols.size());
 }
 
 bool Basis::TightenLuPivotTol() {
@@ -531,7 +531,7 @@ bool Basis::TightenLuPivotTol() {
     for (size_t k = 0; k < cols_guessed.size(); k++) {
         basis_[k] = cols_guessed[k];
         assert(map2basis_[basis_[k]] == -1); // must not have duplicates
-        map2basis_[basis_[k]] = k;
+        map2basis_[basis_[k]] = static_cast<Int>(k);
     }
     Int num_dropped = 0;
     CrashFactorize(&num_dropped, interrupt);
@@ -551,7 +551,7 @@ bool Basis::TightenLuPivotTol() {
 //
 static std::tuple<Int,Int,double> InverseSearch(const Basis& basis,
                                                 Vector& work) {
-    const Int m = work.size();
+    const Int m = static_cast<Int>(work.size());
     double inverse_max = 0.0;
 
     for (Int i = 0; i < m; i++)
@@ -941,7 +941,7 @@ void Basis::PivotFixedVariablesOutOfBasis(const double* colweights, Info* info){
         }
 	std::stringstream h_logging_stream;
 	h_logging_stream.str(std::string());
-	h_logging_stream << Format(remaining.size(), 9) <<
+	h_logging_stream << Format(static_cast<Int>(remaining.size()), 9) <<
 	  " fixed variables remaining" << Format("", 38) <<
 	  time(control_.Elapsed()) << "\n";
 	control_.hIntervalLog(h_logging_stream);

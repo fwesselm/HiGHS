@@ -416,7 +416,8 @@ HighsInt Highs_getOptionName(const void* highs, const HighsInt index,
   HighsInt retcode = (HighsInt)((Highs*)highs)->getOptionName(index, &name_v);
   // Guess we have to add one (for Windows, lol!) because char* is
   // null-terminated
-  const HighsInt malloc_size = sizeof(char) * (name_v.length() + 1);
+  const HighsInt malloc_size =
+      static_cast<HighsInt>(sizeof(char) * (name_v.length() + 1));
   *name = (char*)malloc(malloc_size);
   strcpy(*name, name_v.c_str());
   return retcode;
@@ -1359,8 +1360,8 @@ HighsInt Highs_getIis(void* highs, HighsInt* iis_num_col, HighsInt* iis_num_row,
   HighsIis iis;
   HighsInt status = (HighsInt)((Highs*)highs)->getIis(iis);
   if (status == (HighsInt)HighsStatus::kError) return status;
-  *iis_num_col = iis.col_index_.size();
-  *iis_num_row = iis.row_index_.size();
+  *iis_num_col = static_cast<HighsInt>(iis.col_index_.size());
+  *iis_num_row = static_cast<HighsInt>(iis.row_index_.size());
   if (col_index != nullptr) {
     for (size_t i = 0; i < static_cast<size_t>(*iis_num_col); i++) {
       col_index[i] = iis.col_index_[i];

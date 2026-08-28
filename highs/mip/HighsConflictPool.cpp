@@ -19,7 +19,7 @@ std::pair<HighsInt, HighsInt> HighsConflictPool::allocateConflict(
   if (freeSpaces_.empty() ||
       (it = freeSpaces_.lower_bound(
            std::make_pair(conflictLen, HighsInt{-1}))) == freeSpaces_.end()) {
-    start = conflictEntries_.size();
+    start = static_cast<HighsInt>(conflictEntries_.size());
     end = start + conflictLen;
     conflictEntries_.resize(end);
   } else {
@@ -37,7 +37,7 @@ std::pair<HighsInt, HighsInt> HighsConflictPool::allocateConflict(
   // register the range of entries for this conflict with a reused or a new
   // index
   if (deletedConflicts_.empty()) {
-    conflictIndex = conflictRanges_.size();
+    conflictIndex = static_cast<HighsInt>(conflictRanges_.size());
     conflictRanges_.emplace_back(start, end);
     ages_.resize(conflictRanges_.size());
     modification_.resize(conflictRanges_.size());
@@ -60,7 +60,7 @@ std::pair<HighsInt, HighsInt> HighsConflictPool::allocateConflict(
 void HighsConflictPool::addConflictCut(
     const HighsDomain& domain,
     const std::set<HighsDomain::ConflictSet::LocalDomChg>& reasonSideFrontier) {
-  HighsInt conflictLen = reasonSideFrontier.size();
+  HighsInt conflictLen = static_cast<HighsInt>(reasonSideFrontier.size());
   auto alloc = allocateConflict(conflictLen);
   HighsInt conflictIndex = alloc.first;
   HighsInt start = alloc.second;
@@ -95,7 +95,8 @@ void HighsConflictPool::addReconvergenceCut(
     const std::set<HighsDomain::ConflictSet::LocalDomChg>&
         reconvergenceFrontier,
     const HighsDomainChange& reconvergenceDomchg) {
-  HighsInt conflictLen = reconvergenceFrontier.size() + 1;
+  HighsInt conflictLen =
+      static_cast<HighsInt>(reconvergenceFrontier.size()) + 1;
   auto alloc = allocateConflict(conflictLen);
   HighsInt conflictIndex = alloc.first;
   HighsInt start = alloc.second;
@@ -152,7 +153,7 @@ void HighsConflictPool::removeConflict(HighsInt conflict) {
 
 void HighsConflictPool::performAging(const bool thread_safe) {
   if (age_lock_) return;
-  HighsInt conflictMaxIndex = conflictRanges_.size();
+  HighsInt conflictMaxIndex = static_cast<HighsInt>(conflictRanges_.size());
   HighsInt agelim = agelim_;
   HighsInt numActiveConflicts = getNumConflicts();
   while (agelim > 5 && numActiveConflicts > softlimit_) {
@@ -195,7 +196,7 @@ void HighsConflictPool::addConflictFromOtherPool(
 }
 
 void HighsConflictPool::syncConflictPool(HighsConflictPool& syncpool) {
-  HighsInt conflictMaxIndex = conflictRanges_.size();
+  HighsInt conflictMaxIndex = static_cast<HighsInt>(conflictRanges_.size());
   for (HighsInt i = 0; i != conflictMaxIndex; ++i) {
     if (ages_[i] < 0) continue;
     HighsInt start = conflictRanges_[i].first;

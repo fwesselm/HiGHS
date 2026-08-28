@@ -87,7 +87,7 @@ static void ProcessFreeColumns(const Control& control, const Model& model,
         double pivot = imax >= 0 ? lhs[imax] : 0.0;
         if (std::abs(pivot) > kLuDependencyTol) {
             assert(rownumber[imax] == -1);
-            rownumber[imax] = basis->size();
+            rownumber[imax] = static_cast<Int>(basis->size());
             basis->push_back(j);
             // Add new column to L. Discard off-diagonal entries that were not
             // in the pattern of AI[:,j].
@@ -135,7 +135,7 @@ static void ProcessSingletons(const Control& control, const Model& model,
             }
         }
         if (max_singleton > 0.0 && max_singleton >= 0.5*rowmax) {
-            rownumber[i] = basis->size();
+            rownumber[i] = static_cast<Int>(basis->size());
             basis->push_back(jsingleton);
             active[jsingleton] = false;
             num_singletons++;

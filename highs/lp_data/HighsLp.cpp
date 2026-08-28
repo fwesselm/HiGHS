@@ -122,7 +122,7 @@ bool HighsLp::equalScaling(const HighsLp& lp) const {
 }
 
 double HighsLp::objectiveValue(const std::vector<double>& solution) const {
-  assert((int)solution.size() >= this->num_col_);
+  assert(solution.size() >= static_cast<size_t>(this->num_col_));
   double objective_function_value = this->offset_;
   for (HighsInt iCol = 0; iCol < this->num_col_; iCol++)
     objective_function_value += this->col_cost_[iCol] * solution[iCol];
@@ -131,7 +131,7 @@ double HighsLp::objectiveValue(const std::vector<double>& solution) const {
 
 HighsCDouble HighsLp::objectiveCDoubleValue(
     const std::vector<double>& solution) const {
-  assert((int)solution.size() >= this->num_col_);
+  assert(solution.size() >= static_cast<size_t>(this->num_col_));
   HighsCDouble objective_function_value = this->offset_;
   for (HighsInt iCol = 0; iCol < this->num_col_; iCol++)
     objective_function_value +=
@@ -164,9 +164,9 @@ void HighsLp::exactResize() {
   this->row_upper_.resize(this->num_row_);
   this->a_matrix_.exactResize();
 
-  if ((int)this->col_names_.size()) this->col_names_.resize(this->num_col_);
-  if ((int)this->row_names_.size()) this->row_names_.resize(this->num_row_);
-  if ((int)this->integrality_.size()) this->integrality_.resize(this->num_col_);
+  if (this->col_names_.size()) this->col_names_.resize(this->num_col_);
+  if (this->row_names_.size()) this->row_names_.resize(this->num_row_);
+  if (this->integrality_.size()) this->integrality_.resize(this->num_col_);
 }
 
 bool HighsLp::okNames() const {
@@ -305,7 +305,7 @@ void HighsLp::moveBackLpAndUnapplyScaling(HighsLp& lp) {
 void HighsLp::addColNames(const std::string name, const HighsInt num_new_col) {
   // Don't add names if there are no columns being added
   if (this->num_col_ == 0) return;
-  HighsInt col_names_size = this->col_names_.size();
+  HighsInt col_names_size = static_cast<HighsInt>(this->col_names_.size());
   if (col_names_size <= 0) return;
   assert(col_names_size == this->num_col_ + num_new_col);
   // Handle the addition of user-defined names later
@@ -317,7 +317,7 @@ void HighsLp::addColNames(const std::string name, const HighsInt num_new_col) {
 void HighsLp::addRowNames(const std::string name, const HighsInt num_new_row) {
   // Don't add names if there are no rows being added
   if (this->num_row_ == 0) return;
-  HighsInt row_names_size = this->row_names_.size();
+  HighsInt row_names_size = static_cast<HighsInt>(this->row_names_.size());
   if (row_names_size <= 0) return;
   assert(row_names_size == this->num_row_ + num_new_row);
   // Handle the addition of user-defined names later
@@ -388,7 +388,7 @@ void HighsLp::deleteRowsFromVectors(
 
   HighsInt row_dim = this->num_row_;
   new_num_row = 0;
-  bool have_names = (HighsInt)this->row_names_.size() > 0;
+  bool have_names = this->row_names_.size() > 0;
   for (HighsInt k = from_k; k <= to_k; k++) {
     updateOutInIndex(index_collection, delete_from_row, delete_to_row,
                      keep_from_row, keep_to_row, current_set_entry);
@@ -427,7 +427,8 @@ void HighsLp::deleteRows(const HighsIndexCollection& index_collection) {
 
 void HighsLp::unapplyMods() {
   // Restore any non-semi types
-  const HighsInt num_non_semi = this->mods_.save_non_semi_variable_index.size();
+  const HighsInt num_non_semi =
+      static_cast<HighsInt>(this->mods_.save_non_semi_variable_index.size());
   for (HighsInt k = 0; k < num_non_semi; k++) {
     HighsInt iCol = this->mods_.save_non_semi_variable_index[k];
     assert(this->integrality_[iCol] == HighsVarType::kContinuous ||
@@ -439,8 +440,8 @@ void HighsLp::unapplyMods() {
     }
   }
   // Restore any inconsistent semi variables
-  const HighsInt num_inconsistent_semi =
-      this->mods_.save_inconsistent_semi_variable_index.size();
+  const HighsInt num_inconsistent_semi = static_cast<HighsInt>(
+      this->mods_.save_inconsistent_semi_variable_index.size());
   if (!num_inconsistent_semi) {
     assert(
         !this->mods_.save_inconsistent_semi_variable_lower_bound_value.size());
@@ -462,7 +463,8 @@ void HighsLp::unapplyMods() {
       this->mods_.save_relaxed_semi_variable_lower_bound_index;
   std::vector<double>& relaxed_semi_variable_lower_value =
       this->mods_.save_relaxed_semi_variable_lower_bound_value;
-  const HighsInt num_lower_bound = relaxed_semi_variable_lower_index.size();
+  const HighsInt num_lower_bound =
+      static_cast<HighsInt>(relaxed_semi_variable_lower_index.size());
   if (!num_lower_bound) {
     assert(!relaxed_semi_variable_lower_value.size());
   }
@@ -478,7 +480,7 @@ void HighsLp::unapplyMods() {
   std::vector<double>& tightened_semi_variable_upper_bound_value =
       this->mods_.save_tightened_semi_variable_upper_bound_value;
   const HighsInt num_upper_bound =
-      tightened_semi_variable_upper_bound_index.size();
+      static_cast<HighsInt>(tightened_semi_variable_upper_bound_index.size());
   if (!num_upper_bound) {
     assert(!tightened_semi_variable_upper_bound_value.size());
   }
@@ -532,7 +534,8 @@ void HighsNameHash::form(const std::vector<std::string>& name) {
     if (duplicate) {
       // Find the original and mark it as duplicate
       auto& search = emplace_result.first;
-      assert(int(search->second) < int(this->name2index.size()));
+      assert(static_cast<int>(search->second) <
+             static_cast<int>(this->name2index.size()));
       search->second = kHashIsDuplicate;
     }
   }
@@ -557,7 +560,8 @@ void HighsNameHash::update(int index, const std::string& old_name,
   if (!emplace_result.second) {
     // Find the original and mark it as duplicate
     auto& search = emplace_result.first;
-    assert(int(search->second) < int(this->name2index.size()));
+    assert(static_cast<int>(search->second) <
+           static_cast<int>(this->name2index.size()));
     search->second = kHashIsDuplicate;
   }
 }

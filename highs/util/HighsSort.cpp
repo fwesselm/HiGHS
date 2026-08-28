@@ -261,7 +261,7 @@ void maxHeapify(double* heap_v, HighsInt* heap_i, HighsInt i, HighsInt n) {
 bool increasingSetOk(const vector<HighsInt>& set,
                      const HighsInt set_entry_lower,
                      const HighsInt set_entry_upper, bool strict) {
-  HighsInt set_num_entries = set.size();
+  HighsInt set_num_entries = static_cast<HighsInt>(set.size());
   bool check_bounds = set_entry_lower <= set_entry_upper;
   HighsInt previous_entry;
   if (check_bounds) {
@@ -288,7 +288,7 @@ bool increasingSetOk(const vector<HighsInt>& set,
 
 bool increasingSetOk(const vector<double>& set, const double set_entry_lower,
                      const double set_entry_upper, bool strict) {
-  HighsInt set_num_entries = set.size();
+  HighsInt set_num_entries = static_cast<HighsInt>(set.size());
   bool check_bounds = set_entry_lower <= set_entry_upper;
   double previous_entry;
   if (check_bounds) {

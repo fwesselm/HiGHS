@@ -331,7 +331,7 @@ void IPM::ComputeStartingPoint() {
 // The blocking index is returned in blocking_index if not NULL.
 static double StepToBoundary(const Vector& x, const Vector& dx,
                              Int* blocking_index, double alpha = 1.0) {
-    const Int n = x.size();
+    const Int n = static_cast<Int>(x.size());
     const double damp = 1.0 - std::numeric_limits<double>::epsilon();
     assert(damp < 1.0);
 

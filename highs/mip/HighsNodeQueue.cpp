@@ -152,7 +152,7 @@ void HighsNodeQueue::unlink_suboptimal(int64_t node) {
 
 void HighsNodeQueue::link_domchgs(int64_t node) {
   assert(node != -1);
-  HighsInt numchgs = nodes[node].domchgstack.size();
+  HighsInt numchgs = static_cast<HighsInt>(nodes[node].domchgstack.size());
   nodes[node].domchglinks.resize(numchgs);
 
   for (HighsInt i = 0; i != numchgs; ++i) {
@@ -172,7 +172,7 @@ void HighsNodeQueue::link_domchgs(int64_t node) {
 
 void HighsNodeQueue::unlink_domchgs(int64_t node) {
   assert(node != -1);
-  HighsInt numchgs = nodes[node].domchgstack.size();
+  HighsInt numchgs = static_cast<HighsInt>(nodes[node].domchgstack.size());
 
   for (HighsInt i = 0; i != numchgs; ++i) {
     HighsInt col = nodes[node].domchgstack[i].column;

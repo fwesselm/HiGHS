@@ -58,7 +58,7 @@ HighsInt ProductFormUpdate::update(HVector* aq, HighsInt* pivot_row) {
     index_.push_back(iRow);
     value_.push_back(aq->array[iRow]);
   }
-  start_.push_back(index_.size());
+  start_.push_back(static_cast<HighsInt>(index_.size()));
   update_count_++;
   return kRebuildReasonNo;
 }

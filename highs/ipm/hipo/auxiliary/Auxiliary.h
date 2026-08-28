@@ -59,7 +59,7 @@ void counts2Ptr(Int n, T* ptr, T* w) {
 template <typename T>
 void permuteVector(T* v, const std::vector<Int>& perm) {
   // Permute vector v according to permutation perm.
-  const Int n = perm.size();
+  const Int n = static_cast<Int>(perm.size());
   std::vector<T> temp_v(v, v + n);
   for (Int i = 0; i < n; ++i) v[i] = temp_v[perm[i]];
 }
@@ -74,7 +74,7 @@ void permuteVector(std::vector<T>& v, const std::vector<Int>& perm) {
 template <typename T>
 void permuteVectorInverse(T* v, const std::vector<Int>& iperm) {
   // Permute vector v according to inverse permutation iperm.
-  const Int n = iperm.size();
+  const Int n = static_cast<Int>(iperm.size());
   std::vector<T> temp_v(v, v + n);
   for (Int i = 0; i < n; ++i) v[iperm[i]] = temp_v[i];
 }

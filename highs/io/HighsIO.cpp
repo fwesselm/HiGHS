@@ -332,7 +332,7 @@ const std::string highsInsertMdEscapes(const std::string& from_string) {
   std::string to_string = "";
   const char* underscore = "_";
   const char* backslash = "\\";
-  HighsInt from_string_length = from_string.length();
+  HighsInt from_string_length = static_cast<HighsInt>(from_string.length());
   for (HighsInt p = 0; p < from_string_length; p++) {
     const char string_ch = from_string[p];
     if (string_ch == *underscore) {
@@ -347,7 +347,7 @@ const std::string highsInsertMdId(const std::string& from_string) {
   std::string to_string = "";
   const char* underscore = "_";
   const char* hyphen = "-";
-  HighsInt from_string_length = from_string.length();
+  HighsInt from_string_length = static_cast<HighsInt>(from_string.length());
   for (HighsInt p = 0; p < from_string_length; p++) {
     const char string_ch = from_string[p];
     if (string_ch == *underscore) {

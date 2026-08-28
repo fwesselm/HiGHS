@@ -135,7 +135,7 @@ class Problem {
     var.objectiveCoeff = objCoeff;
     vars.push_back(var);
     incumbentAssignment.push_back(lb);
-    return idx;
+    return static_cast<int>(idx);
   }
 
   int addConstraint(RowType sense, double rhs, int numCoeffs, int* rowVarIdxs,
@@ -187,7 +187,7 @@ class Problem {
       return ok ? INT_MAX : INT_MIN;
     }
 
-    int newConstraintIdx = constraints.size();
+    int newConstraintIdx = static_cast<int>(constraints.size());
     for (auto& c : coeffs) {
       vars[c.idx].coeffs.emplace_back(newConstraintIdx, c.coeff);
     }
@@ -229,8 +229,8 @@ class Problem {
         cstr.incumbentLhs += vc.coeff * incumbentAssignment[vc.idx];
 
       if (cstr.score(cstr.incumbentLhs) < -violationTolerance) {
-        cstr.violatedIdx = violatedConstraints.size();
-        violatedConstraints.push_back(cIdx);
+        cstr.violatedIdx = static_cast<int32_t>(violatedConstraints.size());
+        violatedConstraints.push_back(static_cast<uint32_t>(cIdx));
       } else
         cstr.violatedIdx = -1;
     }
@@ -261,7 +261,8 @@ class Problem {
       if (newCost < -violationTolerance &&
           constraints[cstrCoeff.idx].violatedIdx == -1) {
         // Became violated.
-        constraints[cstrCoeff.idx].violatedIdx = violatedConstraints.size();
+        constraints[cstrCoeff.idx].violatedIdx =
+            static_cast<int32_t>(violatedConstraints.size());
         violatedConstraints.push_back(cstrCoeff.idx);
       }
       if (newCost >= -violationTolerance &&
@@ -580,7 +581,8 @@ class FeasibilityJumpSolver {
 
     // Reset the variable scores.
     goodVarsSet.clear();
-    for (size_t i = 0; i < problem.vars.size(); i += 1) resetMoves(i);
+    for (size_t i = 0; i < problem.vars.size(); i += 1)
+      resetMoves(static_cast<uint32_t>(i));
   }
 
   uint32_t selectVariable() {
@@ -650,7 +652,7 @@ class FeasibilityJumpSolver {
 
       dt += problem.vars.size();
       for (size_t varIdx = 0; varIdx < problem.vars.size(); varIdx += 1)
-        forEachMove(varIdx, [&](Move& move) {
+        forEachMove(static_cast<int32_t>(varIdx), [&](Move& move) {
           move.score += weightUpdateIncrement *
                         problem.vars[varIdx].objectiveCoeff *
                         (move.value - problem.incumbentAssignment[varIdx]);
@@ -687,7 +689,8 @@ class FeasibilityJumpSolver {
       for (auto& c : problem.constraints) c.weight *= 1.0e-20;
       dt += problem.constraints.size();
 
-      for (size_t i = 0; i < problem.vars.size(); i += 1) resetMoves(i);
+      for (size_t i = 0; i < problem.vars.size(); i += 1)
+        resetMoves(static_cast<uint32_t>(i));
     }
 
     totalEffort += dt;
@@ -724,7 +727,7 @@ class FeasibilityJumpSolver {
     bool anyGoodMoves = bestMove(varIdx).score > 0.;
     if (anyGoodMoves && goodVarsSetIdx[varIdx] == -1) {
       // Became good, add to good set.
-      goodVarsSetIdx[varIdx] = goodVarsSet.size();
+      goodVarsSetIdx[varIdx] = static_cast<int32_t>(goodVarsSet.size());
       goodVarsSet.push_back(varIdx);
     } else if (!anyGoodMoves && goodVarsSetIdx[varIdx] != -1) {
       // Became bad, remove from good set.
@@ -783,7 +786,7 @@ class FeasibilityJumpSolver {
       status.effortSinceLastImprovement = totalEffort - effortAtLastImprovement;
 
       status.solution = solution;
-      status.numVars = problem.vars.size();
+      status.numVars = static_cast<int>(problem.vars.size());
       status.solutionObjectiveValue = problem.incumbentObjective;
 
       auto result = callback(status);

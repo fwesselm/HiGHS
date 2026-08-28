@@ -44,7 +44,7 @@ void HighsLpAggregator::getCurrentAggregation(std::vector<HighsInt>& inds,
   });
 
   inds = vectorsum.getNonzeros();
-  HighsInt len = inds.size();
+  HighsInt len = static_cast<HighsInt>(inds.size());
   vals.resize(len);
 
   if (negate)

@@ -410,7 +410,8 @@ struct Matrix {
         tran.value.insert(tran.value.end(), row_values[row].begin(),
                           row_values[row].end());
 
-        tran.start.push_back(tran.start[row] + row_indices[row].size());
+        tran.start.push_back(tran.start[row] +
+                             static_cast<HighsInt>(row_indices[row].size()));
       }
 
       tran.num_col = mat.num_row;

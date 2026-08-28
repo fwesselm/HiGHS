@@ -32,7 +32,7 @@ public:
     // and pattern becomes empty.
     explicit IndexedVector(Int dim = 0);
 
-    Int dim() const { return elements_.size(); }
+    Int dim() const { return static_cast<Int>(elements_.size()); }
 
     // Accesses entry 0 <= @i < dim() by value or reference.
     double operator[](Int i) const { return elements_[i]; }

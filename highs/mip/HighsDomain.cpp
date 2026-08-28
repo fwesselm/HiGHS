@@ -340,19 +340,23 @@ void HighsDomain::ConflictPoolPropagation::propagateConflict(
       assert(!domain->infeasible_);
       domain->mipsolver->mipdata_->debugSolution.nodePruned(*domain);
       domain->infeasible_ = true;
-      domain->infeasible_reason = Reason::cut(
-          domain->cutpoolpropagation.size() + conflictpoolindex, conflict);
-      domain->infeasible_pos = domain->domchgstack_.size();
+      domain->infeasible_reason =
+          Reason::cut(static_cast<HighsInt>(domain->cutpoolpropagation.size()) +
+                          conflictpoolindex,
+                      conflict);
+      domain->infeasible_pos =
+          static_cast<HighsInt>(domain->domchgstack_.size());
       conflictpool_->resetAge(conflict);
       // printf("conflict propagation found infeasibility\n");
       break;
     case 1: {
       HighsDomainChange domchg = domain->flip(entries[inactive[0]]);
       if (!domain->isActive(domchg)) {
-        domain->changeBound(
-            domain->flip(entries[inactive[0]]),
-            Reason::cut(domain->cutpoolpropagation.size() + conflictpoolindex,
-                        conflict));
+        domain->changeBound(domain->flip(entries[inactive[0]]),
+                            Reason::cut(static_cast<HighsInt>(
+                                            domain->cutpoolpropagation.size()) +
+                                            conflictpoolindex,
+                                        conflict));
         conflictpool_->resetAge(conflict);
       }
       // printf("conflict propagation found bound change\n");
@@ -542,7 +546,8 @@ void HighsDomain::CutpoolPropagation::updateActivityLbChange(
               activitycuts_[row] - cutpool->getRhs()[row] > domain->feastol()) {
             domain->mipsolver->mipdata_->debugSolution.nodePruned(*domain);
             domain->infeasible_ = true;
-            domain->infeasible_pos = domain->domchgstack_.size();
+            domain->infeasible_pos =
+                static_cast<HighsInt>(domain->domchgstack_.size());
             domain->infeasible_reason = Reason::cut(cutpoolindex, row);
             return false;
           }
@@ -607,7 +612,8 @@ void HighsDomain::CutpoolPropagation::updateActivityUbChange(
               activitycuts_[row] - cutpool->getRhs()[row] > domain->feastol()) {
             domain->mipsolver->mipdata_->debugSolution.nodePruned(*domain);
             domain->infeasible_ = true;
-            domain->infeasible_pos = domain->domchgstack_.size();
+            domain->infeasible_pos =
+                static_cast<HighsInt>(domain->domchgstack_.size());
             domain->infeasible_reason = Reason::cut(cutpoolindex, row);
             return false;
           }
@@ -865,7 +871,8 @@ void HighsDomain::ObjectivePropagation::updateActivityLbChange(
     } else if (numInfObjLower == 0 &&
                objectiveLower > domain->mipsolver->mipdata_->upper_limit) {
       domain->infeasible_ = true;
-      domain->infeasible_pos = domain->domchgstack_.size();
+      domain->infeasible_pos =
+          static_cast<HighsInt>(domain->domchgstack_.size());
       domain->infeasible_reason = Reason::objective();
       updateActivityLbChange(col, newbound, oldbound);
     }
@@ -938,7 +945,8 @@ void HighsDomain::ObjectivePropagation::updateActivityLbChange(
       if (numInfObjLower == 0 &&
           objectiveLower > domain->mipsolver->mipdata_->upper_limit) {
         domain->infeasible_ = true;
-        domain->infeasible_pos = domain->domchgstack_.size();
+        domain->infeasible_pos =
+            static_cast<HighsInt>(domain->domchgstack_.size());
         domain->infeasible_reason = Reason::objective();
         updateActivityLbChange(col, newbound, oldbound);
       }
@@ -985,7 +993,8 @@ void HighsDomain::ObjectivePropagation::updateActivityUbChange(
     } else if (numInfObjLower == 0 &&
                objectiveLower > domain->mipsolver->mipdata_->upper_limit) {
       domain->infeasible_ = true;
-      domain->infeasible_pos = domain->domchgstack_.size();
+      domain->infeasible_pos =
+          static_cast<HighsInt>(domain->domchgstack_.size());
       domain->infeasible_reason = Reason::objective();
       updateActivityUbChange(col, newbound, oldbound);
     }
@@ -1057,7 +1066,8 @@ void HighsDomain::ObjectivePropagation::updateActivityUbChange(
       if (numInfObjLower == 0 &&
           objectiveLower > domain->mipsolver->mipdata_->upper_limit) {
         domain->infeasible_ = true;
-        domain->infeasible_pos = domain->domchgstack_.size();
+        domain->infeasible_pos =
+            static_cast<HighsInt>(domain->domchgstack_.size());
         domain->infeasible_reason = Reason::objective();
         updateActivityUbChange(col, newbound, oldbound);
       }
@@ -1132,7 +1142,7 @@ void HighsDomain::ObjectivePropagation::propagate() {
   const double upperLimit = domain->mipsolver->mipdata_->upper_limit;
   if (numInfObjLower == 0 && objectiveLower > upperLimit) {
     domain->infeasible_ = true;
-    domain->infeasible_pos = domain->domchgstack_.size();
+    domain->infeasible_pos = static_cast<HighsInt>(domain->domchgstack_.size());
     domain->infeasible_reason = Reason::objective();
     return;
   }
@@ -1573,7 +1583,7 @@ void HighsDomain::updateActivityLbChange(HighsInt col, double oldbound,
               feastol()) {
         mipsolver->mipdata_->debugSolution.nodePruned(*this);
         infeasible_ = true;
-        infeasible_pos = domchgstack_.size();
+        infeasible_pos = static_cast<HighsInt>(domchgstack_.size());
         infeasible_reason = Reason::modelRowUpper(mip->a_matrix_.index_[i]);
         end = i + 1;
         break;
@@ -1622,7 +1632,7 @@ void HighsDomain::updateActivityLbChange(HighsInt col, double oldbound,
               feastol()) {
         mipsolver->mipdata_->debugSolution.nodePruned(*this);
         infeasible_ = true;
-        infeasible_pos = domchgstack_.size();
+        infeasible_pos = static_cast<HighsInt>(domchgstack_.size());
         infeasible_reason = Reason::modelRowLower(mip->a_matrix_.index_[i]);
         end = i + 1;
         break;
@@ -1740,7 +1750,7 @@ void HighsDomain::updateActivityUbChange(HighsInt col, double oldbound,
               feastol()) {
         mipsolver->mipdata_->debugSolution.nodePruned(*this);
         infeasible_ = true;
-        infeasible_pos = domchgstack_.size();
+        infeasible_pos = static_cast<HighsInt>(domchgstack_.size());
         infeasible_reason = Reason::modelRowLower(mip->a_matrix_.index_[i]);
         end = i + 1;
         break;
@@ -1792,7 +1802,7 @@ void HighsDomain::updateActivityUbChange(HighsInt col, double oldbound,
               feastol()) {
         mipsolver->mipdata_->debugSolution.nodePruned(*this);
         infeasible_ = true;
-        infeasible_pos = domchgstack_.size();
+        infeasible_pos = static_cast<HighsInt>(domchgstack_.size());
         infeasible_reason = Reason::modelRowUpper(mip->a_matrix_.index_[i]);
         end = i + 1;
         break;
@@ -1922,7 +1932,8 @@ void HighsDomain::markPropagateCut(Reason reason) {
       if (reason.type < static_cast<HighsInt>(cutpoolpropagation.size()))
         cutpoolpropagation[reason.type].markPropagateCut(reason.index);
       else
-        conflictPoolPropagation[reason.type - cutpoolpropagation.size()]
+        conflictPoolPropagation[reason.type - static_cast<HighsInt>(
+                                                  cutpoolpropagation.size())]
             .markPropagateConflict(reason.index);
   }
 }
@@ -2035,9 +2046,10 @@ void HighsDomain::changeBound(HighsDomainChange boundchg, Reason reason) {
       if (boundchg.boundval - col_upper_[boundchg.column] > feastol()) {
         mipsolver->mipdata_->debugSolution.nodePruned(*this);
         if (!infeasible_) {
-          infeasible_pos = domchgstack_.size();
+          infeasible_pos = static_cast<HighsInt>(domchgstack_.size());
           infeasible_ = true;
-          infeasible_reason = Reason::conflictingBounds(domchgstack_.size());
+          infeasible_reason = Reason::conflictingBounds(
+              static_cast<HighsInt>(domchgstack_.size()));
         }
       } else {
         boundchg.boundval = col_upper_[boundchg.column];
@@ -2046,7 +2058,7 @@ void HighsDomain::changeBound(HighsDomainChange boundchg, Reason reason) {
     }
 
     prevPos = colLowerPos_[boundchg.column];
-    colLowerPos_[boundchg.column] = domchgstack_.size();
+    colLowerPos_[boundchg.column] = static_cast<HighsInt>(domchgstack_.size());
   } else {
     if (boundchg.boundval >= col_upper_[boundchg.column]) {
       if (reason.type != Reason::kBranching) return;
@@ -2056,9 +2068,10 @@ void HighsDomain::changeBound(HighsDomainChange boundchg, Reason reason) {
       if (col_lower_[boundchg.column] - boundchg.boundval > feastol()) {
         mipsolver->mipdata_->debugSolution.nodePruned(*this);
         if (!infeasible_) {
-          infeasible_pos = domchgstack_.size();
+          infeasible_pos = static_cast<HighsInt>(domchgstack_.size());
           infeasible_ = true;
-          infeasible_reason = Reason::conflictingBounds(domchgstack_.size());
+          infeasible_reason = Reason::conflictingBounds(
+              static_cast<HighsInt>(domchgstack_.size()));
         }
       } else {
         boundchg.boundval = col_lower_[boundchg.column];
@@ -2067,14 +2080,14 @@ void HighsDomain::changeBound(HighsDomainChange boundchg, Reason reason) {
     }
 
     prevPos = colUpperPos_[boundchg.column];
-    colUpperPos_[boundchg.column] = domchgstack_.size();
+    colUpperPos_[boundchg.column] = static_cast<HighsInt>(domchgstack_.size());
   }
 
   mipsolver->mipdata_->debugSolution.boundChangeAdded(
       *this, boundchg, reason.type == Reason::kBranching);
 
   if (reason.type == Reason::kBranching)
-    branchPos_.push_back(domchgstack_.size());
+    branchPos_.push_back(static_cast<HighsInt>(domchgstack_.size()));
 
   assert(prevPos < static_cast<HighsInt>(domchgstack_.size()));
 
@@ -3328,8 +3341,9 @@ bool HighsDomain::ConflictSet::explainInfeasibility() {
                                            .cutpool->getRhs()[cutIndex],
                                        minAct);
       } else {
-        HighsInt conflictPoolIndex = localdom.infeasible_reason.type -
-                                     localdom.cutpoolpropagation.size();
+        HighsInt conflictPoolIndex =
+            localdom.infeasible_reason.type -
+            static_cast<HighsInt>(localdom.cutpoolpropagation.size());
         HighsInt conflictIndex = localdom.infeasible_reason.index;
 
         if (localdom.conflictPoolPropagation[conflictPoolIndex]
@@ -3579,8 +3593,9 @@ bool HighsDomain::ConflictSet::explainBoundChange(
                                          .cutpool->getRhs()[cutIndex],
                                      minAct);
       } else {
-        HighsInt conflictPoolIndex = localdom.domchgreason_[domchg.pos].type -
-                                     localdom.cutpoolpropagation.size();
+        HighsInt conflictPoolIndex =
+            localdom.domchgreason_[domchg.pos].type -
+            static_cast<HighsInt>(localdom.cutpoolpropagation.size());
         HighsInt conflictIndex = localdom.domchgreason_[domchg.pos].index;
 
         if (localdom.conflictPoolPropagation[conflictPoolIndex]
@@ -3679,7 +3694,7 @@ HighsDomain::ConflictSet::popQueue() {
 void HighsDomain::ConflictSet::clearQueue() { resolveQueue.clear(); }
 
 HighsInt HighsDomain::ConflictSet::queueSize() const {
-  return resolveQueue.size();
+  return static_cast<HighsInt>(resolveQueue.size());
 }
 
 bool HighsDomain::ConflictSet::resolvable(HighsInt domChgPos) const {

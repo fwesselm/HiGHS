@@ -187,7 +187,8 @@ HighsStatus Highs::formStandardFormLp() {
       // Upper bounded row, so record the slack
       num_upper_row++;
       assert(upper < kHighsInf);
-      HighsInt standard_form_row = this->standard_form_rhs_.size();
+      HighsInt standard_form_row =
+          static_cast<HighsInt>(this->standard_form_rhs_.size());
       slack_ix.push_back(standard_form_row + 1);
       matrix.getRow(iRow, num_nz, local_row.index_.data(),
                     local_row.value_.data());
@@ -197,7 +198,8 @@ HighsStatus Highs::formStandardFormLp() {
       // Lower bounded row, so record the slack
       num_lower_row++;
       assert(lower > -kHighsInf);
-      HighsInt standard_form_row = this->standard_form_rhs_.size();
+      HighsInt standard_form_row =
+          static_cast<HighsInt>(this->standard_form_rhs_.size());
       slack_ix.push_back(-(standard_form_row + 1));
       matrix.getRow(iRow, num_nz, local_row.index_.data(),
                     local_row.value_.data());
@@ -208,14 +210,16 @@ HighsStatus Highs::formStandardFormLp() {
       assert(lower > -kHighsInf);
       assert(upper < kHighsInf);
       num_boxed_row++;
-      HighsInt standard_form_row = this->standard_form_rhs_.size();
+      HighsInt standard_form_row =
+          static_cast<HighsInt>(this->standard_form_rhs_.size());
       slack_ix.push_back(-(standard_form_row + 1));
       matrix.getRow(iRow, num_nz, local_row.index_.data(),
                     local_row.value_.data());
       this->standard_form_matrix_.addRows(local_row);
       this->standard_form_rhs_.push_back(lower);
       // .. and upper slack, adding a copy of the row
-      standard_form_row = this->standard_form_rhs_.size();
+      standard_form_row =
+          static_cast<HighsInt>(this->standard_form_rhs_.size());
       slack_ix.push_back(standard_form_row + 1);
       this->standard_form_matrix_.addRows(local_row);
       this->standard_form_rhs_.push_back(upper);
@@ -316,7 +320,7 @@ HighsStatus Highs::formStandardFormLp() {
             -this->standard_form_matrix_.value_[iEl]);
       }
       this->standard_form_matrix_.start_.push_back(
-          HighsInt(this->standard_form_matrix_.index_.size()));
+          static_cast<HighsInt>(this->standard_form_matrix_.index_.size()));
     }
   }
   // Now add the slack variables
@@ -330,11 +334,13 @@ HighsStatus Highs::formStandardFormLp() {
       this->standard_form_matrix_.value_.push_back(-1);
     }
     this->standard_form_matrix_.start_.push_back(
-        HighsInt(this->standard_form_matrix_.index_.size()));
+        static_cast<HighsInt>(this->standard_form_matrix_.index_.size()));
   }
   // Now set correct values for the dimensions of this->standard_form_matrix_
-  this->standard_form_matrix_.num_col_ = int(standard_form_cost_.size());
-  this->standard_form_matrix_.num_row_ = int(standard_form_rhs_.size());
+  this->standard_form_matrix_.num_col_ =
+      static_cast<HighsInt>(standard_form_cost_.size());
+  this->standard_form_matrix_.num_row_ =
+      static_cast<HighsInt>(standard_form_rhs_.size());
   this->standard_form_valid_ = true;
   highsLogUser(options_.log_options, HighsLogType::kInfo,
                "Standard form LP obtained for LP with (free / lower / upper / "
@@ -381,8 +387,8 @@ HighsStatus Highs::basisForSolution() {
     }
   }
   const HighsInt num_basic_row = num_basic - num_basic_col;
-  assert((int)basis.col_status.size() == lp.num_col_);
-  assert((int)basis.row_status.size() == lp.num_row_);
+  assert(basis.col_status.size() == static_cast<size_t>(lp.num_col_));
+  assert(basis.row_status.size() == static_cast<size_t>(lp.num_row_));
   highsLogDev(options_.log_options, HighsLogType::kInfo,
               "LP has %d rows and solution yields %d possible basic variables "
               "(%d / %d; %d / %d)\n",
@@ -2144,11 +2150,12 @@ HighsStatus Highs::getIisInterface() {
                  " %d cols, %d rows, %d LPs solved"
                  " (min / average / max) iteration count (%6d / %6.2g / % 6d)"
                  " and time (%6.2f / %6.2f / % 6.2f) \n",
-                 int(this->iis_.col_index_.size()),
-                 int(this->iis_.row_index_.size()), int(num_lp_solved),
-                 int(min_iterations),
+                 static_cast<int>(this->iis_.col_index_.size()),
+                 static_cast<int>(this->iis_.row_index_.size()),
+                 static_cast<int>(num_lp_solved),
+                 static_cast<int>(min_iterations),
                  num_lp_solved > 0 ? (1.0 * sum_iterations) / num_lp_solved : 0,
-                 int(max_iterations), min_time,
+                 static_cast<int>(max_iterations), min_time,
                  num_lp_solved > 0 ? sum_time / num_lp_solved : 0, max_time);
   }
   return this->getIisInterfaceReturn(return_status, original_options,
@@ -2402,15 +2409,15 @@ HighsStatus Highs::elasticityFilter(const double global_lower_penalty,
         ecol_cost.push_back(upper_penalty);
         evar_ix++;
       }
-      erow_start.push_back(erow_index.size());
+      erow_start.push_back(static_cast<HighsInt>(erow_index.size()));
       HighsInt row_nz =
           erow_start[erow_start.size() - 1] - erow_start[erow_start.size() - 2];
       //      printf("eRow for column %d has %d nonzeros\n", int(iCol),
       //      int(row_nz));
       assert(row_nz == 2 || row_nz == 3);
     }
-    HighsInt num_new_col = col_of_ecol.size();
-    HighsInt num_new_row = erow_start.size() - 1;
+    HighsInt num_new_col = static_cast<HighsInt>(col_of_ecol.size());
+    HighsInt num_new_row = static_cast<HighsInt>(erow_start.size()) - 1;
     HighsInt num_new_nz = erow_start[num_new_row];
     if (kIisDevReport)
       printf(
@@ -2484,7 +2491,7 @@ HighsStatus Highs::elasticityFilter(const double global_lower_penalty,
         // Define the sub-matrix column
         ecol_index.push_back(iRow);
         ecol_value.push_back(1);
-        ecol_start.push_back(ecol_index.size());
+        ecol_start.push_back(static_cast<HighsInt>(ecol_index.size()));
         ecol_cost.push_back(penalty);
         evar_ix++;
       }
@@ -2498,12 +2505,12 @@ HighsStatus Highs::elasticityFilter(const double global_lower_penalty,
         // Define the sub-matrix column
         ecol_index.push_back(iRow);
         ecol_value.push_back(-1);
-        ecol_start.push_back(ecol_index.size());
+        ecol_start.push_back(static_cast<HighsInt>(ecol_index.size()));
         ecol_cost.push_back(penalty);
         evar_ix++;
       }
     }
-    HighsInt num_new_col = ecol_start.size() - 1;
+    HighsInt num_new_col = static_cast<HighsInt>(ecol_start.size()) - 1;
     HighsInt num_new_nz = ecol_start[num_new_col];
     ecol_lower.assign(num_new_col, 0);
     ecol_upper.assign(num_new_col, kHighsInf);
@@ -2629,7 +2636,8 @@ HighsStatus Highs::elasticityFilter(const double global_lower_penalty,
                 bound_of_col_of_ecol_is_lower[eCol] ? lp.col_lower_[iCol]
                                                     : lp.col_upper_[iCol],
                 solution.col_value[col_ecol_offset + eCol]);
-          this->changeColBounds(col_ecol_offset + eCol, 0, 0);
+          this->changeColBounds(col_ecol_offset + static_cast<HighsInt>(eCol),
+                                0, 0);
           num_fixed++;
         }
       }
@@ -2650,7 +2658,8 @@ HighsStatus Highs::elasticityFilter(const double global_lower_penalty,
                 bound_of_row_of_ecol_is_lower[eCol] ? lp.row_lower_[iRow]
                                                     : lp.row_upper_[iRow],
                 solution.col_value[row_ecol_offset + eCol]);
-          this->changeColBounds(row_ecol_offset + eCol, 0, 0);
+          this->changeColBounds(row_ecol_offset + static_cast<HighsInt>(eCol),
+                                0, 0);
           num_fixed++;
           row_set.insert(iRow);
         }
@@ -2660,7 +2669,8 @@ HighsStatus Highs::elasticityFilter(const double global_lower_penalty,
     if (num_fixed == 0) {
       // No elastic variables were positive, so problem is feasible
       iis.status_ = kIisModelStatusFeasible;
-      iis.reportIteration(options_, loop_k, HighsInt(row_set.size()), true);
+      iis.reportIteration(options_, loop_k,
+                          static_cast<HighsInt>(row_set.size()), true);
       break;
     }
     HighsStatus run_status = solveLp();
@@ -2689,7 +2699,8 @@ HighsStatus Highs::elasticityFilter(const double global_lower_penalty,
     }
     if (kIisDevReport) this->writeSolution("", kSolutionStylePretty);
     bool terminate = (model_status == HighsModelStatus::kInfeasible);
-    iis.reportIteration(options_, loop_k, HighsInt(row_set.size()), terminate);
+    iis.reportIteration(options_, loop_k, static_cast<HighsInt>(row_set.size()),
+                        terminate);
     if (terminate) break;
   }
   HighsInt num_enforced_col_ecol = 0;
@@ -2737,7 +2748,7 @@ HighsStatus Highs::elasticityFilter(const double global_lower_penalty,
       }
     }
   }
-  HighsInt num_iis_row = iis.row_index_.size();
+  HighsInt num_iis_row = static_cast<HighsInt>(iis.row_index_.size());
   if (iis.status_ == kIisModelStatusFeasible) {
     assert(num_enforced_col_ecol == 0 && num_enforced_row_ecol == 0);
     assert(num_iis_row == 0);
@@ -2747,7 +2758,7 @@ HighsStatus Highs::elasticityFilter(const double global_lower_penalty,
     highsLogUser(options_.log_options, HighsLogType::kInfo,
                  "Elasticity filter after %d passes found an infeasible subset "
                  "of %d rows\n",
-                 int(loop_k), row_set.size());
+                 static_cast<int>(loop_k), static_cast<int>(row_set.size()));
   }
 
   iis.valid_ = true;
@@ -2846,8 +2857,8 @@ HighsStatus Highs::extractIis(HighsInt& num_iis_col, HighsInt& num_iis_row,
                               HighsInt* iis_col_bound,
                               HighsInt* iis_row_bound) {
   assert(this->iis_.valid_);
-  num_iis_col = this->iis_.col_index_.size();
-  num_iis_row = this->iis_.row_index_.size();
+  num_iis_col = static_cast<HighsInt>(this->iis_.col_index_.size());
+  num_iis_row = static_cast<HighsInt>(this->iis_.row_index_.size());
   if (iis_col_index || iis_col_bound) {
     for (HighsInt iCol = 0; iCol < num_iis_col; iCol++) {
       if (iis_col_index) iis_col_index[iCol] = this->iis_.col_index_[iCol];
@@ -3011,7 +3022,8 @@ void Highs::restoreInfCost(HighsStatus& return_status) {
   HighsLp& lp = this->model_.lp_;
   HighsBasis& basis = this->basis_;
   HighsLpMods& mods = lp.mods_;
-  HighsInt num_inf_cost = mods.save_inf_cost_variable_index.size();
+  HighsInt num_inf_cost =
+      static_cast<HighsInt>(mods.save_inf_cost_variable_index.size());
   if (num_inf_cost <= 0) return;
   assert(num_inf_cost);
   for (HighsInt ix = 0; ix < num_inf_cost; ix++) {
@@ -3237,9 +3249,11 @@ HighsStatus Highs::computeIllConditioning(
   // Report on ill-conditioning multipliers
   std::stringstream ss;
   const bool has_row_names =
-      HighsInt(incumbent_lp.row_names_.size()) == incumbent_lp.num_row_;
+      static_cast<HighsInt>(incumbent_lp.row_names_.size()) ==
+      incumbent_lp.num_row_;
   const bool has_col_names =
-      HighsInt(incumbent_lp.col_names_.size()) == incumbent_lp.num_col_;
+      static_cast<HighsInt>(incumbent_lp.col_names_.size()) ==
+      incumbent_lp.num_col_;
   const double coefficient_zero_tolerance = 1e-8;
   auto printCoefficient = [&](const double multiplier, const bool first) {
     if (std::fabs(multiplier) < coefficient_zero_tolerance) {
@@ -3259,7 +3273,8 @@ HighsStatus Highs::computeIllConditioning(
     }
   };
 
-  for (HighsInt iX = int(abs_list.size()) - 1; iX >= 0; iX--) {
+  for (HighsInt iX = static_cast<HighsInt>(abs_list.size()) - 1; iX >= 0;
+       iX--) {
     HighsInt iRow = abs_list[iX].second;
     HighsIllConditioningRecord record;
     record.index = iRow;
@@ -3273,7 +3288,8 @@ HighsStatus Highs::computeIllConditioning(
     std::vector<double> value(incumbent_lp.num_col_);
     HighsInt* p_index = index.data();
     double* p_value = value.data();
-    for (HighsInt iX = 0; iX < HighsInt(ill_conditioning.record.size()); iX++) {
+    for (HighsInt iX = 0;
+         iX < static_cast<HighsInt>(ill_conditioning.record.size()); iX++) {
       ss.str(std::string());
       bool newline = false;
       HighsInt iRow = ill_conditioning.record[iX].index;
@@ -3298,7 +3314,7 @@ HighsStatus Highs::computeIllConditioning(
         std::string col_name = has_col_names ? incumbent_lp.col_names_[iCol]
                                              : "C" + std::to_string(iCol);
         ss << col_name << " ";
-        HighsInt length_ss = ss.str().length();
+        HighsInt length_ss = static_cast<HighsInt>(ss.str().length());
         if (length_ss > 72 && iEl < num_nz - 1) {
           highsLogUser(options_.log_options, HighsLogType::kInfo, "%s\n",
                        ss.str().c_str());
@@ -3340,7 +3356,7 @@ HighsStatus Highs::computeIllConditioning(
           std::string row_name = has_row_names ? incumbent_lp.row_names_[iRow]
                                                : "R" + std::to_string(iRow);
           ss << row_name;
-          HighsInt length_ss = ss.str().length();
+          HighsInt length_ss = static_cast<HighsInt>(ss.str().length());
           if (length_ss > 72 && iEl < incumbent_matrix.start_[iCol + 1] - 1) {
             ss << " | ";
             highsLogUser(options_.log_options, HighsLogType::kInfo, "%s\n",
@@ -3413,7 +3429,7 @@ void Highs::formIllConditioningLp0(HighsLp& ill_conditioning_lp,
       ill_conditioning_matrix.value_.push_back(1.0);
     }
     ill_conditioning_matrix.start_.push_back(
-        HighsInt(ill_conditioning_matrix.index_.size()));
+        static_cast<HighsInt>(ill_conditioning_matrix.index_.size()));
   }
   for (HighsInt iRow = 0; iRow < incumbent_lp.num_row_; iRow++) {
     if (this->basis_.row_status[iRow] != HighsBasisStatus::kBasic) continue;
@@ -3429,7 +3445,7 @@ void Highs::formIllConditioningLp0(HighsLp& ill_conditioning_lp,
       ill_conditioning_matrix.value_.push_back(1.0);
     }
     ill_conditioning_matrix.start_.push_back(
-        HighsInt(ill_conditioning_matrix.index_.size()));
+        static_cast<HighsInt>(ill_conditioning_matrix.index_.size()));
   }
   if (constraint) {
     // Add the column e, and transpose the resulting matrix
@@ -3438,7 +3454,7 @@ void Highs::formIllConditioningLp0(HighsLp& ill_conditioning_lp,
       ill_conditioning_matrix.value_.push_back(1.0);
     }
     ill_conditioning_matrix.start_.push_back(
-        HighsInt(ill_conditioning_matrix.index_.size()));
+        static_cast<HighsInt>(ill_conditioning_matrix.index_.size()));
     ill_conditioning_matrix.num_row_ = incumbent_lp.num_row_;
     ill_conditioning_matrix.num_col_ = incumbent_lp.num_row_ + 1;
     ill_conditioning_matrix.ensureRowwise();
@@ -3453,7 +3469,7 @@ void Highs::formIllConditioningLp0(HighsLp& ill_conditioning_lp,
     ill_conditioning_matrix.index_.push_back(iRow);
     ill_conditioning_matrix.value_.push_back(1.0);
     ill_conditioning_matrix.start_.push_back(
-        HighsInt(ill_conditioning_matrix.index_.size()));
+        static_cast<HighsInt>(ill_conditioning_matrix.index_.size()));
     // Subtracting x_- with cost 1
     ill_conditioning_lp.col_cost_.push_back(1);
     ill_conditioning_lp.col_lower_.push_back(0);
@@ -3461,7 +3477,7 @@ void Highs::formIllConditioningLp0(HighsLp& ill_conditioning_lp,
     ill_conditioning_matrix.index_.push_back(iRow);
     ill_conditioning_matrix.value_.push_back(-1.0);
     ill_conditioning_matrix.start_.push_back(
-        HighsInt(ill_conditioning_matrix.index_.size()));
+        static_cast<HighsInt>(ill_conditioning_matrix.index_.size()));
   }
   ill_conditioning_lp.num_col_ = 3 * incumbent_lp.num_row_;
   ill_conditioning_matrix.num_col_ = ill_conditioning_lp.num_col_;
@@ -3538,7 +3554,7 @@ void Highs::formIllConditioningLp1(HighsLp& ill_conditioning_lp,
       ill_conditioning_matrix.value_.push_back(1.0);
     }
     ill_conditioning_matrix.start_.push_back(
-        HighsInt(ill_conditioning_matrix.index_.size()));
+        static_cast<HighsInt>(ill_conditioning_matrix.index_.size()));
     ill_conditioning_lp.num_col_++;
   }
 
@@ -3563,7 +3579,7 @@ void Highs::formIllConditioningLp1(HighsLp& ill_conditioning_lp,
       ill_conditioning_matrix.value_.push_back(1.0);
     }
     ill_conditioning_matrix.start_.push_back(
-        HighsInt(ill_conditioning_matrix.index_.size()));
+        static_cast<HighsInt>(ill_conditioning_matrix.index_.size()));
     ill_conditioning_lp.num_col_++;
   }
   assert(ill_conditioning_lp.num_col_ == incumbent_num_row);
@@ -3573,19 +3589,19 @@ void Highs::formIllConditioningLp1(HighsLp& ill_conditioning_lp,
       ill_conditioning_matrix.index_.push_back(iRow);
       ill_conditioning_matrix.value_.push_back(1.0);
       ill_conditioning_matrix.start_.push_back(
-          HighsInt(ill_conditioning_matrix.index_.size()));
+          static_cast<HighsInt>(ill_conditioning_matrix.index_.size()));
     }
     // Add the square zero matrix of c7
     for (HighsInt iRow = 0; iRow < incumbent_num_row; iRow++)
       ill_conditioning_matrix.start_.push_back(
-          HighsInt(ill_conditioning_matrix.index_.size()));
+          static_cast<HighsInt>(ill_conditioning_matrix.index_.size()));
     // Add the vector of ones for e^Ty = 1
     for (HighsInt iRow = 0; iRow < incumbent_num_row; iRow++) {
       ill_conditioning_matrix.index_.push_back(iRow);
       ill_conditioning_matrix.value_.push_back(1.0);
     }
     ill_conditioning_matrix.start_.push_back(
-        HighsInt(ill_conditioning_matrix.index_.size()));
+        static_cast<HighsInt>(ill_conditioning_matrix.index_.size()));
 
     // Transpose the resulting matrix
     ill_conditioning_matrix.num_col_ = c6_offset + 1;
@@ -3613,7 +3629,7 @@ void Highs::formIllConditioningLp1(HighsLp& ill_conditioning_lp,
     ill_conditioning_matrix.index_.push_back(c7_offset + iRow);
     ill_conditioning_matrix.value_.push_back(1.0);
     ill_conditioning_matrix.start_.push_back(
-        HighsInt(ill_conditioning_matrix.index_.size()));
+        static_cast<HighsInt>(ill_conditioning_matrix.index_.size()));
     ill_conditioning_lp.num_col_++;
     // Adding w with cost 0
     ill_conditioning_lp.col_names_.push_back("w_" + std::to_string(iRow));
@@ -3627,7 +3643,7 @@ void Highs::formIllConditioningLp1(HighsLp& ill_conditioning_lp,
     ill_conditioning_matrix.index_.push_back(c7_offset + iRow);
     ill_conditioning_matrix.value_.push_back(1.0);
     ill_conditioning_matrix.start_.push_back(
-        HighsInt(ill_conditioning_matrix.index_.size()));
+        static_cast<HighsInt>(ill_conditioning_matrix.index_.size()));
     ill_conditioning_lp.num_col_++;
   }
   // Now add the variables s and t
@@ -3644,7 +3660,7 @@ void Highs::formIllConditioningLp1(HighsLp& ill_conditioning_lp,
     ill_conditioning_matrix.index_.push_back(c5_offset);
     ill_conditioning_matrix.value_.push_back(1.0);
     ill_conditioning_matrix.start_.push_back(
-        HighsInt(ill_conditioning_matrix.index_.size()));
+        static_cast<HighsInt>(ill_conditioning_matrix.index_.size()));
     ill_conditioning_lp.num_col_++;
     // Adding t with cost 0
     ill_conditioning_lp.col_names_.push_back("t_" + std::to_string(iRow));
@@ -3658,7 +3674,7 @@ void Highs::formIllConditioningLp1(HighsLp& ill_conditioning_lp,
     ill_conditioning_matrix.index_.push_back(c5_offset);
     ill_conditioning_matrix.value_.push_back(1.0);
     ill_conditioning_matrix.start_.push_back(
-        HighsInt(ill_conditioning_matrix.index_.size()));
+        static_cast<HighsInt>(ill_conditioning_matrix.index_.size()));
     ill_conditioning_lp.num_col_++;
   }
   // Add the bounds for c6: e^Ty = 1
@@ -3668,9 +3684,9 @@ void Highs::formIllConditioningLp1(HighsLp& ill_conditioning_lp,
   assert(ill_conditioning_bound > 0);
   ill_conditioning_lp.row_lower_.push_back(-kHighsInf);
   ill_conditioning_lp.row_upper_.push_back(ill_conditioning_bound);
-  assert(HighsInt(ill_conditioning_lp.row_lower_.size()) ==
+  assert(static_cast<HighsInt>(ill_conditioning_lp.row_lower_.size()) ==
          ill_conditioning_lp.num_row_);
-  assert(HighsInt(ill_conditioning_lp.row_upper_.size()) ==
+  assert(static_cast<HighsInt>(ill_conditioning_lp.row_upper_.size()) ==
          ill_conditioning_lp.num_row_);
 
   // Now add the variables to measure the infeasibilities in
@@ -3685,7 +3701,7 @@ void Highs::formIllConditioningLp1(HighsLp& ill_conditioning_lp,
     ill_conditioning_matrix.index_.push_back(c7_offset + iRow);
     ill_conditioning_matrix.value_.push_back(-1.0);
     ill_conditioning_matrix.start_.push_back(
-        HighsInt(ill_conditioning_matrix.index_.size()));
+        static_cast<HighsInt>(ill_conditioning_matrix.index_.size()));
     ill_conditioning_lp.num_col_++;
     // Adding r^- with cost 1
     ill_conditioning_lp.col_names_.push_back("IfsMinus_" +
@@ -3696,7 +3712,7 @@ void Highs::formIllConditioningLp1(HighsLp& ill_conditioning_lp,
     ill_conditioning_matrix.index_.push_back(c7_offset + iRow);
     ill_conditioning_matrix.value_.push_back(1.0);
     ill_conditioning_matrix.start_.push_back(
-        HighsInt(ill_conditioning_matrix.index_.size()));
+        static_cast<HighsInt>(ill_conditioning_matrix.index_.size()));
     ill_conditioning_lp.num_col_++;
   }
   assert(ill_conditioning_lp.num_col_ == 7 * incumbent_num_row);
@@ -3828,7 +3844,7 @@ bool Highs::infeasibleBoundsOk() {
 bool Highs::validLinearObjective(const HighsLinearObjective& linear_objective,
                                  const HighsInt iObj) const {
   HighsInt linear_objective_coefficients_size =
-      linear_objective.coefficients.size();
+      static_cast<HighsInt>(linear_objective.coefficients.size());
   if (linear_objective_coefficients_size != this->model_.lp_.num_col_) {
     highsLogUser(
         options_.log_options, HighsLogType::kError,
@@ -3854,7 +3870,8 @@ bool Highs::hasRepeatedLinearObjectivePriorities(
   // Look for repeated values in the linear objective priorities, also
   // comparing linear_objective if it's not a null pointer. Cost is
   // O(n^2), but who will have more than O(1) linear objectives!
-  HighsInt num_linear_objective = this->multi_linear_objective_.size();
+  HighsInt num_linear_objective =
+      static_cast<HighsInt>(this->multi_linear_objective_.size());
   if (num_linear_objective <= 0 ||
       (num_linear_objective <= 1 && !linear_objective))
     return false;
@@ -3882,7 +3899,8 @@ HighsStatus Highs::returnFromLexicographicOptimization(
   // deleteRows
   HighsModelStatus model_status = this->model_status_;
   HighsInfo info = this->info_;
-  HighsInt num_linear_objective = this->multi_linear_objective_.size();
+  HighsInt num_linear_objective =
+      static_cast<HighsInt>(this->multi_linear_objective_.size());
   if (num_linear_objective > 1) {
     this->deleteRows(original_lp_num_row, this->model_.lp_.num_row_ - 1);
     // Recover model_status_ and info_, and then account for lack of basis or
@@ -3900,7 +3918,8 @@ HighsStatus Highs::returnFromLexicographicOptimization(
 
 HighsStatus Highs::multiobjectiveSolve() {
   const HighsInt coeff_logging_size_limit = 10;
-  HighsInt num_linear_objective = this->multi_linear_objective_.size();
+  HighsInt num_linear_objective =
+      static_cast<HighsInt>(this->multi_linear_objective_.size());
 
   assert(num_linear_objective > 0);
   HighsLp& lp = this->model_.lp_;

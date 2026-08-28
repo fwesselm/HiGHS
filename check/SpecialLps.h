@@ -361,7 +361,7 @@ class SpecialLps {
 
   void reportLpName(const std::string lp_name, const bool dev_run = false) {
     if (dev_run) {
-      HighsInt lp_name_length = lp_name.length();
+      HighsInt lp_name_length = static_cast<HighsInt>(lp_name.length());
       printf("\n **");
       for (HighsInt i = 0; i < lp_name_length; i++) printf("*");
       printf("**\n * %s *\n **", lp_name.c_str());

@@ -54,7 +54,7 @@ void HighsSymmetryDetection::removeFixPoints() {
   }
 
   if ((HighsInt)currentPartition.size() < numVertices) {
-    numVertices = currentPartition.size();
+    numVertices = static_cast<HighsInt>(currentPartition.size());
     if (numVertices == 0) {
       numActiveCols = 0;
       return;
@@ -199,7 +199,7 @@ HighsSymmetries::computeStabilizerOrbits(const HighsDomain& localdom,
       stabilizerOrbits.stabilizedCols.push_back(columnPosition[col]);
   }
 
-  HighsInt permLength = permutationColumns.size();
+  HighsInt permLength = static_cast<HighsInt>(permutationColumns.size());
   workspace.orbitPartition.resize(permLength);
   std::iota(workspace.orbitPartition.begin(), workspace.orbitPartition.end(),
             0);
@@ -251,7 +251,8 @@ HighsSymmetries::computeStabilizerOrbits(const HighsDomain& localdom,
                      getOrbit(col2, workspace.orbitPartition,
                               workspace.linkCompressionStack);
             });
-    HighsInt numOrbitCols = stabilizerOrbits.orbitCols.size();
+    HighsInt numOrbitCols =
+        static_cast<HighsInt>(stabilizerOrbits.orbitCols.size());
     stabilizerOrbits.orbitStarts.reserve(numOrbitCols + 1);
     stabilizerOrbits.orbitStarts.push_back(0);
 
@@ -272,7 +273,7 @@ HighsInt StabilizerOrbits::orbitalFixing(HighsDomain& domain) const {
   HighsInt numFixed = symmetries->propagateOrbitopes(domain);
   if (domain.infeasible() || orbitCols.empty()) return numFixed;
 
-  HighsInt numOrbits = orbitStarts.size() - 1;
+  HighsInt numOrbits = static_cast<HighsInt>(orbitStarts.size()) - 1;
   for (HighsInt i = 0; i < numOrbits; ++i) {
     HighsInt fixcol = -1;
     for (HighsInt j = orbitStarts[i]; j < orbitStarts[i + 1]; ++j) {
@@ -409,7 +410,7 @@ HighsInt HighsOrbitopeMatrix::getBranchingColumn(
 
 HighsInt HighsOrbitopeMatrix::orbitalFixingForPackingOrbitope(
     const std::vector<HighsInt>& rows, HighsDomain& domain) const {
-  HighsInt numDynamicRows = rows.size();
+  HighsInt numDynamicRows = static_cast<HighsInt>(rows.size());
 
   // printf("propagate packing orbitope\n");
 
@@ -531,7 +532,7 @@ HighsInt HighsOrbitopeMatrix::orbitalFixingForPackingOrbitope(
 
 HighsInt HighsOrbitopeMatrix::orbitalFixingForFullOrbitope(
     const std::vector<HighsInt>& rows, HighsDomain& domain) const {
-  HighsInt numDynamicRows = rows.size();
+  HighsInt numDynamicRows = static_cast<HighsInt>(rows.size());
   std::vector<int8_t> Mminimal(numDynamicRows * rowLength, -1);
 
   for (HighsInt j = 0; j < rowLength; ++j) {
@@ -957,7 +958,8 @@ bool HighsSymmetryDetection::checkStoredAutomorphism(HighsInt vertex) const {
   for (HighsInt i = 0; i < numCheck; ++i) {
     const HighsInt* automorphism = automorphisms.data() + i * numVertices;
     bool automorphismUseful = true;
-    for (HighsInt j = nodeStack.size() - 2; j >= firstPathDepth; --j) {
+    for (HighsInt j = static_cast<HighsInt>(nodeStack.size()) - 2;
+         j >= firstPathDepth; --j) {
       HighsInt fixPos = vertexPosition[nodeStack[j].lastDistiguished];
 
       if (automorphism[fixPos] != vertexGroundSet[fixPos]) {
@@ -1052,7 +1054,7 @@ void HighsSymmetryDetection::cleanupBacktrack(HighsInt cellCreationStackPos) {
   // the links have been updated. Even though they might still not be fully
   // compressed the cell starts will all point to the correct cell end and the
   // lookup with path compression will give the correct start
-  for (HighsInt stackPos = cellCreationStack.size() - 1;
+  for (HighsInt stackPos = static_cast<HighsInt>(cellCreationStack.size()) - 1;
        stackPos >= cellCreationStackPos; --stackPos) {
     HighsInt cell = cellCreationStack[stackPos];
 
@@ -1088,8 +1090,9 @@ HighsInt HighsSymmetryDetection::getCellStart(HighsInt pos) {
 
 void HighsSymmetryDetection::createNode() {
   nodeStack.emplace_back();
-  nodeStack.back().stackStart = cellCreationStack.size();
-  nodeStack.back().certificateEnd = currNodeCertificate.size();
+  nodeStack.back().stackStart = static_cast<HighsInt>(cellCreationStack.size());
+  nodeStack.back().certificateEnd =
+      static_cast<HighsInt>(currNodeCertificate.size());
   nodeStack.back().targetCell = -1;
   nodeStack.back().lastDistiguished = -1;
 }
@@ -1133,7 +1136,7 @@ void HighsSymmetryDetection::loadModelAsGraph(const HighsLp& model,
   HighsMatrixColoring coloring(epsilon);
   edgeBuffer.resize(numVertices);
   // set up row and column based incidence matrix
-  HighsInt numNz = model.a_matrix_.index_.size();
+  HighsInt numNz = static_cast<HighsInt>(model.a_matrix_.index_.size());
   Gedge.resize(2 * numNz);
   std::transform(model.a_matrix_.index_.begin(), model.a_matrix_.index_.end(),
                  Gedge.begin(), [&](HighsInt rowIndex) {
@@ -1273,7 +1276,7 @@ HighsSymmetryDetection::dumpCurrentGraph() {
 }
 
 void HighsSymmetryDetection::switchToNextNode(HighsInt backtrackDepth) {
-  HighsInt stackEnd = cellCreationStack.size();
+  HighsInt stackEnd = static_cast<HighsInt>(cellCreationStack.size());
   // we need to backtrack the datastructures
   nodeStack.resize(backtrackDepth);
   if (backtrackDepth == 0) return;
@@ -1306,7 +1309,7 @@ void HighsSymmetryDetection::switchToNextNode(HighsInt backtrackDepth) {
     }
 
     if (!partitionRefinement()) {
-      stackEnd = cellCreationStack.size();
+      stackEnd = static_cast<HighsInt>(cellCreationStack.size());
       continue;
     }
 
@@ -1433,7 +1436,8 @@ HighsSymmetryDetection::computeComponentData(
   currentComponentStart = -1;
   currentComponent = -1;
 
-  HighsInt numUsedPerms = componentData.permComponents.size();
+  HighsInt numUsedPerms =
+      static_cast<HighsInt>(componentData.permComponents.size());
 
   for (HighsInt i = 0; i < numUsedPerms; ++i) {
     HighsInt p = componentData.permComponents[i];
@@ -1619,7 +1623,8 @@ bool HighsSymmetryDetection::isFullOrbitope(const ComponentData& componentData,
   }
 
   for (HighsInt col : orbitopeMatrix.matrix)
-    symmetries.columnToOrbitope.insert(col, symmetries.orbitopes.size());
+    symmetries.columnToOrbitope.insert(
+        col, static_cast<HighsInt>(symmetries.orbitopes.size()));
 
   symmetries.orbitopes.emplace_back(std::move(orbitopeMatrix));
 
@@ -1679,10 +1684,10 @@ void HighsSymmetryDetection::run(HighsSymmetries& symmetries) {
         firstLeaveCertificate = currNodeCertificate;
         bestLeaveCertificate = currNodeCertificate;
         firstLeaveGraph = dumpCurrentGraph();
-        firstPathDepth = nodeStack.size();
-        bestPathDepth = nodeStack.size();
-        firstLeavePrefixLen = currNodeCertificate.size();
-        bestLeavePrefixLen = currNodeCertificate.size();
+        firstPathDepth = static_cast<HighsInt>(nodeStack.size());
+        bestPathDepth = static_cast<HighsInt>(nodeStack.size());
+        firstLeavePrefixLen = static_cast<HighsInt>(currNodeCertificate.size());
+        bestLeavePrefixLen = static_cast<HighsInt>(currNodeCertificate.size());
 
         HighsInt backtrackDepth = firstPathDepth - 1;
         while (backtrackDepth > 0 &&
@@ -1691,7 +1696,7 @@ void HighsSymmetryDetection::run(HighsSymmetries& symmetries) {
         switchToNextNode(backtrackDepth);
       } else {
         HighsInt wrongCell = -1;
-        HighsInt backtrackDepth = nodeStack.size() - 1;
+        HighsInt backtrackDepth = static_cast<HighsInt>(nodeStack.size()) - 1;
         assert(currNodeCertificate.size() == firstLeaveCertificate.size());
         if (firstLeavePrefixLen ==
                 static_cast<HighsInt>(currNodeCertificate.size()) ||
@@ -1755,8 +1760,9 @@ void HighsSymmetryDetection::run(HighsSymmetries& symmetries) {
           bestLeaveCertificate = currNodeCertificate;
           bestLeaveGraph = dumpCurrentGraph();
           bestLeavePartition = currentPartition;
-          bestPathDepth = nodeStack.size();
-          bestLeavePrefixLen = currNodeCertificate.size();
+          bestPathDepth = static_cast<HighsInt>(nodeStack.size());
+          bestLeavePrefixLen =
+              static_cast<HighsInt>(currNodeCertificate.size());
         }
 
         switchToNextNode(backtrackDepth);
@@ -1769,11 +1775,11 @@ void HighsSymmetryDetection::run(HighsSymmetries& symmetries) {
       bool success = determineNextToDistinguish();
       assert(success);
       if (!distinguishVertex(targetCell)) {
-        switchToNextNode(nodeStack.size() - 1);
+        switchToNextNode(static_cast<HighsInt>(nodeStack.size()) - 1);
         continue;
       }
       if (!partitionRefinement()) {
-        switchToNextNode(nodeStack.size());
+        switchToNextNode(static_cast<HighsInt>(nodeStack.size()));
         continue;
       }
 

@@ -1831,7 +1831,7 @@ HPresolve::Result HPresolve::runProbing(HighsPostsolveStack& postsolve_stack) {
     const bool silent = silentLog();
     HighsInt iBin = -1;
     HighsInt iBin_probed = -1;
-    HighsInt num_binary = binaries.size();
+    HighsInt num_binary = static_cast<HighsInt>(binaries.size());
     double tt = this->timer->read();
     double tt0 = tt;
     double log_tt = tt0;
@@ -2816,7 +2816,8 @@ void HPresolve::storeRow(HighsInt row) { getRowPositions(row, rowpositions); }
 
 HighsTripletPositionSlice HPresolve::getStoredRow() const {
   return HighsTripletPositionSlice(Acol.data(), Avalue.data(),
-                                   rowpositions.data(), rowpositions.size());
+                                   rowpositions.data(),
+                                   static_cast<HighsInt>(rowpositions.size()));
 }
 
 bool HPresolve::okFromCSC(const std::vector<double>& Aval,
@@ -7279,8 +7280,8 @@ HighsModelStatus HPresolve::run(HighsPostsolveStack& postsolve_stack) {
         }
 
         mipsolver->mipdata_->getCutPool().addCut(
-            *mipsolver, cutinds.data(), cutvals.data(), cutinds.size(),
-            model->row_upper_[i],
+            *mipsolver, cutinds.data(), cutvals.data(),
+            static_cast<HighsInt>(cutinds.size()), model->row_upper_[i],
             rowsizeInteger[i] + rowsizeImplInt[i] == rowsize[i] &&
                 rowCoefficientsIntegral(i, 1.0),
             true, false, false);
@@ -7375,7 +7376,8 @@ void HPresolve::computeIntermediateMatrix(std::vector<HighsInt>& flagRow,
                                           size_t& numreductions) {
   shrinkProblemEnabled = false;
   HighsPostsolveStack stack;
-  stack.initializeIndexMaps(flagRow.size(), flagCol.size());
+  stack.initializeIndexMaps(static_cast<HighsInt>(flagRow.size()),
+                            static_cast<HighsInt>(flagCol.size()));
   setReductionLimit(numreductions);
   presolve(stack);
   numreductions = stack.numReductions();
@@ -7404,7 +7406,7 @@ HPresolve::Result HPresolve::removeDependentEquations(
     analysis_.startPresolveRuleLog(kPresolveRuleDependentEquations);
 
   HighsSparseMatrix matrix;
-  HighsInt num_equations = equations.size();
+  HighsInt num_equations = static_cast<HighsInt>(equations.size());
   matrix.num_col_ = num_equations;
   matrix.num_row_ = model->num_col_ + 1;
   matrix.start_.resize(num_equations + 1);
@@ -7436,7 +7438,7 @@ HPresolve::Result HPresolve::removeDependentEquations(
       matrix.index_.push_back(model->num_col_);
     }
 
-    matrix.start_[i] = matrix.value_.size();
+    matrix.start_[i] = static_cast<HighsInt>(matrix.value_.size());
   }
   // Find the number of (true) variables in the system of equations as
   // the number of columns with entries in at least one equation
@@ -8103,7 +8105,7 @@ HPresolve::Result HPresolve::strengthenInequalities(
         continue;
       }
 
-      indices.push_back(reducedcost.size());
+      indices.push_back(static_cast<HighsInt>(reducedcost.size()));
       positions.push_back(pos);
       reducedcost.push_back(weight);
       complementation.push_back(comp);
@@ -8181,7 +8183,7 @@ HPresolve::Result HPresolve::strengthenInequalities(
       step = min(step, maxviolation / coverrhs);
       maxviolation -= step * coverrhs;
 
-      HighsInt slackind = reducedcost.size();
+      HighsInt slackind = static_cast<HighsInt>(reducedcost.size());
       reducedcost.push_back(step);
       upper.push_back(slackupper);
 
@@ -8261,7 +8263,7 @@ HPresolve::Result HPresolve::detectParallelRowsAndCols(
 
   HighsHashTable<HighsInt, HighsInt> numRowSingletons;
 
-  HighsInt nnz = Avalue.size();
+  HighsInt nnz = static_cast<HighsInt>(Avalue.size());
   rowHashes.assign(rowsize.begin(), rowsize.end());
   colHashes.assign(colsize.begin(), colsize.end());
 

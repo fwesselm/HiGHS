@@ -295,7 +295,8 @@ restart:
       mipdata_->domains.emplace_back(mipdata_->getDomain());
       mipdata_->cutpools.emplace_back(
           numCol(), options_mip_->mip_pool_age_limit,
-          options_mip_->mip_pool_soft_limit, mipdata_->cutpools.size());
+          options_mip_->mip_pool_soft_limit,
+          static_cast<HighsInt>(mipdata_->cutpools.size()));
       mipdata_->conflictpools.emplace_back(5 * options_mip_->mip_pool_age_limit,
                                            options_mip_->mip_pool_soft_limit);
       mipdata_->domains.back().addCutpool(mipdata_->cutpools.back());
@@ -308,8 +309,9 @@ restart:
           &mipdata_->pseudocosts.back());
       mipdata_->lps.back().setMipWorker(mipdata_->workers.back());
       mipdata_->lps.back().notifyCutPoolsLpCopied(1);
-      mipdata_->workers.back().randgen.initialise(options_mip_->random_seed +
-                                                  mipdata_->workers.size() - 1);
+      mipdata_->workers.back().randgen.initialise(
+          options_mip_->random_seed +
+          static_cast<HighsUInt>(mipdata_->workers.size()) - 1);
       mipdata_->debugSolution.registerDomain(
           mipdata_->workers.back().search_ptr_->getLocalDomain());
     }

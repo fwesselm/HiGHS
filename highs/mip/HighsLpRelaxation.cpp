@@ -522,8 +522,8 @@ void HighsLpRelaxation::addCuts(HighsCutSet& cutset) {
 
     bool success =
         lpsolver.addRows(numcuts, cutset.lower_.data(), cutset.upper_.data(),
-                         cutset.ARvalue_.size(), cutset.ARstart_.data(),
-                         cutset.ARindex_.data(),
+                         static_cast<HighsInt>(cutset.ARvalue_.size()),
+                         cutset.ARstart_.data(), cutset.ARindex_.data(),
                          cutset.ARvalue_.data()) == HighsStatus::kOk;
     assert(success);
     (void)success;
@@ -642,8 +642,8 @@ void HighsLpRelaxation::performAging(bool deleteRows) {
     ++epochs;
     if (epochs % std::max(agelimit >> 1, HighsInt{2}) != 0)
       agelimit = kHighsIInf;
-    else if ((HighsInt)epochs < agelimit)
-      agelimit = epochs;
+    else if (static_cast<HighsInt>(epochs) < agelimit)
+      agelimit = static_cast<HighsInt>(epochs);
   } else {
     if (lastAgeCall == numlpiters) return;
     agelimit = kHighsIInf;
@@ -713,7 +713,7 @@ void HighsLpRelaxation::flushDomain(HighsDomain& domain, bool continuous) {
     if (&domain == &mipsolver.mipdata_->getDomain()) continuous = true;
     currentbasisstored = false;
     if (!continuous) domain.removeContinuousChangedCols();
-    HighsInt numChgCols = domain.getChangedCols().size();
+    HighsInt numChgCols = static_cast<HighsInt>(domain.getChangedCols().size());
     if (numChgCols == 0) return;
     const HighsInt* chgCols = domain.getChangedCols().data();
     for (HighsInt i = 0; i < numChgCols; ++i) {
@@ -913,13 +913,15 @@ bool HighsLpRelaxation::computeDualProof(const HighsDomain& globaldomain,
 
   rhs = double(upper);
   assert(std::isfinite(rhs));
-  globaldomain.tightenCoefficients(inds.data(), vals.data(), inds.size(), rhs);
+  globaldomain.tightenCoefficients(inds.data(), vals.data(),
+                                   static_cast<HighsInt>(inds.size()), rhs);
 
-  mipsolver.mipdata_->debugSolution.checkCut(inds.data(), vals.data(),
-                                             inds.size(), rhs);
+  mipsolver.mipdata_->debugSolution.checkCut(
+      inds.data(), vals.data(), static_cast<HighsInt>(inds.size()), rhs);
   if (extractCliques && !mipsolver.mipdata_->parallelLockActive())
     mipsolver.mipdata_->cliquetable.extractCliquesFromCut(
-        mipsolver, inds.data(), vals.data(), inds.size(), rhs);
+        mipsolver, inds.data(), vals.data(), static_cast<HighsInt>(inds.size()),
+        rhs);
 
   return true;
 #endif
@@ -1031,16 +1033,17 @@ void HighsLpRelaxation::storeDualInfProof() {
 
   dualproofrhs = double(upper);
   globaldomain.tightenCoefficients(dualproofinds.data(), dualproofvals.data(),
-                                   dualproofinds.size(), dualproofrhs);
+                                   static_cast<HighsInt>(dualproofinds.size()),
+                                   dualproofrhs);
 
   mipsolver.mipdata_->debugSolution.checkCut(
-      dualproofinds.data(), dualproofvals.data(), dualproofinds.size(),
-      dualproofrhs);
+      dualproofinds.data(), dualproofvals.data(),
+      static_cast<HighsInt>(dualproofinds.size()), dualproofrhs);
 
   if (!mipsolver.mipdata_->parallelLockActive()) {
     mipsolver.mipdata_->cliquetable.extractCliquesFromCut(
         mipsolver, dualproofinds.data(), dualproofvals.data(),
-        dualproofinds.size(), dualproofrhs);
+        static_cast<HighsInt>(dualproofinds.size()), dualproofrhs);
   }
 }
 
@@ -1069,7 +1072,7 @@ bool HighsLpRelaxation::checkDualProof() const {
   if (!hasdualproof) return true;
   if (dualproofrhs == kHighsInf) return false;
 
-  HighsInt len = dualproofinds.size();
+  HighsInt len = static_cast<HighsInt>(dualproofinds.size());
 
   HighsCDouble viol = -dualproofrhs;
 
@@ -1602,7 +1605,8 @@ HighsLpRelaxation::Status HighsLpRelaxation::resolveLp(HighsDomain* domain) {
 
           const auto& cliquesubst =
               mipsolver.mipdata_->cliquetable.getSubstitutions();
-          for (HighsInt k = cliquesubst.size() - 1; k >= 0; --k) {
+          for (HighsInt k = static_cast<HighsInt>(cliquesubst.size()) - 1;
+               k >= 0; --k) {
             if (cliquesubst[k].replace.val == 0)
               roundsol[cliquesubst[k].substcol] =
                   1 - roundsol[cliquesubst[k].replace.col];

@@ -351,7 +351,7 @@ bool hasNamesWithSpaces(const HighsLogOptions& log_options, const HighsLp& lp) {
 bool hasNamesWithSpaces(const HighsLogOptions& log_options, const bool col,
                         const std::vector<std::string>& names) {
   HighsInt num_names_with_spaces = 0;
-  HighsInt num_name = names.size();
+  HighsInt num_name = static_cast<HighsInt>(names.size());
   for (HighsInt ix = 0; ix < num_name; ix++)
     if (names[ix].find(" ") != std::string::npos) num_names_with_spaces++;
   if (num_names_with_spaces)
@@ -362,7 +362,7 @@ bool hasNamesWithSpaces(const HighsLogOptions& log_options, const bool col,
 }
 
 bool hasIllegalNameForLpFile(const std::vector<std::string>& names) {
-  HighsInt num_name = names.size();
+  HighsInt num_name = static_cast<HighsInt>(names.size());
   for (HighsInt ix = 0; ix < num_name; ix++) {
     const std::string name = names[ix];
     const std::string first_character = name.substr(0, 1);
@@ -380,7 +380,7 @@ HighsInt maxNameLength(const HighsLp& lp) {
 }
 
 HighsInt maxNameLength(const std::vector<std::string>& names) {
-  HighsInt num_name = names.size();
+  HighsInt num_name = static_cast<HighsInt>(names.size());
   HighsInt max_name_length = 0;
   for (HighsInt ix = 0; ix < num_name; ix++)
     max_name_length = std::max(HighsInt(names[ix].length()), max_name_length);

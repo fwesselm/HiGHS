@@ -86,9 +86,11 @@ class HighsDynamicRowMatrix {
     }
   }
 
-  HighsInt getNumRows() const { return ARrange_.size(); }
+  HighsInt getNumRows() const { return static_cast<HighsInt>(ARrange_.size()); }
 
-  HighsInt getNumDelRows() const { return deletedrows_.size(); }
+  HighsInt getNumDelRows() const {
+    return static_cast<HighsInt>(deletedrows_.size());
+  }
 
   HighsInt getRowStart(HighsInt row) const { return ARrange_[row].first; }
 

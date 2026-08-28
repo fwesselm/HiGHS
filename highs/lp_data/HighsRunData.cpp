@@ -56,7 +56,7 @@ static std::string run_dataEntryTypeToString(const HighsRunDataType type) {
 RunDataStatus getRunDataIndex(
     const HighsLogOptions& report_log_options, const std::string& name,
     const std::vector<RunDataRecord*>& run_data_records, HighsInt& index) {
-  HighsInt num_run_data = run_data_records.size();
+  HighsInt num_run_data = static_cast<HighsInt>(run_data_records.size());
   for (index = 0; index < num_run_data; index++)
     if (run_data_records[index]->name == name) return RunDataStatus::kOk;
   highsLogUser(report_log_options, HighsLogType::kError,
@@ -184,7 +184,7 @@ HighsStatus writeRunDataToFile(
 void reportRunData(FILE* file,
                    const std::vector<RunDataRecord*>& run_data_records,
                    const HighsFileType file_type) {
-  HighsInt num_run_data = run_data_records.size();
+  HighsInt num_run_data = static_cast<HighsInt>(run_data_records.size());
   for (HighsInt index = 0; index < num_run_data; index++) {
     HighsRunDataType type = run_data_records[index]->type;
     if (type == HighsRunDataType::kInt64) {

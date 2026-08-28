@@ -223,7 +223,8 @@ class SimplexTimer {
       const double tolerance_percent_report_ = -1) const {
     HighsTimer* timer_pointer = simplex_timer_clock.timer_pointer_;
     const std::vector<HighsInt>& clock = simplex_timer_clock.clock_;
-    HighsInt simplex_clock_list_size = simplex_clock_list.size();
+    HighsInt simplex_clock_list_size =
+        static_cast<HighsInt>(simplex_clock_list.size());
     std::vector<HighsInt> clockList;
     clockList.resize(simplex_clock_list_size);
     for (HighsInt en = 0; en < simplex_clock_list_size; en++) {
@@ -241,7 +242,8 @@ class SimplexTimer {
                              const HighsTimerClock& simplex_timer_clock) const {
     HighsTimer* timer_pointer = simplex_timer_clock.timer_pointer_;
     const std::vector<HighsInt>& clock = simplex_timer_clock.clock_;
-    HighsInt simplex_clock_list_size = simplex_clock_list.size();
+    HighsInt simplex_clock_list_size =
+        static_cast<HighsInt>(simplex_clock_list.size());
     std::vector<HighsInt> clockList;
     clockList.resize(simplex_clock_list_size);
     for (HighsInt en = 0; en < simplex_clock_list_size; en++) {

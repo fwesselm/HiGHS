@@ -37,13 +37,13 @@ FilereaderRetcode FilereaderLp::readModelFromFile(const HighsOptions& options,
     // build variable index and gather variable information
     std::map<std::string, unsigned int> varindex;
 
-    lp.num_col_ = m.variables.size();
-    lp.num_row_ = m.constraints.size();
+    lp.num_col_ = static_cast<HighsInt>(m.variables.size());
+    lp.num_row_ = static_cast<HighsInt>(m.constraints.size());
     lp.row_names_.resize(m.constraints.size());
     lp.integrality_.assign(lp.num_col_, HighsVarType::kContinuous);
     HighsInt num_continuous = 0;
     for (size_t i = 0; i < m.variables.size(); i++) {
-      varindex[m.variables[i]->name] = i;
+      varindex[m.variables[i]->name] = static_cast<unsigned int>(i);
       lp.col_lower_.push_back(m.variables[i]->lowerbound);
       lp.col_upper_.push_back(m.variables[i]->upperbound);
       lp.col_names_.push_back(m.variables[i]->name);
@@ -94,7 +94,7 @@ FilereaderRetcode FilereaderLp::readModelFromFile(const HighsOptions& options,
       for (size_t i = 0; i < mat[var].size(); i++)
         if (mat2[var][i]) qnnz++;
     if (qnnz) {
-      hessian.dim_ = m.variables.size();
+      hessian.dim_ = static_cast<HighsInt>(m.variables.size());
       qnnz = 0;
       // model_.hessian_ is initialised with start_[0] for fictitious
       // column 0, so have to clear this before pushing back start
@@ -130,7 +130,7 @@ FilereaderRetcode FilereaderLp::readModelFromFile(const HighsOptions& options,
           consofvarmap_index[lt->var] = std::vector<unsigned int>();
           consofvarmap_value[lt->var] = std::vector<double>();
         }
-        consofvarmap_index[lt->var].push_back(i);
+        consofvarmap_index[lt->var].push_back(static_cast<unsigned int>(i));
         consofvarmap_value[lt->var].push_back(lt->coef);
       }
 

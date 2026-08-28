@@ -67,7 +67,7 @@ void highsSparseTranspose(HighsInt numRow, HighsInt numCol,
   // Make a AR copy
   std::vector<HighsInt> iwork(numRow, 0);
   ARstart.resize(numRow + 1, 0);
-  HighsInt AcountX = Aindex.size();
+  HighsInt AcountX = static_cast<HighsInt>(Aindex.size());
   ARindex.resize(AcountX);
   ARvalue.resize(AcountX);
   for (HighsInt k = 0; k < AcountX; k++) {
@@ -288,7 +288,7 @@ bool doubleUserDataNotNull(const HighsLogOptions& log_options,
 
 double getNorm2(const std::vector<double>& values) {
   double sum = 0;
-  HighsInt values_size = values.size();
+  HighsInt values_size = static_cast<HighsInt>(values.size());
   for (HighsInt i = 0; i < values_size; i++) sum += values[i] * values[i];
   return sum;
 }

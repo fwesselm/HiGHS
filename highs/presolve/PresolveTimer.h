@@ -133,7 +133,8 @@ class PresolveTimer {
     HighsTimer* timer_pointer = presolve_timer_clock.timer_pointer_;
     if (!timer_pointer->printf_flag) return false;
     const std::vector<HighsInt>& clock = presolve_timer_clock.clock_;
-    HighsInt presolve_clock_list_size = presolve_clock_list.size();
+    HighsInt presolve_clock_list_size =
+        static_cast<HighsInt>(presolve_clock_list.size());
     std::vector<HighsInt> clockList;
     clockList.resize(presolve_clock_list_size);
     for (HighsInt en = 0; en < presolve_clock_list_size; en++) {
@@ -159,7 +160,8 @@ class PresolveTimer {
     const double ideal_sum_time =
         timer_pointer->clock_time[clock[kPresolveClockIdeal]];
     if (ideal_sum_time < 1e-2) return;
-    const HighsInt num_clock = presolve_clock_list.size();
+    const HighsInt num_clock =
+        static_cast<HighsInt>(presolve_clock_list.size());
     if (header) {
       printf("grep_%s,model,ideal", grep_query.c_str());
       for (HighsInt iX = 0; iX < num_clock; iX++) {

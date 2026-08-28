@@ -31,7 +31,7 @@ void Avgas::addRow(const HighsInt row, HighsInt& num_row, HighsInt& num_row_nz,
   getRow(row, lower, upper, index, value);
   rowLower.push_back(lower);
   rowUpper.push_back(upper);
-  HighsInt num_nz = index.size();
+  HighsInt num_nz = static_cast<HighsInt>(index.size());
   ARstart.push_back(num_row_nz);
   assert(HighsInt(ARstart.size()) == num_row + 1);
   for (HighsInt iEl = 0; iEl < num_nz; iEl++) {
@@ -145,7 +145,7 @@ void Avgas::addCol(HighsInt col, HighsInt& num_col, HighsInt& num_col_nz,
   colCost.push_back(cost);
   colLower.push_back(lower);
   colUpper.push_back(upper);
-  HighsInt num_nz = index.size();
+  HighsInt num_nz = static_cast<HighsInt>(index.size());
   Astart.push_back(num_col_nz);
   assert(HighsInt(Astart.size()) == num_col + 1);
   for (HighsInt iEl = 0; iEl < num_nz; iEl++) {

@@ -81,7 +81,7 @@ HighsPseudocostInitialization::HighsPseudocostInitialization(
       conflict_avg_score(pscost.conflict_avg_score),
       nsamplestotal(std::min(int64_t{1}, pscost.nsamplestotal)),
       ninferencestotal(std::min(int64_t{1}, pscost.ninferencestotal)) {
-  HighsInt ncol = pseudocostup.size();
+  HighsInt ncol = static_cast<HighsInt>(pseudocostup.size());
   conflict_avg_score /= ncol * pscost.conflict_weight;
   for (HighsInt i = 0; i != ncol; ++i) {
     nsamplesup[i] = std::min(nsamplesup[i], maxCount);
@@ -112,7 +112,7 @@ HighsPseudocostInitialization::HighsPseudocostInitialization(
   conflictscoreup.resize(postsolveStack.getOrigNumCol());
   conflictscoredown.resize(postsolveStack.getOrigNumCol());
 
-  HighsInt ncols = pscost.pseudocostup.size();
+  HighsInt ncols = static_cast<HighsInt>(pscost.pseudocostup.size());
   conflict_avg_score /= ncols * pscost.conflict_weight;
 
   for (HighsInt i = 0; i != ncols; ++i) {

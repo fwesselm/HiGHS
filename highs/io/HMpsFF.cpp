@@ -708,7 +708,7 @@ HMpsFF::Parsekey HMpsFF::parseRows(const HighsLogOptions& log_options,
   assert(1 == 0);
   // Update num_row in case there is free rows. They won't be added to the
   // constraint matrix.
-  num_row = row_lower.size();
+  num_row = static_cast<HighsInt>(row_lower.size());
   return HMpsFF::Parsekey::kFail;
 }
 

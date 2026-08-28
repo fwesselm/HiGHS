@@ -240,7 +240,7 @@ OptionStatus getOptionIndex(const HighsLogOptions& report_log_options,
                             const std::string& name,
                             const std::vector<OptionRecord*>& option_records,
                             HighsInt& index) {
-  HighsInt num_options = option_records.size();
+  HighsInt num_options = static_cast<HighsInt>(option_records.size());
   for (index = 0; index < num_options; index++)
     if (option_records[index]->name == name) return OptionStatus::kOk;
   highsLogUser(report_log_options, HighsLogType::kError,
@@ -251,7 +251,7 @@ OptionStatus getOptionIndex(const HighsLogOptions& report_log_options,
 OptionStatus checkOptions(const HighsLogOptions& report_log_options,
                           const std::vector<OptionRecord*>& option_records) {
   bool error_found = false;
-  HighsInt num_options = option_records.size();
+  HighsInt num_options = static_cast<HighsInt>(option_records.size());
   for (HighsInt index = 0; index < num_options; index++) {
     std::string name = option_records[index]->name;
     HighsOptionType type = option_records[index]->type;
@@ -619,7 +619,7 @@ OptionStatus setLocalOptionValue(const HighsLogOptions& report_log_options,
     int scanned_num_char;
     const char* value_char = value_trim.c_str();
     sscanf(value_char, "%" HIGHSINT_FORMAT "%n", &value_int, &scanned_num_char);
-    const int value_num_char = strlen(value_char);
+    const int value_num_char = static_cast<int>(strlen(value_char));
     // Check that all characters in value_char are scanned by the format
     const bool converted_ok = scanned_num_char == value_num_char;
     if (!converted_ok) {
@@ -767,7 +767,7 @@ OptionStatus passLocalOptions(const HighsLogOptions& report_log_options,
   //  std::string original_to_log_file = to_options.log_file;
   //  FILE* original_to_log_stream =
   //  to_options.log_options.log_stream;
-  HighsInt num_options = to_options.records.size();
+  HighsInt num_options = static_cast<HighsInt>(to_options.records.size());
   // Check all the option values before setting any of them - in case
   // to_options are the main Highs options. Checks are only needed for
   // HighsInt, double and string since bool values can't be illegal
@@ -958,7 +958,7 @@ OptionStatus getLocalOptionType(
 }
 
 void resetLocalOptions(std::vector<OptionRecord*>& option_records) {
-  HighsInt num_options = option_records.size();
+  HighsInt num_options = static_cast<HighsInt>(option_records.size());
   for (HighsInt index = 0; index < num_options; index++) {
     HighsOptionType type = option_records[index]->type;
     if (type == HighsOptionType::kBool) {
@@ -992,7 +992,7 @@ void reportOptions(FILE* file, const HighsLogOptions& log_options,
                    const std::vector<OptionRecord*>& option_records,
                    const bool report_only_deviations,
                    const HighsFileType file_type) {
-  HighsInt num_options = option_records.size();
+  HighsInt num_options = static_cast<HighsInt>(option_records.size());
   const bool not_md_or_full =
       file_type != HighsFileType::kMd && file_type != HighsFileType::kFull;
   if (file_type == HighsFileType::kMd)

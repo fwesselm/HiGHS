@@ -30,7 +30,7 @@ class ReducedGradient {
   }
 
   void recompute() {
-    rg.dim = basis.getinactive().size();
+    rg.dim = static_cast<HighsInt>(basis.getinactive().size());
     basis.Ztprod(gradient.getGradient(), rg);
     uptodate = true;
   }

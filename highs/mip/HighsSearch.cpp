@@ -126,7 +126,8 @@ void HighsSearch::setRENSNeighbourhood(const std::vector<double>& lpsol) {
 
 void HighsSearch::createNewNode() {
   nodestack.emplace_back();
-  nodestack.back().domgchgStackPos = localdom.getDomainChangeStack().size();
+  nodestack.back().domgchgStackPos =
+      static_cast<HighsInt>(localdom.getDomainChangeStack().size());
 }
 
 void HighsSearch::cutoffNode() { nodestack.back().opensubtrees = 0; }
@@ -158,7 +159,8 @@ void HighsSearch::openChildNode(HighsInt col, double boundval,
   currnode.branchingdecision.boundval = boundval;
   currnode.branchingdecision.boundtype = boundtype;
 
-  HighsInt domchgPos = localdom.getDomainChangeStack().size();
+  HighsInt domchgPos =
+      static_cast<HighsInt>(localdom.getDomainChangeStack().size());
   bool passStabilizerToChildNode =
       orbitsValidInChildNode(currnode.branchingdecision);
   localdom.changeBound(currnode.branchingdecision);
@@ -190,13 +192,13 @@ void HighsSearch::addBoundExceedingConflict() {
     double rhs;
     if (lp->computeDualProof(getDomain(), getUpperLimit(), inds, vals, rhs)) {
       if (getDomain().infeasible()) return;
-      localdom.conflictAnalysis(inds.data(), vals.data(), inds.size(), rhs,
-                                getConflictPool(), mipworker.getGlobalDomain(),
-                                pseudocost);
+      localdom.conflictAnalysis(
+          inds.data(), vals.data(), static_cast<HighsInt>(inds.size()), rhs,
+          getConflictPool(), mipworker.getGlobalDomain(), pseudocost);
 
       HighsCutGeneration cutGen(*lp, getCutPool());
-      mipsolver.mipdata_->debugSolution.checkCut(inds.data(), vals.data(),
-                                                 inds.size(), rhs);
+      mipsolver.mipdata_->debugSolution.checkCut(
+          inds.data(), vals.data(), static_cast<HighsInt>(inds.size()), rhs);
       cutGen.generateConflict(localdom, mipworker.getGlobalDomain(), inds, vals,
                               rhs);
     }
@@ -222,13 +224,13 @@ void HighsSearch::addInfeasibleConflict() {
     //  }
     //}
     // HighsInt oldnumcuts = cutpool.getNumCuts();
-    localdom.conflictAnalysis(inds.data(), vals.data(), inds.size(), rhs,
-                              getConflictPool(), mipworker.getGlobalDomain(),
-                              pseudocost);
+    localdom.conflictAnalysis(
+        inds.data(), vals.data(), static_cast<HighsInt>(inds.size()), rhs,
+        getConflictPool(), mipworker.getGlobalDomain(), pseudocost);
 
     HighsCutGeneration cutGen(*lp, getCutPool());
-    mipsolver.mipdata_->debugSolution.checkCut(inds.data(), vals.data(),
-                                               inds.size(), rhs);
+    mipsolver.mipdata_->debugSolution.checkCut(
+        inds.data(), vals.data(), static_cast<HighsInt>(inds.size()), rhs);
     cutGen.generateConflict(localdom, mipworker.getGlobalDomain(), inds, vals,
                             rhs);
 
@@ -261,7 +263,7 @@ HighsInt HighsSearch::selectBranchingCandidate(int64_t maxSbIters,
   std::vector<double> upbound;
   std::vector<double> downbound;
 
-  HighsInt numfrac = lp->getFractionalIntegers().size();
+  HighsInt numfrac = static_cast<HighsInt>(lp->getFractionalIntegers().size());
   const auto& fracints = lp->getFractionalIntegers();
 
   upscore.resize(numfrac, kHighsInf);
@@ -417,7 +419,8 @@ HighsInt HighsSearch::selectBranchingCandidate(int64_t maxSbIters,
     auto analyzeSolution = [&](double objdelta,
                                const std::vector<double>& sol) {
       size_t numChangedCols = localdom.getChangedCols().size();
-      HighsInt domchgStackSize = localdom.getDomainChangeStack().size();
+      HighsInt domchgStackSize =
+          static_cast<HighsInt>(localdom.getDomainChangeStack().size());
       const auto& domchgstack = localdom.getDomainChangeStack();
 
       for (HighsInt k = 0; k != numfrac; ++k) {
@@ -446,7 +449,8 @@ HighsInt HighsSearch::selectBranchingCandidate(int64_t maxSbIters,
               continue;
             }
 
-            HighsInt newStackSize = localdom.getDomainChangeStack().size();
+            HighsInt newStackSize =
+                static_cast<HighsInt>(localdom.getDomainChangeStack().size());
 
             bool solutionValid = true;
             for (HighsInt j = domchgStackSize + 1; j < newStackSize; ++j) {
@@ -499,7 +503,8 @@ HighsInt HighsSearch::selectBranchingCandidate(int64_t maxSbIters,
               continue;
             }
 
-            HighsInt newStackSize = localdom.getDomainChangeStack().size();
+            HighsInt newStackSize =
+                static_cast<HighsInt>(localdom.getDomainChangeStack().size());
 
             bool solutionValid = true;
             for (HighsInt j = domchgStackSize + 1; j < newStackSize; ++j) {
@@ -1491,7 +1496,8 @@ HighsSearch::NodeResult HighsSearch::branch() {
 
   // finally open a new node with the branching decision added
   // and remember that we have one open subtree left
-  HighsInt domchgPos = localdom.getDomainChangeStack().size();
+  HighsInt domchgPos =
+      static_cast<HighsInt>(localdom.getDomainChangeStack().size());
 
   bool passStabilizerToChildNode =
       orbitsValidInChildNode(currnode.branchingdecision);
@@ -1567,7 +1573,8 @@ bool HighsSearch::backtrack(bool recoverBasis) {
     assert(currnode.opensubtrees == 1);
     currnode.opensubtrees = 0;
     flipBranchingDecision(currnode);
-    HighsInt domchgPos = localdom.getDomainChangeStack().size();
+    HighsInt domchgPos =
+        static_cast<HighsInt>(localdom.getDomainChangeStack().size());
 
     size_t numChangedCols = localdom.getChangedCols().size();
     bool passStabilizerToChildNode =
@@ -1647,7 +1654,8 @@ bool HighsSearch::backtrackPlunge() {
         // repropagate the node, as it may have become infeasible due to
         // conflicts
         HighsInt oldNumDomchgs = localdom.getNumDomainChanges();
-        HighsInt oldNumChangedCols = localdom.getChangedCols().size();
+        HighsInt oldNumChangedCols =
+            static_cast<HighsInt>(localdom.getChangedCols().size());
         localdom.propagate();
         if (!localdom.infeasible() &&
             oldNumDomchgs != localdom.getNumDomainChanges()) {
@@ -1680,7 +1688,7 @@ bool HighsSearch::backtrackPlunge() {
     currnode.opensubtrees = 0;
     flipBranchingDecision(currnode);
 
-    HighsInt domchgPos = domchgstack.size();
+    HighsInt domchgPos = static_cast<HighsInt>(domchgstack.size());
     size_t numChangedCols = localdom.getChangedCols().size();
     bool passStabilizerToChildNode =
         orbitsValidInChildNode(currnode.branchingdecision);
@@ -1770,7 +1778,8 @@ bool HighsSearch::backtrackUntilDepth(HighsInt targetDepth) {
   currnode.opensubtrees = 0;
   flipBranchingDecision(currnode);
 
-  HighsInt domchgPos = localdom.getDomainChangeStack().size();
+  HighsInt domchgPos =
+      static_cast<HighsInt>(localdom.getDomainChangeStack().size());
   bool passStabilizerToChildNode =
       orbitsValidInChildNode(currnode.branchingdecision);
   localdom.changeBound(currnode.branchingdecision);

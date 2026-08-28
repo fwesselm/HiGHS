@@ -107,7 +107,7 @@ TEST_CASE("LP-orientation", "[lp_orientation]") {
   for (HighsInt row = 0; row < avgas_num_row; row++) {
     avgas.getRow(row, one_row_lower, one_row_upper, one_row_index,
                  one_row_value);
-    one_row_num_nz = one_row_index.size();
+    one_row_num_nz = static_cast<HighsInt>(one_row_index.size());
     REQUIRE(highs.addRow(one_row_lower, one_row_upper, one_row_num_nz,
                          one_row_index.data(),
                          one_row_value.data()) == HighsStatus::kOk);

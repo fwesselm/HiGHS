@@ -205,7 +205,8 @@ class HighsIntegers {
 
   static double integralScale(const std::vector<double>& vals, double deltadown,
                               double deltaup) {
-    return integralScale(vals.data(), vals.size(), deltadown, deltaup);
+    return integralScale(vals.data(), static_cast<HighsInt>(vals.size()),
+                         deltadown, deltaup);
   }
 };
 

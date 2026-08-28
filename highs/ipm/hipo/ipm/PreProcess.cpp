@@ -181,7 +181,7 @@ void PreprocessFixedVars::apply(Model& model) {
     }
 
     HighsIndexCollection index_collection;
-    create(index_collection, index_to_remove.size(), index_to_remove.data(), n);
+    create(index_collection, static_cast<HighsInt>(index_to_remove.size()), index_to_remove.data(), n);
     A.deleteCols(index_collection);
     if (model.qp()) Q.deleteCols(index_collection);
 

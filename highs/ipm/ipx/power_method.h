@@ -17,7 +17,7 @@ template <typename F>
 double PowerMethod(F func, Vector& v) {
     const Int maxiter = 100;
     const double tol = 1e-3;
-    const Int dim = v.size();
+    const Int dim = static_cast<Int>(v.size());
     Vector fv(dim);
 
     // Construct starting vector and normalize.

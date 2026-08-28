@@ -868,8 +868,8 @@ void testMps(std::string& model, const HighsInt iis_strategy,
     highs.writeModel("");
     highs.writeIisModel("");
   }
-  HighsInt num_iis_col = iis.col_index_.size();
-  HighsInt num_iis_row = iis.row_index_.size();
+  HighsInt num_iis_col = static_cast<HighsInt>(iis.col_index_.size());
+  HighsInt num_iis_row = static_cast<HighsInt>(iis.row_index_.size());
   HighsModelStatus model_status = highs.getModelStatus();
   REQUIRE(model_status == require_model_status);
   if (model_status == HighsModelStatus::kInfeasible) {

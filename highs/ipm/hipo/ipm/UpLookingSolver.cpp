@@ -247,7 +247,7 @@ Int UpLookingSolver::solveAS(const std::vector<double>& rhs_x,
                              std::vector<double>& lhs_y) {
   assert(valid_);
 
-  Int n = rhs_x.size();
+  Int n = static_cast<Int>(rhs_x.size());
 
   Clock clock;
   as_buffer_.resize(rhs_x.size() + rhs_y.size());

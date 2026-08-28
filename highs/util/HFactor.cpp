@@ -162,7 +162,7 @@ void HFactor::setup(const HighsSparseMatrix& a_matrix,
                     const double pivot_threshold, const double pivot_tolerance,
                     const HighsInt highs_debug_level,
                     const HighsLogOptions* log_options) {
-  HighsInt basic_index_size = basic_index.size();
+  HighsInt basic_index_size = static_cast<HighsInt>(basic_index.size());
   // Nothing to do if basic index has no entries, and mustn't try to
   // pass the pointer to entry 0 of a vector of size 0.
   if (basic_index_size <= 0) return;
@@ -661,10 +661,10 @@ void HFactor::buildSimple() {
     if (iRow >= 0) {
       // 1.3 Record unit column
       permute[iCol] = iRow;
-      l_start.push_back(l_index.size());
+      l_start.push_back(static_cast<HighsInt>(l_index.size()));
       u_pivot_index.push_back(iRow);
       u_pivot_value.push_back(1);
-      u_start.push_back(u_index.size());
+      u_start.push_back(static_cast<HighsInt>(u_index.size()));
       // Was -num_row, but this is incorrect since the negation needs
       // to be great enough so that, starting from it, the accumulated
       // count can never reach zero
@@ -753,14 +753,14 @@ void HFactor::buildSimple() {
         HighsInt iRow = b_index[pivot_k];
         mr_count_before[iRow] = 0;
         permute[iCol] = iRow;
-        l_start.push_back(l_index.size());
+        l_start.push_back(static_cast<HighsInt>(l_index.size()));
 
         if (report_singletons)
           printf("Row singleton: U Pv (%4d, %11.4g)\n", (int)iRow,
                  b_value[pivot_k]);
         u_pivot_index.push_back(iRow);
         u_pivot_value.push_back(b_value[pivot_k]);
-        u_start.push_back(u_index.size());
+        u_start.push_back(static_cast<HighsInt>(u_index.size()));
         assert(b_var[iCol] == basic_index[iCol]);
 
         this->refactor_info_.pivot_row.push_back(iRow);
@@ -788,14 +788,14 @@ void HFactor::buildSimple() {
         HighsInt iRow = b_index[pivot_k];
         mr_count_before[iRow] = 0;
         permute[iCol] = iRow;
-        l_start.push_back(l_index.size());
+        l_start.push_back(static_cast<HighsInt>(l_index.size()));
 
         if (report_singletons)
           printf("Col singleton: U Pv (%4d, %11.4g)\n", (int)iRow,
                  b_value[pivot_k]);
         u_pivot_index.push_back(iRow);
         u_pivot_value.push_back(b_value[pivot_k]);
-        u_start.push_back(u_index.size());
+        u_start.push_back(static_cast<HighsInt>(u_index.size()));
         assert(b_var[iCol] == basic_index[iCol]);
         this->refactor_info_.pivot_row.push_back(iRow);
         this->refactor_info_.pivot_var.push_back(basic_index[iCol]);
@@ -1225,7 +1225,7 @@ HighsInt HFactor::buildKernel() {
     }
     // One active entry is lost for each entry in the pivotal column
     num_active_nz_ -= (end_A - start_A);
-    l_start.push_back(l_index.size());
+    l_start.push_back(static_cast<HighsInt>(l_index.size()));
     fake_fill += 2 * mc_count_a[jColPivot];
 
     // 2.3. Store non active pivot column to U
@@ -1237,7 +1237,7 @@ HighsInt HFactor::buildKernel() {
     }
     u_pivot_index.push_back(iRowPivot);
     u_pivot_value.push_back(pivot_multiplier);
-    u_start.push_back(u_index.size());
+    u_start.push_back(static_cast<HighsInt>(u_index.size()));
     fake_fill += end_N - start_N;
 
     // 2.4. Loop over pivot row to eliminate other column
@@ -1300,7 +1300,7 @@ HighsInt HFactor::buildKernel() {
           HighsInt p3 = p1 + mc_space[iCol] - mc_count_n[iCol];
           HighsInt p4 = p1 + mc_space[iCol];
           mc_space[iCol] += max(mc_space[iCol], nFillin);
-          HighsInt p5 = mc_start[iCol] = mc_index.size();
+          HighsInt p5 = mc_start[iCol] = static_cast<HighsInt>(mc_index.size());
           HighsInt p7 = p5 + mc_space[iCol] - mc_count_n[iCol];
           resizeHighsInt(mc_index, p5 + mc_space[iCol]);
           resizeDouble(mc_value, p5 + mc_space[iCol]);
@@ -1328,7 +1328,8 @@ HighsInt HFactor::buildKernel() {
             if (mr_count[iRow] == mr_space[iRow]) {
               HighsInt p1 = mr_start[iRow];
               HighsInt p2 = p1 + mr_count[iRow];
-              HighsInt p3 = mr_start[iRow] = mr_index.size();
+              HighsInt p3 = mr_start[iRow] =
+                  static_cast<HighsInt>(mr_index.size());
               mr_space[iRow] *= 2;
               resizeHighsInt(mr_index, p3 + mr_space[iRow]);
               copy(&mr_index[p1], &mr_index[p2], &mr_index[p3]);
@@ -1459,10 +1460,10 @@ void HFactor::buildHandleRankDeficiency() {
     permute[iCol] = iRow;
     if (k < row_rank_deficiency) {
       // Only correct the factorization for the true rows
-      l_start.push_back(l_index.size());
+      l_start.push_back(static_cast<HighsInt>(l_index.size()));
       u_pivot_index.push_back(iRow);
       u_pivot_value.push_back(1);
-      u_start.push_back(u_index.size());
+      u_start.push_back(static_cast<HighsInt>(u_index.size()));
     }
   }
   debugReportRankDeficiency(2, highs_debug_level, log_options, num_row, permute,
@@ -1520,7 +1521,7 @@ void HFactor::buildFinish() {
   l_pivot_lookup = u_pivot_lookup;
 
   // LR space
-  HighsInt LcountX = l_index.size();
+  HighsInt LcountX = static_cast<HighsInt>(l_index.size());
   lr_index.resize(LcountX);
   lr_value.resize(LcountX);
 
@@ -1550,7 +1551,7 @@ void HFactor::buildFinish() {
   u_start.resize(num_row);
 
   // UR space
-  HighsInt u_countX = u_index.size();
+  HighsInt u_countX = static_cast<HighsInt>(u_index.size());
   HighsInt ur_stuff_size = update_method == kUpdateMethodFt ? 5 : 0;
   HighsInt ur_count_size = u_countX + ur_stuff_size * num_row;
   ur_index.resize(ur_count_size);
@@ -1802,7 +1803,7 @@ void HFactor::ftranU(HVector& rhs, const double expected_density,
     // Local accumulation of RHS count
     HighsInt rhs_count = 0;
     // Transform
-    HighsInt u_pivot_count = u_pivot_index.size();
+    HighsInt u_pivot_count = static_cast<HighsInt>(u_pivot_index.size());
     for (HighsInt i_logic = u_pivot_count - 1; i_logic >= 0; i_logic--) {
       // Skip void
       if (u_pivot_index[i_logic] == -1) continue;
@@ -1900,7 +1901,7 @@ void HFactor::btranU(HVector& rhs, const double expected_density,
     // Local accumulation of RHS count
     HighsInt rhs_count = 0;
     // Transform
-    HighsInt u_pivot_count = u_pivot_index.size();
+    HighsInt u_pivot_count = static_cast<HighsInt>(u_pivot_index.size());
     for (HighsInt i_logic = 0; i_logic < u_pivot_count; i_logic++) {
       // Skip void
       if (u_pivot_index[i_logic] == -1) continue;
@@ -1963,7 +1964,7 @@ void HFactor::ftranFT(HVector& vector) const {
   HighsInt* rhs_index = vector.index.data();
   double* rhs_array = vector.array.data();
   // Alias to PF buffer
-  const HighsInt pf_pivot_count = pf_pivot_index.size();
+  const HighsInt pf_pivot_count = static_cast<HighsInt>(pf_pivot_index.size());
   const HighsInt* pf_pivot_index = this->pf_pivot_index.data();
   const HighsInt* pf_start = this->pf_start.data();
   const HighsInt* pf_index = this->pf_index.data();
@@ -1997,7 +1998,7 @@ void HFactor::btranFT(HVector& vector) const {
   HighsInt* rhs_index = vector.index.data();
   double* rhs_array = vector.array.data();
   // Alias to PF buffer
-  const HighsInt pf_pivot_count = pf_pivot_index.size();
+  const HighsInt pf_pivot_count = static_cast<HighsInt>(pf_pivot_index.size());
   const HighsInt* pf_pivot_index = this->pf_pivot_index.data();
   const HighsInt* pf_start = this->pf_start.data();
   const HighsInt* pf_index = this->pf_index.data();
@@ -2027,7 +2028,7 @@ void HFactor::btranFT(HVector& vector) const {
 
 void HFactor::ftranPF(HVector& vector) const {
   // Alias to PF buffer
-  const HighsInt pf_pivot_count = pf_pivot_index.size();
+  const HighsInt pf_pivot_count = static_cast<HighsInt>(pf_pivot_index.size());
   const HighsInt* pf_pivot_index = this->pf_pivot_index.data();
   const double* pf_pivot_value = this->pf_pivot_value.data();
   const HighsInt* pf_start = this->pf_start.data();
@@ -2062,7 +2063,7 @@ void HFactor::ftranPF(HVector& vector) const {
 
 void HFactor::btranPF(HVector& vector) const {
   // Alias to PF buffer
-  const HighsInt pf_pivot_count = pf_pivot_index.size();
+  const HighsInt pf_pivot_count = static_cast<HighsInt>(pf_pivot_index.size());
   const HighsInt* pf_pivot_index = this->pf_pivot_index.data();
   const double* pf_pivot_value = this->pf_pivot_value.data();
   const HighsInt* pf_start = this->pf_start.data();
@@ -2098,7 +2099,7 @@ void HFactor::ftranMPF(HVector& vector) const {
   double* rhs_array = vector.array.data();
 
   // Forwardly
-  HighsInt pf_pivot_count = pf_pivot_value.size();
+  HighsInt pf_pivot_count = static_cast<HighsInt>(pf_pivot_value.size());
   for (HighsInt i = 0; i < pf_pivot_count; i++) {
     solveMatrixT(pf_start[i * 2 + 1], pf_start[i * 2 + 2], pf_start[i * 2],
                  pf_start[i * 2 + 1], pf_index.data(), pf_value.data(),
@@ -2116,7 +2117,8 @@ void HFactor::btranMPF(HVector& vector) const {
   double* rhs_array = vector.array.data();
 
   // Backwardly
-  for (HighsInt i = pf_pivot_value.size() - 1; i >= 0; i--) {
+  for (HighsInt i = static_cast<HighsInt>(pf_pivot_value.size()) - 1; i >= 0;
+       i--) {
     solveMatrixT(pf_start[i * 2], pf_start[i * 2 + 1], pf_start[i * 2 + 1],
                  pf_start[i * 2 + 2], pf_index.data(), pf_value.data(),
                  pf_pivot_value[i], &rhs_count, rhs_index, rhs_array);
@@ -2133,7 +2135,7 @@ void HFactor::ftranAPF(HVector& vector) const {
   double* rhs_array = vector.array.data();
 
   // Backwardly
-  HighsInt pf_pivot_count = pf_pivot_value.size();
+  HighsInt pf_pivot_count = static_cast<HighsInt>(pf_pivot_value.size());
   for (HighsInt i = pf_pivot_count - 1; i >= 0; i--) {
     solveMatrixT(pf_start[i * 2 + 1], pf_start[i * 2 + 2], pf_start[i * 2],
                  pf_start[i * 2 + 1], pf_index.data(), pf_value.data(),
@@ -2151,7 +2153,7 @@ void HFactor::btranAPF(HVector& vector) const {
   double* rhs_array = vector.array.data();
 
   // Forwardly
-  HighsInt pf_pivot_count = pf_pivot_value.size();
+  HighsInt pf_pivot_count = static_cast<HighsInt>(pf_pivot_value.size());
   for (HighsInt i = 0; i < pf_pivot_count; i++) {
     solveMatrixT(pf_start[i * 2], pf_start[i * 2 + 1], pf_start[i * 2 + 1],
                  pf_start[i * 2 + 2], pf_index.data(), pf_value.data(),
@@ -2184,7 +2186,7 @@ void HFactor::updateCFT(HVector* aq, HVector* ep, HighsInt* iRow
   }
 
   // Pivot related buffers
-  HighsInt pf_np0 = pf_pivot_index.size();
+  HighsInt pf_np0 = static_cast<HighsInt>(pf_pivot_index.size());
   HighsInt* p_logic = new HighsInt[num_update];
   double* p_value = new double[num_update];
   double* p_alpha = new double[num_update];
@@ -2199,7 +2201,7 @@ void HFactor::updateCFT(HVector* aq, HVector* ep, HighsInt* iRow
   // Temporary U pointers
   HighsInt* t_start = new HighsInt[num_update + 1];
   double* t_pivot = new double[num_update];
-  t_start[0] = u_index.size();
+  t_start[0] = static_cast<HighsInt>(u_index.size());
 
   // Logically sorted previous row_ep
   vector<pair<HighsInt, HighsInt>> sorted_pp;
@@ -2239,7 +2241,7 @@ void HFactor::updateCFT(HVector* aq, HVector* ep, HighsInt* iRow
         u_value.push_back(value);
       }
     }
-    u_countX = u_index.size();
+    u_countX = static_cast<HighsInt>(u_index.size());
     t_start[cp + 1] = u_countX;
     t_pivot[cp] = p_value[cp] * p_alpha[cp];
 
@@ -2301,7 +2303,7 @@ void HFactor::updateCFT(HVector* aq, HVector* ep, HighsInt* iRow
     }
     pf_pivot_index.push_back(iRow[cp]);
     u_total_x += pf_index.size() - pf_start.back();
-    pf_start.push_back(pf_index.size());
+    pf_start.push_back(static_cast<HighsInt>(pf_index.size()));
 
     // 8. Update the sorted ep
     sorted_pp.push_back(make_pair(p_logic[cp], cp));
@@ -2355,7 +2357,7 @@ void HFactor::updateCFT(HVector* aq, HVector* ep, HighsInt* iRow
         // Make pointers
         HighsInt row_start = ur_start[i_logic];
         HighsInt row_count = ur_lastp[i_logic] - row_start;
-        HighsInt new_start = ur_index.size();
+        HighsInt new_start = static_cast<HighsInt>(ur_index.size());
         HighsInt new_space = row_count * 1.1 + 5;
 
         // Check matrix UR
@@ -2390,7 +2392,7 @@ void HFactor::updateCFT(HVector* aq, HVector* ep, HighsInt* iRow
     ur_lastp.push_back(ur_start[cLogic]);
     ur_space.push_back(ur_space[cLogic] + ur_lastp[cLogic] - ur_start[cLogic]);
 
-    u_pivot_lookup[cIndex] = u_pivot_index.size();
+    u_pivot_lookup[cIndex] = static_cast<HighsInt>(u_pivot_index.size());
     u_pivot_index[cLogic] = -1;
     u_pivot_index.push_back(cIndex);
     u_pivot_value.push_back(t_pivot[cp]);
@@ -2445,13 +2447,13 @@ void HFactor::updateFT(HVector* aq, HVector* ep, HighsInt iRow
   }
 
   // Store column to U
-  u_start.push_back(u_index.size());
+  u_start.push_back(static_cast<HighsInt>(u_index.size()));
   for (HighsInt i = 0; i < aq->packCount; i++)
     if (aq->packIndex[i] != iRow) {
       u_index.push_back(aq->packIndex[i]);
       u_value.push_back(aq->packValue[i]);
     }
-  u_last_p.push_back(u_index.size());
+  u_last_p.push_back(static_cast<HighsInt>(u_index.size()));
   HighsInt u_startX = u_start.back();
   HighsInt u_endX = u_last_p.back();
   u_total_x += u_endX - u_startX + 1;
@@ -2466,7 +2468,7 @@ void HFactor::updateFT(HVector* aq, HVector* ep, HighsInt iRow
       // Make pointers
       HighsInt row_start = ur_start[i_logic];
       HighsInt row_count = ur_lastp[i_logic] - row_start;
-      HighsInt new_start = ur_index.size();
+      HighsInt new_start = static_cast<HighsInt>(ur_index.size());
       HighsInt new_space = row_count * 1.1 + 5;
 
       // Check matrix UR
@@ -2499,7 +2501,7 @@ void HFactor::updateFT(HVector* aq, HVector* ep, HighsInt iRow
   ur_space.push_back(ur_space[p_logic] + ur_lastp[p_logic] - ur_start[p_logic]);
 
   // Update pivot count
-  u_pivot_lookup[iRow] = u_pivot_index.size();
+  u_pivot_lookup[iRow] = static_cast<HighsInt>(u_pivot_index.size());
   u_pivot_index.push_back(iRow);
   u_pivot_value.push_back(pivot * alpha);
 
@@ -2514,7 +2516,7 @@ void HFactor::updateFT(HVector* aq, HVector* ep, HighsInt iRow
 
   // Store R matrix pivot
   pf_pivot_index.push_back(iRow);
-  pf_start.push_back(pf_index.size());
+  pf_start.push_back(static_cast<HighsInt>(pf_index.size()));
 
   // Update total countX
   u_total_x -= u_last_p[p_logic] - u_start[p_logic];
@@ -2544,7 +2546,7 @@ void HFactor::updatePF(HVector* aq, HighsInt iRow, HighsInt* hint) {
   // Save pivot
   pf_pivot_index.push_back(iRow);
   pf_pivot_value.push_back(aq->array[iRow]);
-  pf_start.push_back(pf_index.size());
+  pf_start.push_back(static_cast<HighsInt>(pf_index.size()));
 
   // Check refactor
   u_total_x += aq->packCount;
@@ -2567,13 +2569,13 @@ void HFactor::updateMPF(HVector* aq, HVector* ep, HighsInt iRow,
   }
   pf_index.push_back(iRow);
   pf_value.push_back(-u_pivot_value[p_logic]);
-  pf_start.push_back(pf_index.size());
+  pf_start.push_back(static_cast<HighsInt>(pf_index.size()));
 
   for (HighsInt i = 0; i < ep->packCount; i++) {
     pf_index.push_back(ep->packIndex[i]);
     pf_value.push_back(ep->packValue[i]);
   }
-  pf_start.push_back(pf_index.size());
+  pf_start.push_back(static_cast<HighsInt>(pf_index.size()));
 
   // Store pivot
   pf_pivot_value.push_back(aq->array[iRow]);
@@ -2603,13 +2605,13 @@ void HFactor::updateAPF(HVector* aq, HVector* ep, HighsInt iRow
       pf_value.push_back(-a_value[k]);
     }
   }
-  pf_start.push_back(pf_index.size());
+  pf_start.push_back(static_cast<HighsInt>(pf_index.size()));
 
   for (HighsInt i = 0; i < ep->packCount; i++) {
     pf_index.push_back(ep->packIndex[i]);
     pf_value.push_back(ep->packValue[i]);
   }
-  pf_start.push_back(pf_index.size());
+  pf_start.push_back(static_cast<HighsInt>(pf_index.size()));
 
   // Store pivot
   pf_pivot_value.push_back(aq->array[iRow]);

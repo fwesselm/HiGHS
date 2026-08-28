@@ -36,7 +36,7 @@ bool HighsCutGeneration::determineCover(bool lpSol) {
     cover.push_back(j);
   }
 
-  HighsInt maxCoverSize = cover.size();
+  HighsInt maxCoverSize = static_cast<HighsInt>(cover.size());
   HighsInt coversize = 0;
   HighsInt r = randgen.integer();
   coverweight = 0.0;
@@ -129,7 +129,7 @@ bool HighsCutGeneration::determineCover(bool lpSol) {
 }
 
 void HighsCutGeneration::separateLiftedKnapsackCover() {
-  const HighsInt coversize = cover.size();
+  const HighsInt coversize = static_cast<HighsInt>(cover.size());
 
   std::vector<double> S;
   S.resize(coversize);
@@ -218,7 +218,7 @@ bool HighsCutGeneration::separateLiftedMixedBinaryCover() {
   integralSupport = false;
   integralCoefficients = false;
 
-  HighsInt coversize = cover.size();
+  HighsInt coversize = static_cast<HighsInt>(cover.size());
   std::vector<double> S;
   S.resize(coversize);
   std::vector<HighsBool> coverflag;
@@ -282,7 +282,7 @@ bool HighsCutGeneration::separateLiftedMixedIntegerCover() {
   integralSupport = false;
   integralCoefficients = false;
 
-  HighsInt coversize = cover.size();
+  HighsInt coversize = static_cast<HighsInt>(cover.size());
 
   HighsInt l = -1;
 
@@ -391,7 +391,7 @@ bool HighsCutGeneration::separateLiftedMixedIntegerCover() {
     }
   }
 
-  HighsInt cplussize = a.size();
+  HighsInt cplussize = static_cast<HighsInt>(a.size());
 
   assert(mu > 10 * feastol);
 
@@ -1106,7 +1106,7 @@ bool HighsCutGeneration::generateCut(HighsTransformedLp& transLp,
   if (!transLp.transform(vals_, upper, solval, inds_, rhs_, intsPositive))
     return false;
 
-  rowlen = inds_.size();
+  rowlen = static_cast<HighsInt>(inds_.size());
   this->inds = inds_.data();
   this->vals = vals_.data();
   this->rhs = rhs_;
@@ -1159,7 +1159,7 @@ bool HighsCutGeneration::generateCut(HighsTransformedLp& transLp,
   inds_.resize(rowlen);
   if (!transLp.untransform(vals_, inds_, rhs_)) return false;
 
-  rowlen = inds_.size();
+  rowlen = static_cast<HighsInt>(inds_.size());
   inds = inds_.data();
   vals = vals_.data();
   rhs = rhs_;
@@ -1187,9 +1187,10 @@ bool HighsCutGeneration::generateCut(HighsTransformedLp& transLp,
 
   // if the cut is violated by a small factor above the feasibility
   // tolerance, add it to the cutpool
-  HighsInt cutindex = cutpool.addCut(lpRelaxation.getMipSolver(), inds_.data(),
-                                     vals_.data(), inds_.size(), rhs_,
-                                     integralSupport && integralCoefficients);
+  HighsInt cutindex =
+      cutpool.addCut(lpRelaxation.getMipSolver(), inds_.data(), vals_.data(),
+                     static_cast<HighsInt>(inds_.size()), rhs_,
+                     integralSupport && integralCoefficients);
 
   // only return true if cut was accepted by the cutpool, i.e. not a duplicate
   // of a cut already in the pool
@@ -1204,7 +1205,7 @@ bool HighsCutGeneration::generateConflict(const HighsDomain& localdomain,
   this->inds = proofinds.data();
   this->vals = proofvals.data();
   this->rhs = proofrhs;
-  rowlen = proofinds.size();
+  rowlen = static_cast<HighsInt>(proofinds.size());
 
   lpRelaxation.getMipSolver().mipdata_->debugSolution.checkCut(
       inds, vals, rowlen, proofrhs);
@@ -1295,7 +1296,7 @@ bool HighsCutGeneration::finalizeAndAddCut(const HighsDomain& globaldom,
                                            std::vector<double>& vals_,
                                            double& rhs_) {
   complementation.clear();
-  rowlen = inds_.size();
+  rowlen = static_cast<HighsInt>(inds_.size());
   inds = inds_.data();
   vals = vals_.data();
   rhs = rhs_;
@@ -1339,9 +1340,10 @@ bool HighsCutGeneration::finalizeAndAddCut(const HighsDomain& globaldom,
 
   // if the cut is violated by a small factor above the feasibility
   // tolerance, add it to the cutpool
-  HighsInt cutindex = cutpool.addCut(lpRelaxation.getMipSolver(), inds_.data(),
-                                     vals_.data(), inds_.size(), rhs_,
-                                     integralSupport && integralCoefficients);
+  HighsInt cutindex =
+      cutpool.addCut(lpRelaxation.getMipSolver(), inds_.data(), vals_.data(),
+                     static_cast<HighsInt>(inds_.size()), rhs_,
+                     integralSupport && integralCoefficients);
 
   // only return true if cut was accepted by the cutpool, i.e. not a duplicate
   // of a cut already in the pool

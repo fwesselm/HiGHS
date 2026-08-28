@@ -203,7 +203,7 @@ HighsStatus solveQpAsm(const HighsOptions& options, HighsTimer& timer,
 
   // Define the QP solver iteration logging function
   settings.iteration_log.subscribe([&](Statistics& stats) {
-    int rep = stats.iteration.size() - 1;
+    int rep = static_cast<int>(stats.iteration.size()) - 1;
     std::string time_string =
         options.timeless_log ? ""
                              : highsFormatToString(" %9.2fs", stats.time[rep]);

@@ -175,7 +175,7 @@ void Maxvolume::Reset() {
 // Returns a vector holding the indices of the largest and second largest
 // entry in @weights. The index of the largest entry is at the back.
 static std::vector<Int> FindLargest(const Vector& weights) {
-    const Int n = weights.size();
+    const Int n = static_cast<Int>(weights.size());
     Int jmax = 0;               // index of largest element
     Int jmax2 = 0;              // index of second largest element
     double wmax = 0.0;

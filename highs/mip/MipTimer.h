@@ -398,7 +398,7 @@ class MipTimer {
     HighsTimer* timer_pointer = mip_timer_clock.timer_pointer_;
     if (!timer_pointer->printf_flag) return false;
     const std::vector<HighsInt>& clock = mip_timer_clock.clock_;
-    HighsInt mip_clock_list_size = mip_clock_list.size();
+    HighsInt mip_clock_list_size = static_cast<HighsInt>(mip_clock_list.size());
     std::vector<HighsInt> clockList;
     clockList.resize(mip_clock_list_size);
     for (HighsInt en = 0; en < mip_clock_list_size; en++) {
@@ -424,7 +424,7 @@ class MipTimer {
     const double ideal_sum_time =
         timer_pointer->clock_time[clock[kMipClockIdeal]];
     if (ideal_sum_time < 1e-2) return;
-    const HighsInt num_clock = mip_clock_list.size();
+    const HighsInt num_clock = static_cast<HighsInt>(mip_clock_list.size());
     if (header) {
       printf("grep_%s,model,ideal", grep_query.c_str());
       for (HighsInt iX = 0; iX < num_clock; iX++) {

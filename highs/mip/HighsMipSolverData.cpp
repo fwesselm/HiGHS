@@ -1078,13 +1078,13 @@ void HighsMipSolverData::runSetup() {
 
   basisTransfer();
 
-  numintegercols = integer_cols.size();
+  numintegercols = static_cast<HighsInt>(integer_cols.size());
   detectSymmetries = detectSymmetries && num_binary > 0;
   numCliqueEntriesAfterPresolve = cliquetable.getNumEntries();
   HighsInt num_col = mipsolver.numCol();
   HighsInt num_general_integer = numintegercols - num_binary;
-  HighsInt num_implied_integer = implint_cols.size();
-  HighsInt num_continuous = continuous_cols.size();
+  HighsInt num_implied_integer = static_cast<HighsInt>(implint_cols.size());
+  HighsInt num_continuous = static_cast<HighsInt>(continuous_cols.size());
   assert(num_col == num_continuous + num_binary + num_general_integer +
                         num_implied_integer + num_domain_fixed);
   if (numRestarts == 0) {
@@ -1716,7 +1716,7 @@ void HighsMipSolverData::printSolutionSourceKey() const {
   }
   highsLogUser(mipsolver.options_mip_->log_options, HighsLogType::kInfo,
                "%s;\n", ss.str().c_str());
-  int to_line = limits.size() - 1;
+  int to_line = static_cast<int>(limits.size()) - 1;
   for (int line = 0; line < to_line; line++) {
     ss.str(std::string());
     for (int k = limits[line]; k < limits[line + 1]; k++) {
