@@ -536,8 +536,7 @@ void HighsIis::setLp(const HighsLp& lp) {
 
 HighsInt HighsIis::nonIsStatus() const {
   const bool is_feasible = this->status_ == kIisModelStatusFeasible;
-  const bool has_is = static_cast<HighsInt>(this->col_index_.size()) ||
-                      static_cast<HighsInt>(this->row_index_.size());
+  const bool has_is = this->col_index_.size() || this->row_index_.size();
   // If the model is known to be feasible, then there should be no IS,
   // and all columns and rows are kIisStatusNotInConflict
   if (is_feasible) assert(!has_is);
