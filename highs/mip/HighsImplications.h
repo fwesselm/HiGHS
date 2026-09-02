@@ -180,6 +180,13 @@ class HighsImplications {
     }
   }
 
+  const HighsHashTree<HighsInt, VarBound>& getVlbs(HighsInt col) const {
+    return vlbs[col];
+  }
+  const HighsHashTree<HighsInt, VarBound>& getVubs(HighsInt col) const {
+    return vubs[col];
+  }
+
   std::pair<HighsInt, VarBound> getBestVub(HighsInt col,
                                            const HighsSolution& lpSolution,
                                            double& bestUb,
