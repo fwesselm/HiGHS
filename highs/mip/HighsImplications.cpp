@@ -452,6 +452,8 @@ void HighsImplications::addVUB(HighsInt col, HighsInt vubcol, double vubcoef,
     }
   } else
     numVarBounds++;
+
+  if (origin_row >= 0) rowToVarBounds[origin_row].insert(col, vubcol);
 }
 
 void HighsImplications::addVLB(HighsInt col, HighsInt vlbcol, double vlbcoef,
@@ -495,6 +497,8 @@ void HighsImplications::addVLB(HighsInt col, HighsInt vlbcol, double vlbcoef,
     }
   } else
     numVarBounds++;
+
+  if (origin_row >= 0) rowToVarBounds[origin_row].insert(col, vlbcol);
 }
 
 void HighsImplications::rebuild(HighsInt ncols,
@@ -529,6 +533,9 @@ void HighsImplications::rebuild(HighsInt ncols,
   vlbs.clear();
   vlbs.shrink_to_fit();
   vlbs.resize(ncols);
+  rowToVarBounds.clear();
+  rowToVarBounds.shrink_to_fit();
+  rowToVarBounds.resize(mipsolver.numRow());
   numImplications = 0;
   numVarBounds = 0;
   HighsInt oldncols = oldvubs.size();

@@ -67,6 +67,8 @@ class HighsImplications {
   std::vector<HighsHashTree<HighsInt, VarBound>> vubs;
   std::vector<HighsHashTree<HighsInt, VarBound>> vlbs;
 
+  std::vector<HighsHashTree<HighsInt, HighsInt>> rowToVarBounds;
+
  public:
   const HighsMipSolver& mipsolver;
   std::vector<HighsSubstitution> substitutions;
@@ -95,6 +97,8 @@ class HighsImplications {
     vubs.shrink_to_fit();
     vlbs.clear();
     vlbs.shrink_to_fit();
+    rowToVarBounds.clear();
+    rowToVarBounds.shrink_to_fit();
     resize(mipsolver.numCol());
     numVarBounds = 0;
     nextCleanupCall = mipsolver.numNonzero();
@@ -107,6 +111,7 @@ class HighsImplications {
     colsubstituted.resize(ncols);
     vubs.resize(ncols);
     vlbs.resize(ncols);
+    rowToVarBounds.resize(mipsolver.numRow());
     maxVarBounds = calcMaxVarBounds(ncols);
   }
 
@@ -185,6 +190,12 @@ class HighsImplications {
   }
   const HighsHashTree<HighsInt, VarBound>& getVubs(HighsInt col) const {
     return vubs[col];
+  }
+
+  void rowModified(HighsInt row) { rowToVarBounds[row].clear(); }
+
+  const HighsHashTree<HighsInt, HighsInt>& getRowVarBounds(HighsInt row) const {
+    return rowToVarBounds[row];
   }
 
   std::pair<HighsInt, VarBound> getBestVub(HighsInt col,

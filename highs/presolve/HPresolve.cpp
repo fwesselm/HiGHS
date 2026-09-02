@@ -2208,6 +2208,8 @@ void HPresolve::addToMatrix(const HighsInt row, const HighsInt col,
   markChangedRow(row);
   markChangedCol(col);
 
+  if (mipsolver != nullptr) mipsolver->mipdata_->implications.rowModified(row);
+
   if (pos == -1) {
     if (freeslots.empty()) {
       pos = static_cast<HighsInt>(Avalue.size());
