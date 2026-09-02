@@ -163,7 +163,7 @@ std::pair<HighsInt, HighsImplications::VarBound> HighsImplications::getBestVub(
     HighsInt col, const HighsSolution& lpSolution, double& bestUb,
     const HighsDomain& globaldom) const {
   std::pair<HighsInt, VarBound> bestVub =
-      std::make_pair(-1, VarBound{0.0, kHighsInf});
+      std::make_pair(-1, VarBound{0.0, kHighsInf, -1});
   double minbestUb = bestUb;
   double bestUbDist = kHighsInf;
   int64_t bestvubnodes = 0;
@@ -236,7 +236,7 @@ std::pair<HighsInt, HighsImplications::VarBound> HighsImplications::getBestVlb(
     HighsInt col, const HighsSolution& lpSolution, double& bestLb,
     const HighsDomain& globaldom) const {
   std::pair<HighsInt, VarBound> bestVlb =
-      std::make_pair(-1, VarBound{0.0, -kHighsInf});
+      std::make_pair(-1, VarBound{0.0, -kHighsInf, -1});
   double maxbestlb = bestLb;
   double bestLbDist = kHighsInf;
   int64_t bestvlbnodes = 0;
