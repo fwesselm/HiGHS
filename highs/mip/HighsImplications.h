@@ -51,7 +51,7 @@ class HighsImplications {
   struct VarBound {
     double coef;
     double constant;
-    HighsInt origin_row = -1;
+    HighsInt origin_row;
 
     double minValue() const {
       return static_cast<double>(static_cast<HighsCDouble>(constant) +
