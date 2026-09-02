@@ -192,7 +192,8 @@ class HighsImplications {
     return vubs[col];
   }
 
-  void rowModified(HighsInt row) { rowToVarBounds[row].clear(); }
+  void numRowsChanged();
+  void rowModified(HighsInt row);
 
   const HighsHashTree<HighsInt, HighsInt>& getRowVarBounds(HighsInt row) const {
     return rowToVarBounds[row];

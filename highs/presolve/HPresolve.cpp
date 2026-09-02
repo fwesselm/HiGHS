@@ -2335,6 +2335,8 @@ bool HPresolve::addToMatrix(
       implRowDualUpper.data(), rowDualLowerSource.data(),
       rowDualUpperSource.data());
 
+  if (mipsolver != nullptr) mipsolver->mipdata_->implications.numRowsChanged();
+
   for (HighsInt i = 0; i < num_rows; i++) {
     // new row index
     HighsInt row = oldNumRows + i;

@@ -412,6 +412,20 @@ void HighsImplications::strengthenVarBound(VarBound& vbnd,
   vbnd.coef = -multiplier * (downaj + std::max(fj - f0, 0.0) / (1.0 - f0));
 };
 
+void HighsImplications::numRowsChanged() {
+  rowToVarBounds.resize(mipsolver.numRow());
+}
+
+void HighsImplications::rowModified(HighsInt row) {
+  rowToVarBounds[row].for_each([&](HighsInt col, HighsInt binaryCol) {
+    VarBound* vb = vlbs[col].find(binaryCol);
+    if (vb && vb->origin_row == row) vb->origin_row = -1;
+    vb = vubs[col].find(binaryCol);
+    if (vb && vb->origin_row == row) vb->origin_row = -1;
+  });
+  rowToVarBounds[row].clear();
+}
+
 void HighsImplications::addVUB(HighsInt col, HighsInt vubcol, double vubcoef,
                                double vubconstant, HighsInt origin_row) {
   addVUB(col, vubcol, vubcoef, vubconstant,
