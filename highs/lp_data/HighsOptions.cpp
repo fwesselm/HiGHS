@@ -87,8 +87,8 @@ static bool optionSolverValueOk(const HighsLogOptions& report_log_options,
                                 HighsLogType log_type) {
   for (const auto& solver : valid_solvers)
     if (value == solver) return true;
-  if (value == kHipoString) {
-    if (HighsExternalApi::isAvailable<HighsExtras::hipo>()) return true;
+  if (value == kHipoString &&
+      !HighsExternalApi::isAvailable<HighsExtras::hipo>()) {
     HighsExternalApi::logUnavailable<HighsExtras::hipo>(
         report_log_options, HighsLogType::kError,
         "The HiPO solver was requested via the \"%s\" option.",
@@ -96,13 +96,9 @@ static bool optionSolverValueOk(const HighsLogOptions& report_log_options,
     return false;
   }
   std::string valid_list;
-  std::vector<std::string> all_valid;
-  if (HighsExternalApi::isAvailable<HighsExtras::hipo>())
-    all_valid.push_back(kHipoString);
-  all_valid.insert(all_valid.end(), valid_solvers.begin(), valid_solvers.end());
-  for (size_t i = 0; i < all_valid.size(); i++) {
-    if (i > 0) valid_list += (i == all_valid.size() - 1) ? " or " : ", ";
-    valid_list += "\"" + all_valid[i] + "\"";
+  for (size_t i = 0; i < valid_solvers.size(); i++) {
+    if (i > 0) valid_list += (i == valid_solvers.size() - 1) ? " or " : ", ";
+    valid_list += "\"" + valid_solvers[i] + "\"";
   }
   highsLogUser(report_log_options, log_type,
                "Value \"%s\" for %s option (\"%s\") is not one of %s\n",
@@ -113,26 +109,34 @@ static bool optionSolverValueOk(const HighsLogOptions& report_log_options,
 
 bool optionSolverOk(const HighsLogOptions& report_log_options,
                     const string& value) {
-  return optionSolverValueOk(
-      report_log_options, value,
-      {kHighsChooseString, kSimplexString, kIpmString, kIpxString, kPdlpString,
-       kQpAsmString, kHiPdlpString},
-      kSolverString, "solver", HighsLogType::kWarning);
+  std::vector<std::string> valid = {
+      kHighsChooseString, kSimplexString, kIpmString,   kIpxString,
+      kPdlpString,        kQpAsmString,   kHiPdlpString};
+  if (HighsExternalApi::isAvailable<HighsExtras::hipo>())
+    valid.push_back(kHipoString);
+  return optionSolverValueOk(report_log_options, value, valid, kSolverString,
+                             "solver", HighsLogType::kWarning);
 }
 
 bool optionMipLpSolverOk(const HighsLogOptions& report_log_options,
                          const string& value) {
-  return optionSolverValueOk(
-      report_log_options, value,
-      {kHighsChooseString, kSimplexString, kIpmString, kIpxString},
-      kMipLpSolverString, "MIP LP solver", HighsLogType::kError);
+  std::vector<std::string> valid = {kHighsChooseString, kSimplexString,
+                                    kIpmString, kIpxString};
+  if (HighsExternalApi::isAvailable<HighsExtras::hipo>())
+    valid.push_back(kHipoString);
+  return optionSolverValueOk(report_log_options, value, valid,
+                             kMipLpSolverString, "MIP LP solver",
+                             HighsLogType::kError);
 }
 
 bool optionMipIpmSolverOk(const HighsLogOptions& report_log_options,
                           const string& value) {
-  return optionSolverValueOk(
-      report_log_options, value, {kHighsChooseString, kIpmString, kIpxString},
-      kMipIpmSolverString, "MIP IPM solver", HighsLogType::kError);
+  std::vector<std::string> valid = {kHighsChooseString, kIpmString, kIpxString};
+  if (HighsExternalApi::isAvailable<HighsExtras::hipo>())
+    valid.push_back(kHipoString);
+  return optionSolverValueOk(report_log_options, value, valid,
+                             kMipIpmSolverString, "MIP IPM solver",
+                             HighsLogType::kError);
 }
 
 bool optionHipoParallelTypeOk(const HighsLogOptions& report_log_options,
