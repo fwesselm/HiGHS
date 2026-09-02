@@ -220,6 +220,31 @@ OptionStatus getOptionIndex(const HighsLogOptions& report_log_options,
   return OptionStatus::kUnknownOption;
 }
 
+template <typename RecordType>
+static bool hasDuplicateValuePointers(
+    const HighsLogOptions& report_log_options,
+    const std::vector<OptionRecord*>& option_records, HighsInt index) {
+  RecordType& option = *static_cast<RecordType*>(option_records[index]);
+  for (HighsInt check_index = 0;
+       check_index < static_cast<HighsInt>(option_records.size());
+       check_index++) {
+    if (check_index == index) continue;
+    if (option_records[check_index]->type != option.type) continue;
+    RecordType& check_option =
+        *static_cast<RecordType*>(option_records[check_index]);
+    if (check_option.value == option.value) {
+      highsLogUser(report_log_options, HighsLogType::kError,
+                   "checkOptions: Option %" HIGHSINT_FORMAT
+                   " (\"%s\") has the same "
+                   "value pointer as option %" HIGHSINT_FORMAT " (\"%s\")\n",
+                   index, option.name.c_str(), check_index,
+                   check_option.name.c_str());
+      return true;
+    }
+  }
+  return false;
+}
+
 OptionStatus checkOptions(const HighsLogOptions& report_log_options,
                           const std::vector<OptionRecord*>& option_records) {
   bool error_found = false;
@@ -242,98 +267,31 @@ OptionStatus checkOptions(const HighsLogOptions& report_log_options,
     }
     if (type == HighsOptionType::kBool) {
       // Check bool option
-      OptionRecordBool& option = ((OptionRecordBool*)option_records[index])[0];
-      // Check that there are no other options with the same value pointers
-      bool* value_pointer = option.value;
-      for (HighsInt check_index = 0; check_index < num_options; check_index++) {
-        if (check_index == index) continue;
-        if (option_records[check_index]->type == HighsOptionType::kBool) {
-          OptionRecordBool& check_option =
-              ((OptionRecordBool*)option_records[check_index])[0];
-          if (check_option.value == value_pointer) {
-            highsLogUser(report_log_options, HighsLogType::kError,
-                         "checkOptions: Option %" HIGHSINT_FORMAT
-                         " (\"%s\") has the same "
-                         "value pointer as option %" HIGHSINT_FORMAT
-                         " (\"%s\")\n",
-                         index, option.name.c_str(), check_index,
-                         check_option.name.c_str());
-            error_found = true;
-          }
-        }
-      }
+      if (hasDuplicateValuePointers<OptionRecordBool>(report_log_options,
+                                                      option_records, index))
+        error_found = true;
     } else if (type == HighsOptionType::kInt) {
       // Check HighsInt option
       OptionRecordInt& option = ((OptionRecordInt*)option_records[index])[0];
       if (checkOption(report_log_options, option) != OptionStatus::kOk)
         error_found = true;
-      // Check that there are no other options with the same value pointers
-      HighsInt* value_pointer = option.value;
-      for (HighsInt check_index = 0; check_index < num_options; check_index++) {
-        if (check_index == index) continue;
-        if (option_records[check_index]->type == HighsOptionType::kInt) {
-          OptionRecordInt& check_option =
-              ((OptionRecordInt*)option_records[check_index])[0];
-          if (check_option.value == value_pointer) {
-            highsLogUser(report_log_options, HighsLogType::kError,
-                         "checkOptions: Option %" HIGHSINT_FORMAT
-                         " (\"%s\") has the same "
-                         "value pointer as option %" HIGHSINT_FORMAT
-                         " (\"%s\")\n",
-                         index, option.name.c_str(), check_index,
-                         check_option.name.c_str());
-            error_found = true;
-          }
-        }
-      }
+      if (hasDuplicateValuePointers<OptionRecordInt>(report_log_options,
+                                                     option_records, index))
+        error_found = true;
     } else if (type == HighsOptionType::kDouble) {
       // Check double option
       OptionRecordDouble& option =
           ((OptionRecordDouble*)option_records[index])[0];
       if (checkOption(report_log_options, option) != OptionStatus::kOk)
         error_found = true;
-      // Check that there are no other options with the same value pointers
-      double* value_pointer = option.value;
-      for (HighsInt check_index = 0; check_index < num_options; check_index++) {
-        if (check_index == index) continue;
-        if (option_records[check_index]->type == HighsOptionType::kDouble) {
-          OptionRecordDouble& check_option =
-              ((OptionRecordDouble*)option_records[check_index])[0];
-          if (check_option.value == value_pointer) {
-            highsLogUser(report_log_options, HighsLogType::kError,
-                         "checkOptions: Option %" HIGHSINT_FORMAT
-                         " (\"%s\") has the same "
-                         "value pointer as option %" HIGHSINT_FORMAT
-                         " (\"%s\")\n",
-                         index, option.name.c_str(), check_index,
-                         check_option.name.c_str());
-            error_found = true;
-          }
-        }
-      }
+      if (hasDuplicateValuePointers<OptionRecordDouble>(report_log_options,
+                                                        option_records, index))
+        error_found = true;
     } else if (type == HighsOptionType::kString) {
       // Check string option
-      OptionRecordString& option =
-          ((OptionRecordString*)option_records[index])[0];
-      // Check that there are no other options with the same value pointers
-      std::string* value_pointer = option.value;
-      for (HighsInt check_index = 0; check_index < num_options; check_index++) {
-        if (check_index == index) continue;
-        if (option_records[check_index]->type == HighsOptionType::kString) {
-          OptionRecordString& check_option =
-              ((OptionRecordString*)option_records[check_index])[0];
-          if (check_option.value == value_pointer) {
-            highsLogUser(report_log_options, HighsLogType::kError,
-                         "checkOptions: Option %" HIGHSINT_FORMAT
-                         " (\"%s\") has the same "
-                         "value pointer as option %" HIGHSINT_FORMAT
-                         " (\"%s\")\n",
-                         index, option.name.c_str(), check_index,
-                         check_option.name.c_str());
-            error_found = true;
-          }
-        }
-      }
+      if (hasDuplicateValuePointers<OptionRecordString>(report_log_options,
+                                                        option_records, index))
+        error_found = true;
     }
   }
   if (error_found) return OptionStatus::kIllegalValue;
