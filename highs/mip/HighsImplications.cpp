@@ -413,21 +413,21 @@ void HighsImplications::strengthenVarBound(VarBound& vbnd,
 };
 
 void HighsImplications::addVUB(HighsInt col, HighsInt vubcol, double vubcoef,
-                               double vubconstant) {
+                               double vubconstant, HighsInt origin_row) {
   addVUB(col, vubcol, vubcoef, vubconstant,
          mipsolver.mipdata_->getDomain().col_upper_[col],
-         mipsolver.isColIntegral(col));
+         mipsolver.isColIntegral(col), origin_row);
 }
 
 void HighsImplications::addVUB(HighsInt col, HighsInt vubcol, double vubcoef,
                                double vubconstant, double colupperbound,
-                               bool colisintegral) {
+                               bool colisintegral, HighsInt origin_row) {
   // assume that VUBs do not have infinite coefficients and infinite constant
   // terms since such VUBs effectively evaluate to NaN.
   assert(std::abs(vubcoef) != kHighsInf || std::abs(vubconstant) != kHighsInf);
   if (tooManyVarBounds()) return;
 
-  VarBound vub{vubcoef, vubconstant};
+  VarBound vub{vubcoef, vubconstant, origin_row};
 
   if (colisintegral) {
     // try to strengthen VUB
@@ -448,27 +448,28 @@ void HighsImplications::addVUB(HighsInt col, HighsInt vubcol, double vubcoef,
     if (minBound < currentMinBound - mipsolver.mipdata_->feastol) {
       currentvub.coef = vub.coef;
       currentvub.constant = vub.constant;
+      currentvub.origin_row = vub.origin_row;
     }
   } else
     numVarBounds++;
 }
 
 void HighsImplications::addVLB(HighsInt col, HighsInt vlbcol, double vlbcoef,
-                               double vlbconstant) {
+                               double vlbconstant, HighsInt origin_row) {
   addVLB(col, vlbcol, vlbcoef, vlbconstant,
          mipsolver.mipdata_->getDomain().col_lower_[col],
-         mipsolver.isColIntegral(col));
+         mipsolver.isColIntegral(col), origin_row);
 }
 
 void HighsImplications::addVLB(HighsInt col, HighsInt vlbcol, double vlbcoef,
                                double vlbconstant, double colllowerbound,
-                               bool colisintegral) {
+                               bool colisintegral, HighsInt origin_row) {
   // assume that VLBs do not have infinite coefficients and infinite constant
   // terms since such VLBs effectively evaluate to NaN.
   assert(std::abs(vlbcoef) != kHighsInf || std::abs(vlbconstant) != kHighsInf);
   if (tooManyVarBounds()) return;
 
-  VarBound vlb{vlbcoef, vlbconstant};
+  VarBound vlb{vlbcoef, vlbconstant, origin_row};
 
   if (colisintegral) {
     // try to strengthen VLB
@@ -490,6 +491,7 @@ void HighsImplications::addVLB(HighsInt col, HighsInt vlbcol, double vlbcoef,
     if (maxBound > currentMaxBound + mipsolver.mipdata_->feastol) {
       currentvlb.coef = vlb.coef;
       currentvlb.constant = vlb.constant;
+      currentvlb.origin_row = vlb.origin_row;
     }
   } else
     numVarBounds++;
@@ -554,7 +556,8 @@ void HighsImplications::rebuild(HighsInt ncols,
               newVubCol))
         return;
 
-      addVUB(newi, newVubCol, vub.coef, vub.constant);
+      addVUB(newi, newVubCol, vub.coef, vub.constant,
+             vub.origin_row >= 0 ? orig2reducedrow[vub.origin_row] : -1);
     });
 
     oldvlbs[i].for_each([&](HighsInt vlbCol, VarBound vlb) {
@@ -566,7 +569,8 @@ void HighsImplications::rebuild(HighsInt ncols,
               newVlbCol))
         return;
 
-      addVLB(newi, newVlbCol, vlb.coef, vlb.constant);
+      addVLB(newi, newVlbCol, vlb.coef, vlb.constant,
+             vlb.origin_row >= 0 ? orig2reducedrow[vlb.origin_row] : -1);
     });
 
     if (mipsolver.mipdata_->getDomain().isBinary(newi)) {
@@ -592,12 +596,12 @@ void HighsImplications::buildFrom(const HighsImplications& init) {
   for (HighsInt i = 0; i != numcol; ++i) {
     init.vubs[i].for_each([&](HighsInt vubCol, VarBound vub) {
       if (!mipsolver.mipdata_->getDomain().isBinary(vubCol)) return;
-      addVUB(i, vubCol, vub.coef, vub.constant);
+      addVUB(i, vubCol, vub.coef, vub.constant, vub.origin_row);
     });
 
     init.vlbs[i].for_each([&](HighsInt vlbCol, VarBound vlb) {
       if (!mipsolver.mipdata_->getDomain().isBinary(vlbCol)) return;
-      addVLB(i, vlbCol, vlb.coef, vlb.constant);
+      addVLB(i, vlbCol, vlb.coef, vlb.constant, vlb.origin_row);
     });
 
     if (mipsolver.mipdata_->getDomain().isBinary(i)) {

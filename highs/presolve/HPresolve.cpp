@@ -9118,14 +9118,16 @@ void HPresolve::extractVarBounds(HighsInt row) {
       mipsolver->mipdata_->implications.addVLB(
           nonzero.index(), binCol, vbCoef, vlbConstant,
           model->col_lower_[nonzero.index()],
-          model->integrality_[nonzero.index()] != HighsVarType::kContinuous);
+          model->integrality_[nonzero.index()] != HighsVarType::kContinuous,
+          row);
 
     // add VUB
     if (vubConstant != kHighsInf)
       mipsolver->mipdata_->implications.addVUB(
           nonzero.index(), binCol, vbCoef, vubConstant,
           model->col_upper_[nonzero.index()],
-          model->integrality_[nonzero.index()] != HighsVarType::kContinuous);
+          model->integrality_[nonzero.index()] != HighsVarType::kContinuous,
+          row);
 
     // stop if no additional variable bounds can be found
     if (!useLhs && !useRhs) break;
