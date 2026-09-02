@@ -83,6 +83,7 @@ static bool optionSolverValueOk(const HighsLogOptions& report_log_options,
                                 const string& value,
                                 const std::vector<std::string>& valid_solvers,
                                 const string& option_name,
+                                const string& option_description,
                                 HighsLogType log_type) {
   for (const auto& solver : valid_solvers)
     if (value == solver) return true;
@@ -104,8 +105,9 @@ static bool optionSolverValueOk(const HighsLogOptions& report_log_options,
     valid_list += "\"" + all_valid[i] + "\"";
   }
   highsLogUser(report_log_options, log_type,
-               "Value \"%s\" for option \"%s\" is not one of %s\n",
-               value.c_str(), option_name.c_str(), valid_list.c_str());
+               "Value \"%s\" for %s option (\"%s\") is not one of %s\n",
+               value.c_str(), option_description.c_str(), option_name.c_str(),
+               valid_list.c_str());
   return false;
 }
 
@@ -115,7 +117,7 @@ bool optionSolverOk(const HighsLogOptions& report_log_options,
       report_log_options, value,
       {kHighsChooseString, kSimplexString, kIpmString, kIpxString, kPdlpString,
        kQpAsmString, kHiPdlpString},
-      kSolverString, HighsLogType::kWarning);
+      kSolverString, "solver", HighsLogType::kWarning);
 }
 
 bool optionMipLpSolverOk(const HighsLogOptions& report_log_options,
@@ -123,14 +125,14 @@ bool optionMipLpSolverOk(const HighsLogOptions& report_log_options,
   return optionSolverValueOk(
       report_log_options, value,
       {kHighsChooseString, kSimplexString, kIpmString, kIpxString},
-      kMipLpSolverString, HighsLogType::kError);
+      kMipLpSolverString, "MIP LP solver", HighsLogType::kError);
 }
 
 bool optionMipIpmSolverOk(const HighsLogOptions& report_log_options,
                           const string& value) {
-  return optionSolverValueOk(report_log_options, value,
-                             {kHighsChooseString, kIpmString, kIpxString},
-                             kMipIpmSolverString, HighsLogType::kError);
+  return optionSolverValueOk(
+      report_log_options, value, {kHighsChooseString, kIpmString, kIpxString},
+      kMipIpmSolverString, "MIP IPM solver", HighsLogType::kError);
 }
 
 bool optionHipoParallelTypeOk(const HighsLogOptions& report_log_options,
