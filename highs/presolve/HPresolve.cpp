@@ -4944,6 +4944,9 @@ HPresolve::Result HPresolve::colPresolve(HighsPostsolveStack& postsolve_stack,
   if (model->integrality_[col] != HighsVarType::kInteger)
     updateRowDualImpliedBounds(col);
 
+  // aggregate variable bounds
+  aggregateVarBounds(col);
+
   return Result::kOk;
 }
 
@@ -9149,9 +9152,20 @@ void HPresolve::extractVarBounds(HighsInt row) {
   }
 }
 
-HPresolve::Result HPresolve::aggregateVarBounds(
-    HighsPostsolveStack& postsolve_stack) {
+void HPresolve::aggregateVarBounds(HighsInt col) {
   assert(mipsolver != nullptr);
+
+  if (colDeleted[col]) return;
+
+  // get lower bound and upper bound
+  double lb = model->col_lower_[col];
+  double ub = model->col_upper_[col];
+
+  // skip binary columns — we aggregate VLBs/VUBs on non-binary columns
+  if (model->integrality_[col] == HighsVarType::kInteger && lb == 0.0 &&
+      ub == 1.0)
+    return;
+
   HighsImplications& implications = mipsolver->mipdata_->implications;
   HighsCliqueTable& cliquetable = mipsolver->mipdata_->cliquetable;
 
@@ -9163,145 +9177,110 @@ HPresolve::Result HPresolve::aggregateVarBounds(
   HighsHashTree<HighsInt, colImpliedBounds> vlbsFromRow;
   HighsHashTree<HighsInt, colImpliedBounds> vubsFromRow;
 
-  HighsInt overallNumRowsRemoved = 0;
-  HighsInt overallNumRowsModified = 0;
-  HighsInt overallNumVarsLifted = 0;
+  // collect VLBs and VUBs
+  implications.getVlbs(col).for_each(
+      [&](HighsInt binaryCol, const HighsImplications::VarBound& vlb) {
+        if (vlb.origin_row >= 0) {
+          HighsCDouble newCoef = vlb.constant - static_cast<HighsCDouble>(lb);
+          if (vlb.coef > 0) newCoef += vlb.coef;
+          vlbsFromRow.insert(
+              binaryCol, colImpliedBounds{vlb, HighsImplications::VarBound{
+                                                   static_cast<double>(newCoef),
+                                                   lb, vlb.origin_row}});
+        }
+      });
+  implications.getVubs(col).for_each(
+      [&](HighsInt binaryCol, const HighsImplications::VarBound& vub) {
+        if (vub.origin_row >= 0) {
+          HighsCDouble newCoef = static_cast<HighsCDouble>(ub) - vub.constant;
+          if (vub.coef < 0) newCoef -= vub.coef;
+          vubsFromRow.insert(
+              binaryCol, colImpliedBounds{vub, HighsImplications::VarBound{
+                                                   static_cast<double>(newCoef),
+                                                   ub, vub.origin_row}});
+        }
+      });
 
-  for (HighsInt col = 0; col < model->num_col_; ++col) {
-    if (colDeleted[col]) continue;
-    // get lower bound and upper bound
-    double lb = model->col_lower_[col];
-    double ub = model->col_upper_[col];
+  // set up cliques
+  std::vector<HighsCliqueTable::CliqueVar> vlbsClique;
+  std::vector<HighsCliqueTable::CliqueVar> vubsClique;
+  vlbsFromRow.for_each([&](HighsInt binaryCol, colImpliedBounds& bounds) {
+    HighsInt val = bounds.originalBound.coef > 0 ? 1 : 0;
+    vlbsClique.emplace_back(binaryCol, val);
+  });
+  vubsFromRow.for_each([&](HighsInt binaryCol, colImpliedBounds& bounds) {
+    HighsInt val = bounds.originalBound.coef < 0 ? 1 : 0;
+    vubsClique.emplace_back(binaryCol, val);
+  });
 
-    // skip binary columns — we aggregate VLBs/VUBs on non-binary columns
-    if (model->integrality_[col] == HighsVarType::kInteger && lb == 0.0 &&
-        ub == 1.0)
-      continue;
+  // clique partitioning
+  std::vector<HighsInt> vlbsCliquePartitionStart;
+  std::vector<HighsInt> vubsCliquePartitionStart;
+  cliquetable.cliquePartition(vlbsClique, vlbsCliquePartitionStart);
+  cliquetable.cliquePartition(vubsClique, vubsCliquePartitionStart);
+  HighsInt numVlbsCliques =
+      static_cast<HighsInt>(vlbsCliquePartitionStart.size()) - 1;
+  HighsInt numVubsCliques =
+      static_cast<HighsInt>(vubsCliquePartitionStart.size()) - 1;
 
-    // collect VLBs and VUBs
-    implications.getVlbs(col).for_each(
-        [&](HighsInt binaryCol, const HighsImplications::VarBound& vlb) {
-          if (vlb.origin_row >= 0) {
-            HighsCDouble newCoef = vlb.constant - static_cast<HighsCDouble>(lb);
-            if (vlb.coef > 0) newCoef += vlb.coef;
-            vlbsFromRow.insert(
-                binaryCol,
-                colImpliedBounds{vlb, HighsImplications::VarBound{
-                                          static_cast<double>(newCoef), lb,
-                                          vlb.origin_row}});
-          }
-        });
-    implications.getVubs(col).for_each(
-        [&](HighsInt binaryCol, const HighsImplications::VarBound& vub) {
-          if (vub.origin_row >= 0) {
-            HighsCDouble newCoef = static_cast<HighsCDouble>(ub) - vub.constant;
-            if (vub.coef < 0) newCoef -= vub.coef;
-            vubsFromRow.insert(
-                binaryCol,
-                colImpliedBounds{vub, HighsImplications::VarBound{
-                                          static_cast<double>(newCoef), ub,
-                                          vub.origin_row}});
-          }
-        });
+  HighsInt numRowsRemoved = 0;
+  HighsInt numRowsModified = 0;
+  HighsInt numVarsLifted = 0;
 
-    // set up cliques
-    std::vector<HighsCliqueTable::CliqueVar> vlbsClique;
-    std::vector<HighsCliqueTable::CliqueVar> vubsClique;
-    vlbsFromRow.for_each([&](HighsInt binaryCol, colImpliedBounds& bounds) {
-      HighsInt val = bounds.originalBound.coef > 0 ? 1 : 0;
-      vlbsClique.emplace_back(binaryCol, val);
-    });
-    vubsFromRow.for_each([&](HighsInt binaryCol, colImpliedBounds& bounds) {
-      HighsInt val = bounds.originalBound.coef < 0 ? 1 : 0;
-      vubsClique.emplace_back(binaryCol, val);
-    });
+  auto mergeCliques = [&](std::vector<HighsCliqueTable::CliqueVar>& clqVars,
+                          std::vector<HighsInt>& partitionStart,
+                          HighsHashTree<HighsInt, colImpliedBounds>& boundsMap,
+                          double baseBound, HighsInt direction) {
+    HighsInt numCliques = static_cast<HighsInt>(partitionStart.size()) - 1;
 
-    // clique partitioning
-    std::vector<HighsInt> vlbsCliquePartitionStart;
-    std::vector<HighsInt> vubsCliquePartitionStart;
-    cliquetable.cliquePartition(vlbsClique, vlbsCliquePartitionStart);
-    cliquetable.cliquePartition(vubsClique, vubsCliquePartitionStart);
-    HighsInt numVlbsCliques =
-        static_cast<HighsInt>(vlbsCliquePartitionStart.size()) - 1;
-    HighsInt numVubsCliques =
-        static_cast<HighsInt>(vubsCliquePartitionStart.size()) - 1;
+    for (HighsInt i = 0; i < numCliques; ++i) {
+      HighsInt cliqueStart = partitionStart[i];
+      HighsInt cliqueEnd = partitionStart[i + 1];
+      if (cliqueEnd - cliqueStart < 2) continue;
 
-    auto mergeCliques =
-        [&](std::vector<HighsCliqueTable::CliqueVar>& clqVars,
-            std::vector<HighsInt>& partitionStart,
-            HighsHashTree<HighsInt, colImpliedBounds>& boundsMap,
-            double baseBound, HighsInt direction) {
-          HighsInt numRowsRemoved = 0;
-          HighsInt numRowsModified = 0;
-          HighsInt numVarsLifted = 0;
+      HighsInt row = -1;
+      HighsCDouble rowBound = baseBound;
 
-          HighsInt numCliques =
-              static_cast<HighsInt>(partitionStart.size()) - 1;
+      for (HighsInt j = cliqueStart; j < cliqueEnd; ++j) {
+        HighsInt binCol = clqVars[j].col;
+        HighsInt val = clqVars[j].val;
+        const auto* bounds = boundsMap.find(binCol);
+        double a = bounds->standardBound.coef;
+        HighsInt currentrow = bounds->originalBound.origin_row;
 
-          for (HighsInt i = 0; i < numCliques; ++i) {
-            HighsInt cliqueStart = partitionStart[i];
-            HighsInt cliqueEnd = partitionStart[i + 1];
-            if (cliqueEnd - cliqueStart < 2) continue;
+        if (row == -1) {
+          row = currentrow;
+          unlinkRow(row);
+          addToMatrix(row, col, 1.0);
+          numRowsModified++;
+        } else {
+          removeRow(currentrow);
+          numRowsRemoved++;
+        }
 
-            HighsInt row = -1;
-            HighsCDouble rowBound = baseBound;
+        numVarsLifted++;
 
-            for (HighsInt j = cliqueStart; j < cliqueEnd; ++j) {
-              HighsInt binCol = clqVars[j].col;
-              HighsInt val = clqVars[j].val;
-              const auto* bounds = boundsMap.find(binCol);
-              double a = bounds->standardBound.coef;
-              HighsInt currentrow = bounds->originalBound.origin_row;
+        if (val == 1) {
+          addToMatrix(row, binCol, -direction * a);
+        } else {
+          addToMatrix(row, binCol, direction * a);
+          rowBound -= direction * a;
+        }
+      }
+      if (direction > 0) {
+        model->row_lower_[row] = static_cast<double>(rowBound);
+        model->row_upper_[row] = kHighsInf;
+      } else {
+        model->row_lower_[row] = -kHighsInf;
+        model->row_upper_[row] = static_cast<double>(rowBound);
+      }
+    }
+  };
 
-              if (row == -1) {
-                row = currentrow;
-                unlinkRow(row);
-                addToMatrix(row, col, 1.0);
-                numRowsModified++;
-              } else {
-                removeRow(currentrow);
-                numRowsRemoved++;
-              }
-
-              numVarsLifted++;
-
-              if (val == 1) {
-                addToMatrix(row, binCol, -direction * a);
-              } else {
-                addToMatrix(row, binCol, direction * a);
-                rowBound -= direction * a;
-              }
-            }
-            if (direction > 0) {
-              model->row_lower_[row] = static_cast<double>(rowBound);
-              model->row_upper_[row] = kHighsInf;
-            } else {
-              model->row_lower_[row] = -kHighsInf;
-              model->row_upper_[row] = static_cast<double>(rowBound);
-            }
-          }
-          overallNumRowsRemoved += numRowsRemoved;
-          overallNumRowsModified += numRowsModified;
-          overallNumVarsLifted += numVarsLifted;
-        };
-
-    mergeCliques(vlbsClique, vlbsCliquePartitionStart, vlbsFromRow, lb,
-                 HighsInt{1});
-    mergeCliques(vubsClique, vubsCliquePartitionStart, vubsFromRow, ub,
-                 HighsInt{-1});
-
-    // clear vectors
-    vlbsFromRow.clear();
-    vubsFromRow.clear();
-  }
-
-  if (overallNumRowsModified > 0)
-    printf(
-        "VI aggregation: %d rows modified, %d rows removed, %d vars lifted\n",
-        (int)overallNumRowsModified, (int)overallNumRowsRemoved,
-        (int)overallNumVarsLifted);
-
-  return Result::kOk;
+  mergeCliques(vlbsClique, vlbsCliquePartitionStart, vlbsFromRow, lb,
+               HighsInt{1});
+  mergeCliques(vubsClique, vubsCliquePartitionStart, vubsFromRow, ub,
+               HighsInt{-1});
 }
 
 // Not currently called

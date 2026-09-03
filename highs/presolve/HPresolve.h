@@ -531,7 +531,7 @@ class HPresolve {
 
   void extractVarBounds(HighsInt row);
 
-  Result aggregateVarBounds(HighsPostsolveStack& postsolve_stack);
+  void aggregateVarBounds(HighsInt col);
 
   Result sparsify(HighsPostsolveStack& postsolve_stack);
 
