@@ -9177,29 +9177,36 @@ void HPresolve::aggregateVarBounds(HighsInt col) {
   HighsHashTree<HighsInt, colImpliedBounds> vlbsFromRow;
   HighsHashTree<HighsInt, colImpliedBounds> vubsFromRow;
 
-  // collect VLBs and VUBs
-  implications.getVlbs(col).for_each(
-      [&](HighsInt binaryCol, const HighsImplications::VarBound& vlb) {
-        if (vlb.origin_row >= 0) {
-          HighsCDouble newCoef = vlb.constant - static_cast<HighsCDouble>(lb);
-          if (vlb.coef > 0) newCoef += vlb.coef;
-          vlbsFromRow.insert(
-              binaryCol, colImpliedBounds{vlb, HighsImplications::VarBound{
-                                                   static_cast<double>(newCoef),
-                                                   lb, vlb.origin_row}});
-        }
-      });
-  implications.getVubs(col).for_each(
-      [&](HighsInt binaryCol, const HighsImplications::VarBound& vub) {
-        if (vub.origin_row >= 0) {
-          HighsCDouble newCoef = static_cast<HighsCDouble>(ub) - vub.constant;
-          if (vub.coef < 0) newCoef -= vub.coef;
-          vubsFromRow.insert(
-              binaryCol, colImpliedBounds{vub, HighsImplications::VarBound{
-                                                   static_cast<double>(newCoef),
-                                                   ub, vub.origin_row}});
-        }
-      });
+  // collect VLBs (standardization needs finite lb)
+  if (lb != -kHighsInf) {
+    implications.getVlbs(col).for_each(
+        [&](HighsInt binaryCol, const HighsImplications::VarBound& vlb) {
+          if (vlb.origin_row >= 0) {
+            HighsCDouble newCoef = vlb.constant - static_cast<HighsCDouble>(lb);
+            if (vlb.coef > 0) newCoef += vlb.coef;
+            vlbsFromRow.insert(
+                binaryCol,
+                colImpliedBounds{vlb, HighsImplications::VarBound{
+                                          static_cast<double>(newCoef), lb,
+                                          vlb.origin_row}});
+          }
+        });
+  }
+  // collect VUBs (standardization needs finite ub)
+  if (ub != kHighsInf) {
+    implications.getVubs(col).for_each(
+        [&](HighsInt binaryCol, const HighsImplications::VarBound& vub) {
+          if (vub.origin_row >= 0) {
+            HighsCDouble newCoef = static_cast<HighsCDouble>(ub) - vub.constant;
+            if (vub.coef < 0) newCoef -= vub.coef;
+            vubsFromRow.insert(
+                binaryCol,
+                colImpliedBounds{vub, HighsImplications::VarBound{
+                                          static_cast<double>(newCoef), ub,
+                                          vub.origin_row}});
+          }
+        });
+  }
 
   // set up cliques
   std::vector<HighsCliqueTable::CliqueVar> vlbsClique;
@@ -9218,10 +9225,6 @@ void HPresolve::aggregateVarBounds(HighsInt col) {
   std::vector<HighsInt> vubsCliquePartitionStart;
   cliquetable.cliquePartition(vlbsClique, vlbsCliquePartitionStart);
   cliquetable.cliquePartition(vubsClique, vubsCliquePartitionStart);
-  HighsInt numVlbsCliques =
-      static_cast<HighsInt>(vlbsCliquePartitionStart.size()) - 1;
-  HighsInt numVubsCliques =
-      static_cast<HighsInt>(vubsCliquePartitionStart.size()) - 1;
 
   HighsInt numRowsRemoved = 0;
   HighsInt numRowsModified = 0;
