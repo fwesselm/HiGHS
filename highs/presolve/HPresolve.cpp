@@ -9153,9 +9153,7 @@ void HPresolve::extractVarBounds(HighsInt row) {
 }
 
 void HPresolve::aggregateVarBounds(HighsInt col) {
-  assert(mipsolver != nullptr);
-
-  if (colDeleted[col]) return;
+  if (mipsolver == nullptr || colDeleted[col]) return;
 
   // get lower bound and upper bound
   double lb = model->col_lower_[col];
@@ -9178,7 +9176,7 @@ void HPresolve::aggregateVarBounds(HighsInt col) {
   HighsHashTree<HighsInt, colImpliedBounds> vubsFromRow;
 
   // collect VLBs (standardization needs finite lb)
-  if (lb != -kHighsInf) {
+  if (lb > -kHighsInf) {
     implications.getVlbs(col).for_each(
         [&](HighsInt binaryCol, const HighsImplications::VarBound& vlb) {
           if (vlb.origin_row >= 0) {
@@ -9193,7 +9191,7 @@ void HPresolve::aggregateVarBounds(HighsInt col) {
         });
   }
   // collect VUBs (standardization needs finite ub)
-  if (ub != kHighsInf) {
+  if (ub < kHighsInf) {
     implications.getVubs(col).for_each(
         [&](HighsInt binaryCol, const HighsImplications::VarBound& vub) {
           if (vub.origin_row >= 0) {
@@ -9280,10 +9278,12 @@ void HPresolve::aggregateVarBounds(HighsInt col) {
     }
   };
 
-  mergeCliques(vlbsClique, vlbsCliquePartitionStart, vlbsFromRow, lb,
-               HighsInt{1});
-  mergeCliques(vubsClique, vubsCliquePartitionStart, vubsFromRow, ub,
-               HighsInt{-1});
+  if (lb > -kHighsInf)
+    mergeCliques(vlbsClique, vlbsCliquePartitionStart, vlbsFromRow, lb,
+                 HighsInt{1});
+  if (ub < kHighsInf)
+    mergeCliques(vubsClique, vubsCliquePartitionStart, vubsFromRow, ub,
+                 HighsInt{-1});
 }
 
 // Not currently called
