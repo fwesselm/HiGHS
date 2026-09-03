@@ -126,6 +126,9 @@ void HPresolve::setInput(HighsMipSolver& mipsolver,
         mipsolver.mipdata_->getDomain().col_upper_;
   }
 
+  mipsolver.mipdata_->implications.resize(mipsolver.numCol(),
+                                          mipsolver.numRow());
+
   setInput(mipsolver.mipdata_->presolvedModel, *mipsolver.options_mip_,
            presolve_reduction_limit, &mipsolver.timer_);
 }
@@ -2335,7 +2338,9 @@ bool HPresolve::addToMatrix(
       implRowDualUpper.data(), rowDualLowerSource.data(),
       rowDualUpperSource.data());
 
-  if (mipsolver != nullptr) mipsolver->mipdata_->implications.numRowsChanged();
+  if (mipsolver != nullptr)
+    mipsolver->mipdata_->implications.resize(mipsolver->numCol(),
+                                             mipsolver->numRow());
 
   for (HighsInt i = 0; i < num_rows; i++) {
     // new row index

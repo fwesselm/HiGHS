@@ -77,7 +77,7 @@ class HighsImplications {
     nextCleanupCall = mipsolver.numNonzero();
     numImplications = 0;
     numVarBounds = 0;
-    resize(mipsolver.numCol());
+    resize(mipsolver.numCol(), mipsolver.numRow());
   }
 
   std::function<void(HighsInt, HighsInt, HighsInt, double)>
@@ -99,19 +99,19 @@ class HighsImplications {
     vlbs.shrink_to_fit();
     rowToVarBounds.clear();
     rowToVarBounds.shrink_to_fit();
-    resize(mipsolver.numCol());
+    resize(mipsolver.numCol(), mipsolver.numRow());
     numVarBounds = 0;
     nextCleanupCall = mipsolver.numNonzero();
   }
 
-  void resize(HighsInt ncols) {
+  void resize(HighsInt ncols, HighsInt nrows) {
     implications.resize(2 * static_cast<size_t>(ncols));
     hasProbed.resize(2 * static_cast<size_t>(ncols));
     reverseImplications.resize(ncols);
     colsubstituted.resize(ncols);
     vubs.resize(ncols);
     vlbs.resize(ncols);
-    rowToVarBounds.resize(mipsolver.numRow());
+    rowToVarBounds.resize(nrows);
     maxVarBounds = calcMaxVarBounds(ncols);
   }
 
@@ -192,7 +192,6 @@ class HighsImplications {
     return vubs[col];
   }
 
-  void numRowsChanged();
   void rowModified(HighsInt row);
 
   const HighsHashTree<HighsInt, HighsInt>& getRowVarBounds(HighsInt row) const {
