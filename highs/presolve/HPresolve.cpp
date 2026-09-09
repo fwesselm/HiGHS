@@ -1671,21 +1671,62 @@ HPresolve::Result HPresolve::finaliseProbing(
   cliquetable.getDeletedRows().clear();
 
   // add nonzeros from clique lifting before removing fixed variables, since
-  // this might lead to stronger constraint sides
+  // this might lead to stronger constraint sides.
   auto& extensionvars = cliquetable.getCliqueExtensions();
   liftedNonZeros += static_cast<HighsInt>(extensionvars.size());
+
+  struct rowLiftingInfo {
+    HighsCDouble complementedRhs;
+    double minAbsCoef;
+    HighsInt direction;
+  };
+  HighsHashTable<HighsInt, rowLiftingInfo> rowLifting;
+
+  auto updateLiftingInfo = [&](HighsInt row, HighsInt col, double val) {
+    rowLifting[row].complementedRhs -=
+        val * static_cast<HighsCDouble>(val < 0 ? model->col_upper_[col]
+                                                : model->col_lower_[col]);
+    rowLifting[row].minAbsCoef =
+        std::min(rowLifting[row].minAbsCoef, std::abs(val));
+  };
+
+  auto initialiseLiftingInfo = [&](HighsInt row) {
+    HighsInt direction =
+        model->row_upper_[row] < kHighsInf ? HighsInt{1} : HighsInt{-1};
+    double rhs =
+        direction > 0 ? model->row_upper_[row] : model->row_lower_[row];
+    rowLifting[row] = rowLiftingInfo{direction * rhs, kHighsInf, direction};
+    for (const auto& nz : getRowVector(row))
+      updateLiftingInfo(row, nz.index(), direction * nz.value());
+  };
+
+  auto computeMinLiftedCoef = [&](HighsInt row) {
+    return rowLifting[row].direction *
+           static_cast<double>(
+               ceil((rowLifting[row].complementedRhs -
+                     rowLifting[row].minAbsCoef + primal_feastol)));
+  };
+
   for (const auto& cliqueextension : extensionvars) {
-    if (rowDeleted[cliqueextension.first]) {
+    HighsInt row = cliqueextension.first;
+    if (rowDeleted[row]) {
       --liftedNonZeros;
       continue;
     }
-    double val = 1.0;
+
+    if (rowLifting.find(row) == nullptr) initialiseLiftingInfo(row);
+
+    double val = computeMinLiftedCoef(row);
+
     if (cliqueextension.second.val == 0) {
-      model->row_lower_[cliqueextension.first] -= 1;
-      model->row_upper_[cliqueextension.first] -= 1;
-      val = -1.0;
+      model->row_lower_[row] -= val;
+      model->row_upper_[row] -= val;
+      val = -val;
     }
-    addToMatrix(cliqueextension.first, cliqueextension.second.col, val);
+    addToMatrix(row, cliqueextension.second.col, val);
+
+    updateLiftingInfo(row, cliqueextension.second.col,
+                      rowLifting[row].direction * val);
   }
   extensionvars.clear();
 

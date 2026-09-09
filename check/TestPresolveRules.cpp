@@ -3,6 +3,9 @@
 #include "HCheckConfig.h"
 #include "Highs.h"
 #include "catch.hpp"
+#include "mip/HighsMipSolver.h"
+#include "mip/HighsMipSolverData.h"
+#include "parallel/HighsParallel.h"
 #include "presolve/HPresolve.h"
 #include "presolve/HighsPostsolveStack.h"
 
@@ -88,6 +91,269 @@ TEST_CASE("test-col-stuffing", "[highs_test_presolve_rules]") {
   lp.clear();
 
   h.resetGlobalScheduler(true);
+}
+
+TEST_CASE("test-clique-lift-nonunit-le", "[highs_test_presolve_rules]") {
+  // Non-unit coefficient <= clique row with a lifted extension variable.
+  //   row 0: 3*x0 + 4*x1 + 3*x2 <= 4  (all-binary clique: 3+3>4, 3+4>4)
+  //   row 1: x0 + x3 <= 1   (size-2 clique: x0=1 implies x3=0)
+  //   row 2: x1 + x3 <= 1   (size-2 clique: x1=1 implies x3=0)
+  //   row 3: x2 + x3 <= 1   (size-2 clique: x2=1 implies x3=0)
+  // Clique merging extends row 0's 3-clique with (x3, val=1).
+  // Correct lift coefficient: ceil(4 - 3 + feastol) = 2.
+  // Row becomes: 3*x0 + 4*x1 + 3*x2 + 2*x3 <= 4.
+  HighsLp lp;
+  lp.num_col_ = 4;
+  lp.num_row_ = 4;
+  lp.sense_ = ObjSense::kMinimize;
+  lp.col_cost_ = {1, 1, 1, 1};
+  lp.col_lower_ = {0, 0, 0, 0};
+  lp.col_upper_ = {1, 1, 1, 1};
+  lp.integrality_ = {HighsVarType::kInteger, HighsVarType::kInteger,
+                     HighsVarType::kInteger, HighsVarType::kInteger};
+  lp.row_lower_ = {-kHighsInf, -kHighsInf, -kHighsInf, -kHighsInf};
+  lp.row_upper_ = {4.0, 1.0, 1.0, 1.0};
+  //        row0  row1  row2  row3
+  // x0:      3     1     0     0
+  // x1:      4     0     1     0
+  // x2:      3     0     0     1
+  // x3:      0     1     1     1
+  lp.a_matrix_.format_ = MatrixFormat::kColwise;
+  lp.a_matrix_.num_col_ = 4;
+  lp.a_matrix_.num_row_ = 4;
+  lp.a_matrix_.start_ = {0, 2, 4, 6, 9};
+  lp.a_matrix_.index_ = {0, 1, 0, 2, 0, 3, 1, 2, 3};
+  lp.a_matrix_.value_ = {3.0, 1.0, 4.0, 1.0, 3.0, 1.0, 1.0, 1.0, 1.0};
+
+  highs::parallel::initialize_scheduler(1);
+
+  Highs highs;
+  highs.setOptionValue("output_flag", dev_run);
+  highs.setOptionValue("presolve_rule_test", kPresolveRuleProbing);
+  highs.passModel(lp);
+
+  HighsCallback callback(&highs);
+  const HighsOptions& options = highs.getOptions();
+  HighsSolution solution;
+  HighsProfiling profiling;
+
+  HighsMipSolver mipsolver(callback, options, lp, solution);
+  mipsolver.timer_.start();
+  profiling.initialize(mipsolver.timer_, true, true);
+  mipsolver.setProfiling(&profiling);
+  mipsolver.mipdata_ =
+      std::unique_ptr<HighsMipSolverData>(new HighsMipSolverData(mipsolver));
+  mipsolver.mipdata_->init();
+  mipsolver.mipdata_->setupDomainPropagation();
+
+  presolve::HighsPostsolveStack& postsolve_stack =
+      mipsolver.mipdata_->postSolveStack;
+
+  presolve::HPresolve presolve;
+  presolve.setInput(mipsolver, -1);
+  REQUIRE(presolve.okSetupPresolveDataStructures());
+  HighsModelStatus status = presolve.run(postsolve_stack);
+  REQUIRE(status == HighsModelStatus::kNotset);
+
+  // Row 0 should be: 3*x0 + 4*x1 + 3*x2 + 2*x3 <= 4
+  const HighsLp& presolved = *mipsolver.model_;
+  HighsInt lifted_row = -1;
+  for (HighsInt i = 0; i < presolved.num_row_; i++) {
+    if (postsolve_stack.getOrigRowIndex(i) == 0) {
+      lifted_row = i;
+      break;
+    }
+  }
+  REQUIRE(lifted_row >= 0);
+  REQUIRE(presolved.row_lower_[lifted_row] == -kHighsInf);
+  REQUIRE(presolved.row_upper_[lifted_row] == 4.0);
+
+  std::vector<double> coeffs(4, 0.0);
+  for (HighsInt j = 0; j < presolved.num_col_; j++) {
+    for (HighsInt p = presolved.a_matrix_.start_[j];
+         p < presolved.a_matrix_.start_[j + 1]; p++) {
+      if (presolved.a_matrix_.index_[p] != lifted_row) continue;
+      coeffs[postsolve_stack.getOrigColIndex(j)] =
+          presolved.a_matrix_.value_[p];
+    }
+  }
+  REQUIRE(coeffs[0] == 3.0);
+  REQUIRE(coeffs[1] == 4.0);
+  REQUIRE(coeffs[2] == 3.0);
+  REQUIRE(coeffs[3] == 2.0);
+
+  HighsTaskExecutor::shutdown(true);
+}
+
+TEST_CASE("test-clique-lift-nonunit-ge", "[highs_test_presolve_rules]") {
+  // Same clique structure but with a >= row.
+  //   row 0: -3*x0 - 4*x1 - 3*x2 >= -4   (same clique, flipped direction)
+  //   row 1: x0 + x3 <= 1
+  //   row 2: x1 + x3 <= 1
+  //   row 3: x2 + x3 <= 1
+  // Correct lift coefficient: -2 (direction * ceil(compRhs - minAbs +
+  // feastol)). Row becomes: -3*x0 - 4*x1 - 3*x2 - 2*x3 >= -4.
+  HighsLp lp;
+  lp.num_col_ = 4;
+  lp.num_row_ = 4;
+  lp.sense_ = ObjSense::kMinimize;
+  lp.col_cost_ = {1, 1, 1, 1};
+  lp.col_lower_ = {0, 0, 0, 0};
+  lp.col_upper_ = {1, 1, 1, 1};
+  lp.integrality_ = {HighsVarType::kInteger, HighsVarType::kInteger,
+                     HighsVarType::kInteger, HighsVarType::kInteger};
+  lp.row_lower_ = {-4.0, -kHighsInf, -kHighsInf, -kHighsInf};
+  lp.row_upper_ = {kHighsInf, 1.0, 1.0, 1.0};
+  lp.a_matrix_.format_ = MatrixFormat::kColwise;
+  lp.a_matrix_.num_col_ = 4;
+  lp.a_matrix_.num_row_ = 4;
+  lp.a_matrix_.start_ = {0, 2, 4, 6, 9};
+  lp.a_matrix_.index_ = {0, 1, 0, 2, 0, 3, 1, 2, 3};
+  lp.a_matrix_.value_ = {-3.0, 1.0, -4.0, 1.0, -3.0, 1.0, 1.0, 1.0, 1.0};
+
+  highs::parallel::initialize_scheduler(1);
+
+  Highs highs;
+  highs.setOptionValue("output_flag", dev_run);
+  highs.setOptionValue("presolve_rule_test", kPresolveRuleProbing);
+  highs.passModel(lp);
+
+  HighsCallback callback(&highs);
+  const HighsOptions& options = highs.getOptions();
+  HighsSolution solution;
+  HighsProfiling profiling;
+
+  HighsMipSolver mipsolver(callback, options, lp, solution);
+  mipsolver.timer_.start();
+  profiling.initialize(mipsolver.timer_, true, true);
+  mipsolver.setProfiling(&profiling);
+  mipsolver.mipdata_ =
+      std::unique_ptr<HighsMipSolverData>(new HighsMipSolverData(mipsolver));
+  mipsolver.mipdata_->init();
+  mipsolver.mipdata_->setupDomainPropagation();
+
+  presolve::HighsPostsolveStack& postsolve_stack =
+      mipsolver.mipdata_->postSolveStack;
+
+  presolve::HPresolve presolve;
+  presolve.setInput(mipsolver, -1);
+  REQUIRE(presolve.okSetupPresolveDataStructures());
+  HighsModelStatus status = presolve.run(postsolve_stack);
+  REQUIRE(status == HighsModelStatus::kNotset);
+
+  // Row 0 should be: -3*x0 - 4*x1 - 3*x2 - 2*x3 >= -4
+  const HighsLp& presolved = *mipsolver.model_;
+  HighsInt lifted_row = -1;
+  for (HighsInt i = 0; i < presolved.num_row_; i++) {
+    if (postsolve_stack.getOrigRowIndex(i) == 0) {
+      lifted_row = i;
+      break;
+    }
+  }
+  REQUIRE(lifted_row >= 0);
+  REQUIRE(presolved.row_lower_[lifted_row] == -4.0);
+  REQUIRE(presolved.row_upper_[lifted_row] == kHighsInf);
+
+  std::vector<double> coeffs(4, 0.0);
+  for (HighsInt j = 0; j < presolved.num_col_; j++) {
+    for (HighsInt p = presolved.a_matrix_.start_[j];
+         p < presolved.a_matrix_.start_[j + 1]; p++) {
+      if (presolved.a_matrix_.index_[p] != lifted_row) continue;
+      coeffs[postsolve_stack.getOrigColIndex(j)] =
+          presolved.a_matrix_.value_[p];
+    }
+  }
+  REQUIRE(coeffs[0] == -3.0);
+  REQUIRE(coeffs[1] == -4.0);
+  REQUIRE(coeffs[2] == -3.0);
+  REQUIRE(coeffs[3] == -2.0);
+
+  HighsTaskExecutor::shutdown(true);
+}
+
+TEST_CASE("test-clique-lift-setpacking", "[highs_test_presolve_rules]") {
+  // Baseline: set-packing row with unit coefficients, lift coef should be 1.
+  //   row 0: x0 + x1 + x2 <= 1   (set packing, 3-clique)
+  //   row 1: x0 + x3 <= 1
+  //   row 2: x1 + x3 <= 1
+  //   row 3: x2 + x3 <= 1
+  // Clique merging extends row 0 with (x3, val=1), coef = ceil(1-1+eps) = 1.
+  HighsLp lp;
+  lp.num_col_ = 4;
+  lp.num_row_ = 4;
+  lp.sense_ = ObjSense::kMinimize;
+  lp.col_cost_ = {1, 1, 1, 1};
+  lp.col_lower_ = {0, 0, 0, 0};
+  lp.col_upper_ = {1, 1, 1, 1};
+  lp.integrality_ = {HighsVarType::kInteger, HighsVarType::kInteger,
+                     HighsVarType::kInteger, HighsVarType::kInteger};
+  lp.row_lower_ = {-kHighsInf, -kHighsInf, -kHighsInf, -kHighsInf};
+  lp.row_upper_ = {1.0, 1.0, 1.0, 1.0};
+  lp.a_matrix_.format_ = MatrixFormat::kColwise;
+  lp.a_matrix_.num_col_ = 4;
+  lp.a_matrix_.num_row_ = 4;
+  lp.a_matrix_.start_ = {0, 2, 4, 6, 9};
+  lp.a_matrix_.index_ = {0, 1, 0, 2, 0, 3, 1, 2, 3};
+  lp.a_matrix_.value_ = {1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0};
+
+  highs::parallel::initialize_scheduler(1);
+
+  Highs highs;
+  highs.setOptionValue("output_flag", dev_run);
+  highs.setOptionValue("presolve_rule_test", kPresolveRuleProbing);
+  highs.passModel(lp);
+
+  HighsCallback callback(&highs);
+  const HighsOptions& options = highs.getOptions();
+  HighsSolution solution;
+  HighsProfiling profiling;
+
+  HighsMipSolver mipsolver(callback, options, lp, solution);
+  mipsolver.timer_.start();
+  profiling.initialize(mipsolver.timer_, true, true);
+  mipsolver.setProfiling(&profiling);
+  mipsolver.mipdata_ =
+      std::unique_ptr<HighsMipSolverData>(new HighsMipSolverData(mipsolver));
+  mipsolver.mipdata_->init();
+  mipsolver.mipdata_->setupDomainPropagation();
+
+  presolve::HighsPostsolveStack& postsolve_stack =
+      mipsolver.mipdata_->postSolveStack;
+
+  presolve::HPresolve presolve;
+  presolve.setInput(mipsolver, -1);
+  REQUIRE(presolve.okSetupPresolveDataStructures());
+  HighsModelStatus status = presolve.run(postsolve_stack);
+  REQUIRE(status == HighsModelStatus::kNotset);
+
+  // Row 0 should be: x0 + x1 + x2 + x3 <= 1
+  const HighsLp& presolved = *mipsolver.model_;
+  HighsInt lifted_row = -1;
+  for (HighsInt i = 0; i < presolved.num_row_; i++) {
+    if (postsolve_stack.getOrigRowIndex(i) == 0) {
+      lifted_row = i;
+      break;
+    }
+  }
+  REQUIRE(lifted_row >= 0);
+  REQUIRE(presolved.row_lower_[lifted_row] == -kHighsInf);
+  REQUIRE(presolved.row_upper_[lifted_row] == 1.0);
+
+  std::vector<double> coeffs(4, 0.0);
+  for (HighsInt j = 0; j < presolved.num_col_; j++) {
+    for (HighsInt p = presolved.a_matrix_.start_[j];
+         p < presolved.a_matrix_.start_[j + 1]; p++) {
+      if (presolved.a_matrix_.index_[p] != lifted_row) continue;
+      coeffs[postsolve_stack.getOrigColIndex(j)] =
+          presolved.a_matrix_.value_[p];
+    }
+  }
+  REQUIRE(coeffs[0] == 1.0);
+  REQUIRE(coeffs[1] == 1.0);
+  REQUIRE(coeffs[2] == 1.0);
+  REQUIRE(coeffs[3] == 1.0);
+
+  HighsTaskExecutor::shutdown(true);
 }
 
 TEST_CASE("test-parallel-rows-cut-ordering", "[highs_test_presolve_rules]") {

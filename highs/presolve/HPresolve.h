@@ -548,6 +548,7 @@ class HPresolve {
   Result presolveRuleTestColStuffing(HighsPostsolveStack& postsolve_stack);
   Result presolveRuleTestParallelRowsAndCols(
       HighsPostsolveStack& postsolve_stack);
+  Result presolveRuleTestProbing(HighsPostsolveStack& postsolve_stack);
 
   // Not currently called
   static void debug(const HighsLp& lp, const HighsOptions& options);
