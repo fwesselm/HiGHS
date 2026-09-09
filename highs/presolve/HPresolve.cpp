@@ -1584,6 +1584,116 @@ HPresolve::Result HPresolve::dominatedColumns(
   return Result::kOk;
 }
 
+HPresolve::Result HPresolve::normaliseAllBinaryCliqueRows() {
+  struct nonZero {
+    HighsInt index;
+    double value;
+    int8_t complementation;
+    HighsInt position;
+  };
+
+  auto transformAllBinaryRow = [&](HighsInt row, std::vector<nonZero>& nzs,
+                                   HighsCDouble& rhs, HighsInt direction) {
+    nzs.clear();
+    rhs *= direction;
+
+    storeRow(row);
+    for (HighsInt rowiter : rowpositions) {
+      HighsInt col = Acol[rowiter];
+      double val = direction * Avalue[rowiter];
+
+      if (val < 0) {
+        nzs.push_back(nonZero{col, -val, -1, rowiter});
+        rhs -= static_cast<HighsCDouble>(val) * model->col_upper_[col];
+      } else {
+        nzs.push_back(nonZero{col, val, 1, rowiter});
+        rhs -= static_cast<HighsCDouble>(val) * model->col_lower_[col];
+      }
+    }
+  };
+
+  std::vector<nonZero> nzs;
+
+  for (HighsInt row = 0; row < model->num_row_; row++) {
+    // skip deleted and ranged rows
+    if (rowDeleted[row] || (isRanged(row) && !isEquation(row))) continue;
+
+    // skip rows that are not all-binary
+    bool allBinary = true;
+    bool isSetPpc = model->row_upper_[row] == 1.0;
+    for (const auto& nz : getRowVector(row)) {
+      allBinary = allBinary &&
+                  model->integrality_[nz.index()] == HighsVarType::kInteger &&
+                  model->col_lower_[nz.index()] == 0.0 &&
+                  model->col_upper_[nz.index()] == 1.0;
+      isSetPpc = isSetPpc && allBinary && nz.value() == 1.0;
+      if (!allBinary) break;
+    }
+    if (!allBinary || isSetPpc) continue;
+
+    // transform row
+    HighsInt direction =
+        model->row_upper_[row] < kHighsInf ? HighsInt{1} : HighsInt{-1};
+    HighsCDouble rhs =
+        direction > 0 ? model->row_upper_[row] : model->row_lower_[row];
+
+    // transform the row
+    transformAllBinaryRow(row, nzs, rhs, direction);
+
+    HighsInt n = static_cast<HighsInt>(nzs.size());
+    if (n < 2) continue;
+
+    // sort by descending coefficient value
+    std::vector<HighsInt> perm(n);
+    std::iota(perm.begin(), perm.end(), 0);
+    pdqsort(perm.begin(), perm.end(), [&](HighsInt a, HighsInt b) {
+      return nzs[a].value > nzs[b].value;
+    });
+
+    // trivial fixings: variables with coefficient > rhs must be zero
+    // in the complemented space
+    HighsInt start = 0;
+    for (HighsInt j = 0; j < n; ++j) {
+      if (nzs[perm[j]].value <= rhs + primal_feastol) break;
+      HighsInt col = nzs[perm[j]].index;
+      if (nzs[perm[j]].complementation == -1)
+        HPRESOLVE_CHECKED_CALL(changeColLower(col, 1.0));
+      else
+        HPRESOLVE_CHECKED_CALL(changeColUpper(col, 0.0));
+      ++start;
+    }
+
+    // skip row if there are less than two remaining variables or two smallest
+    // remaining coefficients do not form a clique
+    if (n - start < 2 ||
+        nzs[perm[n - 2]].value + nzs[perm[n - 1]].value <= rhs + primal_feastol)
+      continue;
+
+    // normalize remaining coefficients to ±1
+    HighsInt numNeg = 0;
+    for (HighsInt j = start; j < n; ++j) {
+      HighsInt pos = nzs[perm[j]].position;
+      double target = static_cast<double>(nzs[perm[j]].complementation);
+      double delta = target - Avalue[pos];
+      if (delta != 0.0) addToMatrix(row, nzs[perm[j]].index, delta);
+      if (nzs[perm[j]].complementation == -1) ++numNeg;
+    }
+
+    // update row bounds
+    model->row_upper_[row] = 1.0 - numNeg;
+    if (isEquation(row))
+      model->row_lower_[row] = 1.0 - numNeg;
+    else {
+      model->row_lower_[row] = -kHighsInf;
+      if (direction == -1) {
+        changeRowDualLower(row, -kHighsInf);
+        changeRowDualUpper(row, 0);
+      }
+    }
+  }
+  return Result::kOk;
+}
+
 HPresolve::Result HPresolve::prepareProbing(
     HighsPostsolveStack& postsolve_stack, bool& firstCall) {
   HighsDomain& domain = mipsolver->mipdata_->getDomain();
@@ -1611,6 +1721,8 @@ HPresolve::Result HPresolve::prepareProbing(
         implColUpper[i] < model->col_upper_[i])
       HPRESOLVE_CHECKED_CALL(changeColUpper(i, implColUpper[i]));
   }
+
+  HPRESOLVE_CHECKED_CALL(normaliseAllBinaryCliqueRows());
 
   // prepare for domain propagation
   mipsolver->mipdata_->setupDomainPropagation();
