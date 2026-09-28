@@ -354,6 +354,35 @@ class HighsCliqueTable {
   void setAllowParallel(const bool allowParallel) {
     this->allowParallel = allowParallel;
   }
+
+  template <typename F>
+  void forEachUniqueNeighbor(CliqueVar v, F&& callback) {
+    iscandidate[v.index()] = true;
+
+    auto collect = [&](HighsInt cliqueid) {
+      HighsInt start = cliques[cliqueid].start;
+      HighsInt end = cliques[cliqueid].end;
+      for (HighsInt i = start; i != end; ++i) {
+        if (iscandidate[cliqueentries[i].index()]) continue;
+        iscandidate[cliqueentries[i].index()] = true;
+        callback(cliqueentries[i]);
+      }
+    };
+
+    auto cleanup = [&](HighsInt cliqueid) {
+      HighsInt start = cliques[cliqueid].start;
+      HighsInt end = cliques[cliqueid].end;
+      for (HighsInt i = start; i != end; ++i)
+        iscandidate[cliqueentries[i].index()] = false;
+    };
+
+    invertedHashList[v.index()].for_each(collect);
+    invertedHashListSizeTwo[v.index()].for_each(collect);
+
+    iscandidate[v.index()] = false;
+    invertedHashList[v.index()].for_each(cleanup);
+    invertedHashListSizeTwo[v.index()].for_each(cleanup);
+  }
 };
 
 #endif

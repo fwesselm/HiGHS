@@ -539,6 +539,8 @@ class HPresolve {
 
   void aggregateVarBounds();
 
+  Result implAwareConstrPropagation(HighsPostsolveStack& postsolve_stack);
+
   Result sparsify(HighsPostsolveStack& postsolve_stack);
 
   const HighsPresolveLog& getPresolveLog() const {
