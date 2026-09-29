@@ -10097,15 +10097,10 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
     void updateOne(const HighsCDouble& update) { weightOne += update; }
   };
 
-  struct cliqueCandidate {
-    HighsCliqueTable::CliqueVar cliquevar;
-    double weight;
-  };
-
   HighsHashTable<HighsInt, double> nonBinNonZeros;
   HighsHashTable<HighsInt, binaryData> binNonZeros;
   std::vector<std::pair<HighsInt, HighsCliqueTable::CliqueVar>> neighbours;
-  std::vector<cliqueCandidate> candidates;
+  std::vector<HighsCliqueTable::CliqueVar> candidates;
 
   HighsInt numVarsFixed = 0;
   HighsInt numCliquesAdded = 0;
@@ -10168,6 +10163,11 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
     return true;
   };
 
+  auto getBinaryWeight = [&](const HighsCliqueTable::CliqueVar& clqvar) {
+    return clqvar.val == 1 ? binNonZeros[clqvar.col].weightOne
+                           : binNonZeros[clqvar.col].weightZero;
+  };
+
   auto findCliques = [&](double threshold) {
     // two-column clique extraction
     if (threshold <= primal_feastol) return;
@@ -10181,34 +10181,35 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
     for (const auto& bin : binNonZeros) {
       HighsInt col = bin.key();
       if (colDeleted[col]) continue;
-      double weightOne = static_cast<double>(bin.value().weightOne);
-      double weightZero = static_cast<double>(bin.value().weightZero);
-      if (weightOne > primal_feastol && weightOne <= threshold + primal_feastol)
-        candidates.push_back({HighsCliqueTable::CliqueVar{col, 1}, weightOne});
-      if (weightZero > primal_feastol &&
-          weightZero <= threshold + primal_feastol)
-        candidates.push_back({HighsCliqueTable::CliqueVar{col, 0}, weightZero});
+      if (bin.value().weightOne > primal_feastol &&
+          bin.value().weightOne <= threshold + primal_feastol)
+        candidates.push_back(HighsCliqueTable::CliqueVar{col, 1});
+      if (bin.value().weightZero > primal_feastol &&
+          bin.value().weightZero <= threshold + primal_feastol)
+        candidates.push_back(HighsCliqueTable::CliqueVar{col, 0});
     }
 
     pdqsort(candidates.begin(), candidates.end(),
-            [](const cliqueCandidate& a, const cliqueCandidate& b) {
-              return a.weight > b.weight;
+            [&](const HighsCliqueTable::CliqueVar& a,
+                const HighsCliqueTable::CliqueVar& b) {
+              return getBinaryWeight(a) > getBinaryWeight(b);
             });
 
     for (size_t i = 0; i < candidates.size() && numCliquesAdded < numNonzeros();
          ++i) {
-      const auto& v1 = candidates[i].cliquevar;
-      for (size_t j = i + 1; j < candidates.size(); ++j) {
-        const auto& v2 = candidates[j].cliquevar;
+      const auto& v1 = candidates[i];
 
-        if (candidates[i].weight + candidates[j].weight <=
+      for (size_t j = i + 1; j < candidates.size(); ++j) {
+        const auto& v2 = candidates[j];
+
+        if (getBinaryWeight(v1) + getBinaryWeight(v2) <=
             threshold + primal_feastol)
           break;
 
         if (v1.col == v2.col || cliquetable.haveCommonClique(v1, v2)) continue;
 
         // compute combined weight
-        double sum = 0;
+        HighsCDouble sum = 0;
         for (const auto& bin : binNonZeros) {
           HighsInt bcol = bin.key();
           double bval = bin.value().val;
@@ -10229,17 +10230,19 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
         for (const auto& nz : nonBinNonZeros) {
           HighsInt col = nz.key();
           double val = nz.value();
-          double best = 0.0;
+          HighsCDouble best = 0.0;
           for (const auto& v : {v1, v2}) {
             const auto* impl =
                 implications.getImplications(v.col, v.val).find(col);
             if (impl == nullptr) continue;
-            double change = 0.0;
+            HighsCDouble change = 0.0;
             if (val > 0 && impl->lb > -kHighsInf)
-              change = val * (impl->lb - model->col_lower_[col]);
+              change = val * (static_cast<HighsCDouble>(impl->lb) -
+                              model->col_lower_[col]);
             else if (val < 0 && impl->ub < kHighsInf)
-              change = val * (impl->ub - model->col_upper_[col]);
-            best = std::max(best, change);
+              change = val * (static_cast<HighsCDouble>(impl->ub) -
+                              model->col_upper_[col]);
+            best = max(best, change);
           }
           sum += best;
         }
