@@ -10108,7 +10108,7 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
 
   HighsInt numVarsFixed = 0;
 
-  auto checkRow = [&](HighsInt row, HighsInt direction) {
+  auto loadModelRow = [&](HighsInt row, HighsInt direction) {
     binNonZeros.clear();
     nonBinNonZeros.clear();
 
@@ -10117,7 +10117,6 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
       double val = direction * nz.value();
       double lb = model->col_lower_[col];
       double ub = model->col_upper_[col];
-      if (lb == ub) continue;
       if (isBinary(col)) {
         binNonZeros[col] = binaryData{val};
         if (val < 0)
@@ -10126,11 +10125,47 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
           binNonZeros[col].updateOne(static_cast<HighsCDouble>(val));
       } else {
         if ((val > 0 && lb <= -kHighsInf) || (val < 0 && ub >= kHighsInf))
-          return Result::kOk;
+          return false;
         nonBinNonZeros.push_back(nonZero{col, val});
       }
     }
+    return true;
+  };
 
+  auto loadObjective = [&](HighsCDouble& objectiveLower) {
+    binNonZeros.clear();
+    nonBinNonZeros.clear();
+    objectiveLower = 0;
+
+    for (HighsInt col = 0; col < model->num_col_; col++) {
+      if (colDeleted[col]) continue;
+      double cost = model->col_cost_[col];
+      if (cost == 0.0) continue;
+      double lb = model->col_lower_[col];
+      double ub = model->col_upper_[col];
+      // accumulate standard minimum
+      if (cost > 0) {
+        if (lb <= -kHighsInf) return false;
+        objectiveLower += cost * static_cast<HighsCDouble>(lb);
+      } else {
+        if (ub >= kHighsInf) return false;
+        objectiveLower += cost * static_cast<HighsCDouble>(ub);
+      }
+      if (lb == ub) continue;
+      if (isBinary(col)) {
+        binNonZeros[col] = binaryData{cost};
+        if (cost < 0)
+          binNonZeros[col].updateZero(-static_cast<HighsCDouble>(cost));
+        else
+          binNonZeros[col].updateOne(static_cast<HighsCDouble>(cost));
+      } else {
+        nonBinNonZeros.push_back(nonZero{col, cost});
+      }
+    }
+    return true;
+  };
+
+  auto checkRow = [&](double threshold) {
     // consider variable bound constraints
     for (const auto& nz : nonBinNonZeros) {
       if (nz.val < 0) {
@@ -10190,23 +10225,17 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
         binNonZeros[cvar.second.col].updateZero(update);
     }
 
-    // compute threshold
-    double b0 =
-        direction > 0
-            ? -impliedRowBounds.getSumLowerOrig(row, -model->row_upper_[row])
-            : impliedRowBounds.getSumUpperOrig(row, -model->row_lower_[row]);
-
     // binary fixing
     for (const auto& bin : binNonZeros) {
       HighsInt col = bin.key();
       const HighsCDouble& weightZero = bin.value().weightZero;
       const HighsCDouble& weightOne = bin.value().weightOne;
 
-      if (weightZero > b0 + primal_feastol) {
+      if (weightZero > threshold + primal_feastol) {
         // fix to upper bound
         numVarsFixed++;
         HPRESOLVE_CHECKED_CALL(fixColToUpper(postsolve_stack, col));
-      } else if (weightOne > b0 + primal_feastol) {
+      } else if (weightOne > threshold + primal_feastol) {
         // fix to lower bound
         numVarsFixed++;
         HPRESOLVE_CHECKED_CALL(fixColToLower(postsolve_stack, col));
@@ -10216,13 +10245,25 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
     return Result::kOk;
   };
 
+  // check objective function
+  HighsCDouble objectiveLower;
+  if (mipsolver->mipdata_->upper_bound < kHighsInf &&
+      loadObjective(objectiveLower)) {
+    double threshold = static_cast<double>(
+        static_cast<HighsCDouble>(mipsolver->mipdata_->upper_bound) -
+        objectiveLower);
+    HPRESOLVE_CHECKED_CALL(checkRow(threshold));
+  }
+
   // check rows
   for (HighsInt row = 0; row < model->num_row_; row++) {
     if (rowDeleted[row]) continue;
-    if (model->row_upper_[row] < kHighsInf)
-      HPRESOLVE_CHECKED_CALL(checkRow(row, HighsInt{1}));
-    if (model->row_lower_[row] > -kHighsInf)
-      HPRESOLVE_CHECKED_CALL(checkRow(row, HighsInt{-1}));
+    if (model->row_upper_[row] < kHighsInf && loadModelRow(row, HighsInt{1}))
+      HPRESOLVE_CHECKED_CALL(checkRow(
+          -impliedRowBounds.getSumLowerOrig(row, -model->row_upper_[row])));
+    if (model->row_lower_[row] > -kHighsInf && loadModelRow(row, HighsInt{-1}))
+      HPRESOLVE_CHECKED_CALL(checkRow(
+          impliedRowBounds.getSumUpperOrig(row, -model->row_lower_[row])));
   }
 
   if (numVarsFixed > 0)
