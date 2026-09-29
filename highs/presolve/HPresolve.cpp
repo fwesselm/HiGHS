@@ -10102,11 +10102,18 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
     void updateOne(const HighsCDouble& update) { weightOne += update; }
   };
 
+  struct cliqueCandidate {
+    HighsCliqueTable::CliqueVar cliquevar;
+    double weight;
+  };
+
   std::vector<nonZero> nonBinNonZeros;
   HighsHashTable<HighsInt, binaryData> binNonZeros;
   std::vector<std::pair<HighsInt, HighsCliqueTable::CliqueVar>> neighbours;
+  std::vector<cliqueCandidate> candidates;
 
   HighsInt numVarsFixed = 0;
+  HighsInt numCliquesAdded = 0;
 
   auto loadModelRow = [&](HighsInt row, HighsInt direction) {
     binNonZeros.clear();
@@ -10163,6 +10170,75 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
       }
     }
     return true;
+  };
+
+  auto findCliques = [&](double threshold) {
+    // two-column clique extraction
+    if (threshold <= primal_feastol) return;
+
+    // stop if no cliques were found after a number of tries
+    HighsInt consecutiveNoClique = 0;
+    const HighsInt maxConsecutiveNoClique = 10;
+
+    // collect candidates
+    candidates.clear();
+    for (const auto& bin : binNonZeros) {
+      HighsInt col = bin.key();
+      if (colDeleted[col]) continue;
+      double weightOne = static_cast<double>(bin.value().weightOne);
+      double weightZero = static_cast<double>(bin.value().weightZero);
+      if (weightOne > primal_feastol && weightOne <= threshold + primal_feastol)
+        candidates.push_back({HighsCliqueTable::CliqueVar{col, 1}, weightOne});
+      if (weightZero > primal_feastol &&
+          weightZero <= threshold + primal_feastol)
+        candidates.push_back({HighsCliqueTable::CliqueVar{col, 0}, weightZero});
+    }
+
+    pdqsort(candidates.begin(), candidates.end(),
+            [](const cliqueCandidate& a, const cliqueCandidate& b) {
+              return a.weight > b.weight;
+            });
+
+    for (size_t i = 0; i < candidates.size() && numCliquesAdded < numNonzeros();
+         ++i) {
+      const auto& v1 = candidates[i].cliquevar;
+      for (size_t j = i + 1; j < candidates.size(); ++j) {
+        const auto& v2 = candidates[j].cliquevar;
+
+        if (candidates[i].weight + candidates[j].weight <=
+            threshold + primal_feastol)
+          break;
+
+        if (v1.col == v2.col || cliquetable.haveCommonClique(v1, v2)) continue;
+
+        // compute combined weight (binary contributions only)
+        double s = 0;
+        for (const auto& bin : binNonZeros) {
+          HighsInt bcol = bin.key();
+          double bval = bin.value().val;
+          double absbval = std::abs(bval);
+          if (absbval == 0.0) continue;
+
+          HighsCliqueTable::CliqueVar minContribCliqueVar(bcol,
+                                                          bval < 0 ? 1 : 0);
+
+          if (v1 == minContribCliqueVar.complement() ||
+              v2 == minContribCliqueVar.complement() ||
+              cliquetable.haveCommonClique(v1, minContribCliqueVar) ||
+              cliquetable.haveCommonClique(v2, minContribCliqueVar))
+            s += absbval;
+        }
+
+        if (s > threshold + primal_feastol) {
+          std::vector<HighsCliqueTable::CliqueVar> clique = {v1, v2};
+          cliquetable.addClique(*mipsolver, clique.data(), 2);
+          numCliquesAdded++;
+          consecutiveNoClique = 0;
+        } else {
+          if (++consecutiveNoClique >= maxConsecutiveNoClique) return;
+        }
+      }
+    }
   };
 
   auto checkRow = [&](double threshold) {
@@ -10242,6 +10318,9 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
       }
     }
 
+    // two-column clique extraction
+    findCliques(threshold);
+
     return Result::kOk;
   };
 
@@ -10266,12 +10345,12 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
           impliedRowBounds.getSumUpperOrig(row, -model->row_lower_[row])));
   }
 
-  if (numVarsFixed > 0)
+  if (numVarsFixed > 0 || numCliquesAdded > 0)
     highsLogDev(
         options->log_options, HighsLogType::kInfo,
         "Implication-aware constraint propagation fixed %" HIGHSINT_FORMAT
-        " columns\n",
-        numVarsFixed);
+        " columns, added %" HIGHSINT_FORMAT " cliques\n",
+        numVarsFixed, numCliquesAdded);
 
   return Result::kOk;
 }
