@@ -10142,14 +10142,10 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
               if (colDeleted[binCol] || !isBinary(binCol)) return;
               // x_bin = 1 --> x_j <= coef + constant
               HighsCDouble liftOneVal = nz.val * (vub.coef + vub.constant - ub);
-              bool liftOne = liftOneVal > 0;
+              if (liftOneVal > 0) binNonZeros[binCol].updateOne(liftOneVal);
               // x_bin = 0 --> x_j <= constant
               HighsCDouble liftZeroVal = nz.val * (vub.constant - ub);
-              bool liftZero = liftZeroVal > 0;
-              if (liftOne || liftZero) {
-                if (liftOne) binNonZeros[binCol].updateOne(liftOneVal);
-                if (liftZero) binNonZeros[binCol].updateZero(liftZeroVal);
-              }
+              if (liftZeroVal > 0) binNonZeros[binCol].updateZero(liftZeroVal);
             });
       } else {
         // check VLBs
@@ -10160,14 +10156,10 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
               if (colDeleted[binCol] || !isBinary(binCol)) return;
               // x_bin = 1 --> x_j >= coef + constant
               HighsCDouble liftOneVal = nz.val * (vlb.coef + vlb.constant - lb);
-              bool liftOne = liftOneVal > 0;
+              if (liftOneVal > 0) binNonZeros[binCol].updateOne(liftOneVal);
               // x_bin = 0 --> x_j >= constant
               HighsCDouble liftZeroVal = nz.val * (vlb.constant - lb);
-              bool liftZero = liftZeroVal > 0;
-              if (liftOne || liftZero) {
-                if (liftOne) binNonZeros[binCol].updateOne(liftOneVal);
-                if (liftZero) binNonZeros[binCol].updateZero(liftZeroVal);
-              }
+              if (liftZeroVal > 0) binNonZeros[binCol].updateZero(liftZeroVal);
             });
       }
     }
