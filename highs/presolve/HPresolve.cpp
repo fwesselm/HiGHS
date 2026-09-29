@@ -10189,6 +10189,7 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
         candidates.push_back(HighsCliqueTable::CliqueVar{col, 0});
     }
 
+    // sort candidates by decreasing weight
     pdqsort(candidates.begin(), candidates.end(),
             [&](const HighsCliqueTable::CliqueVar& a,
                 const HighsCliqueTable::CliqueVar& b) {
@@ -10202,13 +10203,21 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
       for (size_t j = i + 1; j < candidates.size(); ++j) {
         const auto& v2 = candidates[j];
 
+        // skip pair of variables if the column index is identical or they are
+        // already in a clique together
+        if (v1.col == v2.col || cliquetable.haveCommonClique(v1, v2)) continue;
+
+        // combined weight cannot exceed threshold; since candidates are
+        // sorted by decreasing weight, no later pair with v1 can either
         if (getBinaryWeight(v1) + getBinaryWeight(v2) <=
             threshold + primal_feastol)
           break;
 
-        if (v1.col == v2.col || cliquetable.haveCommonClique(v1, v2)) continue;
-
-        // compute combined weight
+        // "simulate" setting v1 and v2 active: what is the effect on the
+        // constraint's minimum activity?
+        //
+        // binary contributions: add |a_j| for each binary forced away from
+        // its min-contribution value when v1 or v2 is active (via clique)
         HighsCDouble sum = 0;
         for (const auto& bin : binNonZeros) {
           HighsInt bcol = bin.key();
@@ -10216,9 +10225,12 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
           double absbval = std::abs(bval);
           if (absbval == 0.0) continue;
 
+          // (col, val) setting that minimises this binary's contribution
           HighsCliqueTable::CliqueVar minContribCliqueVar(bcol,
                                                           bval < 0 ? 1 : 0);
 
+          // binary is forced away from min-contribution if v1 or v2
+          // is the complement, or shares a clique with it
           if (v1 == minContribCliqueVar.complement() ||
               v2 == minContribCliqueVar.complement() ||
               cliquetable.haveCommonClique(v1, minContribCliqueVar) ||
@@ -10226,7 +10238,10 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
             sum += absbval;
         }
 
-        // add non-binary contributions via implied bounds
+        // non-binary contributions: when v1 or v2 is active, implied bounds
+        // may tighten a non-binary's feasible range, increasing its minimum
+        // contribution to the row. add this excess over the standard bound,
+        // taking the max of v1 and v2 to avoid double-counting.
         for (const auto& nz : nonBinNonZeros) {
           HighsInt col = nz.key();
           double val = nz.value();
@@ -10235,6 +10250,8 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
             const auto* impl =
                 implications.getImplications(v.col, v.val).find(col);
             if (impl == nullptr) continue;
+            // compute excess activity from implied bound over standard bound:
+            // a_j > 0: use implied lower bound, a_j < 0: use implied upper
             HighsCDouble change = 0.0;
             if (val > 0 && impl->lb > -kHighsInf)
               change = val * (static_cast<HighsCDouble>(impl->lb) -
@@ -10247,6 +10264,7 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
           sum += best;
         }
 
+        // combined weight exceeds threshold: v1 and v2 form a clique
         if (sum > threshold + primal_feastol) {
           std::vector<HighsCliqueTable::CliqueVar> clique = {v1, v2};
           cliquetable.addClique(*mipsolver, clique.data(), 2);
