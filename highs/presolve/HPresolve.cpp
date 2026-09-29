@@ -9993,6 +9993,8 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
   HighsHashTable<HighsInt, binaryData> binNonZeros;
   std::vector<std::pair<HighsInt, HighsCliqueTable::CliqueVar>> neighbours;
 
+  HighsInt numVarsFixed = 0;
+
   auto checkRow = [&](HighsInt row, HighsInt direction) {
     binNonZeros.clear();
     nonBinNonZeros.clear();
@@ -10102,12 +10104,15 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
                                                   : -model->row_lower_[row]) -
           residual;
 
-      if (weightZero > b0 + primal_feastol)
+      if (weightZero > b0 + primal_feastol) {
         // fix to upper bound
+        numVarsFixed++;
         HPRESOLVE_CHECKED_CALL(fixColToUpper(postsolve_stack, col));
-      else if (weightOne > b0 + primal_feastol)
+      } else if (weightOne > b0 + primal_feastol) {
         // fix to lower bound
+        numVarsFixed++;
         HPRESOLVE_CHECKED_CALL(fixColToLower(postsolve_stack, col));
+      }
     }
 
     return Result::kOk;
@@ -10121,6 +10126,13 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
     if (model->row_lower_[row] > -kHighsInf)
       HPRESOLVE_CHECKED_CALL(checkRow(row, HighsInt{-1}));
   }
+
+  if (numVarsFixed > 0)
+    highsLogDev(
+        options->log_options, HighsLogType::kInfo,
+        "Implication-aware constraint propagation fixed %" HIGHSINT_FORMAT
+        " columns\n",
+        numVarsFixed);
 
   return Result::kOk;
 }
