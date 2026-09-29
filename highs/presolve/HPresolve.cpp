@@ -10191,13 +10191,10 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
     }
 
     // compute threshold
-    double activityBound = direction > 0
-                               ? impliedRowBounds.getSumLowerOrig(row)
-                               : -impliedRowBounds.getSumUpperOrig(row);
-    HighsCDouble b0 =
-        static_cast<HighsCDouble>(direction > 0 ? model->row_upper_[row]
-                                                : -model->row_lower_[row]) -
-        activityBound;
+    double b0 =
+        direction > 0
+            ? -impliedRowBounds.getSumLowerOrig(row, -model->row_upper_[row])
+            : impliedRowBounds.getSumUpperOrig(row, -model->row_lower_[row]);
 
     // binary fixing
     for (const auto& bin : binNonZeros) {
