@@ -10085,11 +10085,6 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
   HighsCliqueTable& cliquetable = mipsolver->mipdata_->cliquetable;
   HighsImplications& implications = mipsolver->mipdata_->implications;
 
-  struct nonZero {
-    HighsInt col;
-    double val;
-  };
-
   struct binaryData {
     double val;
     HighsCDouble weightZero;
@@ -10107,7 +10102,7 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
     double weight;
   };
 
-  std::vector<nonZero> nonBinNonZeros;
+  HighsHashTable<HighsInt, double> nonBinNonZeros;
   HighsHashTable<HighsInt, binaryData> binNonZeros;
   std::vector<std::pair<HighsInt, HighsCliqueTable::CliqueVar>> neighbours;
   std::vector<cliqueCandidate> candidates;
@@ -10133,7 +10128,7 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
       } else {
         if ((val > 0 && lb <= -kHighsInf) || (val < 0 && ub >= kHighsInf))
           return false;
-        nonBinNonZeros.push_back(nonZero{col, val});
+        nonBinNonZeros[col] = val;
       }
     }
     return true;
@@ -10158,6 +10153,7 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
         if (ub >= kHighsInf) return false;
         objectiveLower += cost * static_cast<HighsCDouble>(ub);
       }
+      // skip fixed variables (since we are iterating all columns)
       if (lb == ub) continue;
       if (isBinary(col)) {
         binNonZeros[col] = binaryData{cost};
@@ -10166,7 +10162,7 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
         else
           binNonZeros[col].updateOne(static_cast<HighsCDouble>(cost));
       } else {
-        nonBinNonZeros.push_back(nonZero{col, cost});
+        nonBinNonZeros[col] = cost;
       }
     }
     return true;
@@ -10211,8 +10207,8 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
 
         if (v1.col == v2.col || cliquetable.haveCommonClique(v1, v2)) continue;
 
-        // compute combined weight (binary contributions only)
-        double s = 0;
+        // compute combined weight
+        double sum = 0;
         for (const auto& bin : binNonZeros) {
           HighsInt bcol = bin.key();
           double bval = bin.value().val;
@@ -10226,10 +10222,29 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
               v2 == minContribCliqueVar.complement() ||
               cliquetable.haveCommonClique(v1, minContribCliqueVar) ||
               cliquetable.haveCommonClique(v2, minContribCliqueVar))
-            s += absbval;
+            sum += absbval;
         }
 
-        if (s > threshold + primal_feastol) {
+        // add non-binary contributions via implied bounds
+        for (const auto& nz : nonBinNonZeros) {
+          HighsInt col = nz.key();
+          double val = nz.value();
+          double best = 0.0;
+          for (const auto& v : {v1, v2}) {
+            const auto* impl =
+                implications.getImplications(v.col, v.val).find(col);
+            if (impl == nullptr) continue;
+            double change = 0.0;
+            if (val > 0 && impl->lb > -kHighsInf)
+              change = val * (impl->lb - model->col_lower_[col]);
+            else if (val < 0 && impl->ub < kHighsInf)
+              change = val * (impl->ub - model->col_upper_[col]);
+            best = std::max(best, change);
+          }
+          sum += best;
+        }
+
+        if (sum > threshold + primal_feastol) {
           std::vector<HighsCliqueTable::CliqueVar> clique = {v1, v2};
           cliquetable.addClique(*mipsolver, clique.data(), 2);
           numCliquesAdded++;
@@ -10244,32 +10259,34 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
   auto checkRow = [&](double threshold) {
     // consider variable bound constraints
     for (const auto& nz : nonBinNonZeros) {
-      if (nz.val < 0) {
+      HighsInt col = nz.key();
+      double val = nz.value();
+      if (val < 0) {
         // check VUBs
-        HighsCDouble ub = model->col_upper_[nz.col];
-        implications.getVubs(nz.col).for_each(
+        HighsCDouble ub = model->col_upper_[col];
+        implications.getVubs(col).for_each(
             [&](HighsInt binCol, const HighsImplications::VarBound& vub) {
               // skip deleted or fixed binary variables
               if (colDeleted[binCol] || !isBinary(binCol)) return;
               // x_bin = 1 --> x_j <= coef + constant
-              HighsCDouble liftOneVal = nz.val * (vub.coef + vub.constant - ub);
+              HighsCDouble liftOneVal = val * (vub.coef + vub.constant - ub);
               if (liftOneVal > 0) binNonZeros[binCol].updateOne(liftOneVal);
               // x_bin = 0 --> x_j <= constant
-              HighsCDouble liftZeroVal = nz.val * (vub.constant - ub);
+              HighsCDouble liftZeroVal = val * (vub.constant - ub);
               if (liftZeroVal > 0) binNonZeros[binCol].updateZero(liftZeroVal);
             });
       } else {
         // check VLBs
-        HighsCDouble lb = model->col_lower_[nz.col];
-        implications.getVlbs(nz.col).for_each(
+        HighsCDouble lb = model->col_lower_[col];
+        implications.getVlbs(col).for_each(
             [&](HighsInt binCol, const HighsImplications::VarBound& vlb) {
               // skip deleted or fixed binary variables
               if (colDeleted[binCol] || !isBinary(binCol)) return;
               // x_bin = 1 --> x_j >= coef + constant
-              HighsCDouble liftOneVal = nz.val * (vlb.coef + vlb.constant - lb);
+              HighsCDouble liftOneVal = val * (vlb.coef + vlb.constant - lb);
               if (liftOneVal > 0) binNonZeros[binCol].updateOne(liftOneVal);
               // x_bin = 0 --> x_j >= constant
-              HighsCDouble liftZeroVal = nz.val * (vlb.constant - lb);
+              HighsCDouble liftZeroVal = val * (vlb.constant - lb);
               if (liftZeroVal > 0) binNonZeros[binCol].updateZero(liftZeroVal);
             });
       }

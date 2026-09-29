@@ -23,18 +23,13 @@ class HighsLpRelaxation;
 class HighsImplications {
   HighsInt nextCleanupCall;
 
+ public:
   struct Implication {
     double lb = -kHighsInf;
     double ub = kHighsInf;
   };
 
-  std::vector<HighsHashTree<HighsInt, Implication>> implications;
-  std::vector<HighsHashTree<HighsInt, bool>> reverseImplications;
-  std::vector<uint8_t> hasProbed;
-  int64_t numImplications;
-  int64_t numVarBounds;
-  int64_t maxVarBounds;
-
+ private:
   struct ImplIdx {
     HighsInt col;
     HighsInt val;
@@ -44,6 +39,13 @@ class HighsImplications {
       return 2 * col + val;
     }
   };
+
+  std::vector<HighsHashTree<HighsInt, Implication>> implications;
+  std::vector<HighsHashTree<HighsInt, bool>> reverseImplications;
+  std::vector<uint8_t> hasProbed;
+  int64_t numImplications;
+  int64_t numVarBounds;
+  int64_t maxVarBounds;
 
   bool computeImplications(HighsInt col, bool val);
 
@@ -187,6 +189,10 @@ class HighsImplications {
     }
   }
 
+  const HighsHashTree<HighsInt, Implication>& getImplications(
+      HighsInt col, HighsInt val) const {
+    return implications[ImplIdx{col, val}];
+  }
   const HighsHashTree<HighsInt, VarBound>& getVlbs(HighsInt col) const {
     return vlbs[col];
   }
