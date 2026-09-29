@@ -10085,24 +10085,20 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
         binNonZeros[cvar.second.col].updateZero(update);
     }
 
+    // compute threshold
+    double activityBound = direction > 0
+                               ? impliedRowBounds.getSumLowerOrig(row)
+                               : -impliedRowBounds.getSumUpperOrig(row);
+    HighsCDouble b0 =
+        static_cast<HighsCDouble>(direction > 0 ? model->row_upper_[row]
+                                                : -model->row_lower_[row]) -
+        activityBound;
+
     // binary fixing
     for (const auto& bin : binNonZeros) {
       HighsInt col = bin.key();
-      double val = bin.value().val;
       const HighsCDouble& weightZero = bin.value().weightZero;
       const HighsCDouble& weightOne = bin.value().weightOne;
-
-      double residual;
-      if (direction > 0)
-        residual =
-            impliedRowBounds.getResidualSumLowerOrig(row, col, direction * val);
-      else
-        residual = -impliedRowBounds.getResidualSumUpperOrig(row, col,
-                                                             direction * val);
-      HighsCDouble b0 =
-          static_cast<HighsCDouble>(direction > 0 ? model->row_upper_[row]
-                                                  : -model->row_lower_[row]) -
-          residual;
 
       if (weightZero > b0 + primal_feastol) {
         // fix to upper bound
