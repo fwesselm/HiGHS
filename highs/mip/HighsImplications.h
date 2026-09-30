@@ -25,8 +25,10 @@ class HighsImplications {
 
  public:
   struct Implication {
-    double lb = -kHighsInf;
-    double ub = kHighsInf;
+    double lb;
+    double ub;
+    Implication() : lb(-kHighsInf), ub(kHighsInf) {}
+    Implication(double lb, double ub) : lb(lb), ub(ub) {}
   };
 
  private:

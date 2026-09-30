@@ -10102,7 +10102,7 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
 
   HighsHashTable<HighsInt, double> nonBinNonZeros;
   HighsHashTable<HighsInt, binaryData> binNonZeros;
-  std::vector<std::pair<HighsInt, HighsCliqueTable::CliqueVar>> neighbours;
+  std::vector<HighsInt> sortedBins;
   std::vector<HighsCliqueTable::CliqueVar> candidates;
 
   HighsInt numVarsFixed = 0;
@@ -10316,30 +10316,61 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
       }
     }
 
-    // consider cliques
-    neighbours.clear();
+    // consider cliques: sort binaries for early termination
+    // few clique connections first (cheap), large coefficients last
+    sortedBins.clear();
+    HighsCDouble remaining_weight = 0;
     for (const auto& binVar : binNonZeros) {
       HighsInt col = binVar.key();
-      double val = binVar.value().val;
       // skip VLB / VUB binaries that have zero coefficient because their
       // contribution (through cliques) is zero
-      if (val == 0.0) continue;
-      // collect neighbors
+      if (binVar.value().val == 0.0) continue;
+      sortedBins.push_back(col);
+      remaining_weight += std::abs(binVar.value().val);
+    }
+
+    pdqsort(sortedBins.begin(), sortedBins.end(), [&](HighsInt a, HighsInt b) {
+      double aval = binNonZeros[a].val;
+      double bval = binNonZeros[b].val;
+      double akey = cliquetable.numCliques(a, aval < 0) -
+                    10.0 * std::abs(aval) / threshold;
+      double bkey = cliquetable.numCliques(b, bval < 0) -
+                    10.0 * std::abs(bval) / threshold;
+      return akey < bkey;
+    });
+
+    // clique propagation with early termination:
+    // if max_weight + remaining_weight <= threshold, no binary can
+    // exceed the threshold, so stop processing
+    HighsCDouble max_weight = 0;
+    for (const auto& bin : binNonZeros)
+      max_weight =
+          max(max_weight, max(bin.value().weightOne, bin.value().weightZero));
+
+    for (HighsInt col : sortedBins) {
+      double val = binNonZeros[col].val;
+      double absval = std::abs(val);
+      remaining_weight -= absval;
+
+      // no binary's weight can exceed threshold after processing the
+      // remaining binaries, so skip clique propagation
+      if (max_weight + remaining_weight <= threshold + primal_feastol) break;
+
+      // collect neighbors and update weights
       cliquetable.forEachUniqueNeighbor(
           HighsCliqueTable::CliqueVar(col, val < 0 ? 1 : 0),
           [&](HighsCliqueTable::CliqueVar neighbor) {
-            if (!colDeleted[neighbor.col])
-              neighbours.emplace_back(col, neighbor);
+            if (colDeleted[neighbor.col]) return;
+            HighsCDouble update(absval);
+            if (neighbor.val == 1)
+              binNonZeros[neighbor.col].updateOne(update);
+            else
+              binNonZeros[neighbor.col].updateZero(update);
+            max_weight =
+                max(max_weight, neighbor.val == 1
+                                    ? binNonZeros[neighbor.col].weightOne
+                                    : binNonZeros[neighbor.col].weightZero);
           });
-    }
-
-    // update weights
-    for (const auto& cvar : neighbours) {
-      HighsCDouble update = abs(binNonZeros[cvar.first].val);
-      if (cvar.second.val == 1)
-        binNonZeros[cvar.second.col].updateOne(update);
-      else
-        binNonZeros[cvar.second.col].updateZero(update);
     }
 
     // binary fixing
