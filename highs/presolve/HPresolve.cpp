@@ -10399,6 +10399,35 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
     // two-column clique extraction
     findCliques(threshold);
 
+    // update non-binary weights from binary implications
+    for (const auto& binVar : binNonZeros) {
+      HighsInt binCol = binVar.key();
+      double binVal = binVar.value().val;
+
+      for (HighsInt val = 0; val <= 1; val++) {
+        // excess activity when x_i is forced to (1-val)
+        if ((binVal < 0 || val == 1) && (binVal > 0 || val == 0)) continue;
+        double absBinVal = std::abs(binVal);
+
+        implications.getImplications(binCol, val)
+            .for_each([&](HighsInt implCol,
+                          const HighsImplications::Implication& impl) {
+              auto* nzData = nonBinNonZeros.find(implCol);
+              if (nzData == nullptr) return;
+
+              // x_i = val => x_r >= λ: at x_r = lb < λ, x_i forced
+              if (model->col_lower_[implCol] > -kHighsInf &&
+                  impl.lb > model->col_lower_[implCol] + primal_feastol)
+                nzData->updateLower(absBinVal);
+
+              // x_i = val => x_r <= μ: at x_r = ub > μ, x_i forced
+              if (model->col_upper_[implCol] < kHighsInf &&
+                  impl.ub < model->col_upper_[implCol] - primal_feastol)
+                nzData->updateUpper(absBinVal);
+            });
+      }
+    }
+
     return Result::kOk;
   };
 
