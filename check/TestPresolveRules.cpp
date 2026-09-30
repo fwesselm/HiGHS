@@ -1524,15 +1524,18 @@ TEST_CASE("test-impl-aware-paper-example-3-5", "[highs_test_presolve_rules]") {
   HighsModelStatus status = presolve.run(postsolve_stack);
   REQUIRE(status == HighsModelStatus::kNotset);
 
-  // x5 upper bound should be tightened from 3 to 2
-  REQUIRE(mipsolver.model_->col_upper_[3] <= 2.0 + 1e-6);
-  REQUIRE(mipsolver.model_->col_upper_[3] >= 2.0 - 1e-6);
+  // x5 upper bound should be tightened from 3 to 2.
+  // After presolve, x1 (col 0) was fixed and removed by shrinkProblem,
+  // so original col 3 (x5) is now at presolved index 2.
+  REQUIRE(mipsolver.model_->col_upper_[2] <= 2.0 + 1e-6);
+  REQUIRE(mipsolver.model_->col_upper_[2] >= 2.0 - 1e-6);
 
   // x1 is fixed to 1 and removed by presolve; verify via postsolve
-  // that restores the fixed value into the solution
+  // that restores the fixed value into the solution.
+  // Presolved model has 3 cols: x2(0), x3(1), x5(2).
   HighsSolution sol;
   sol.value_valid = true;
-  sol.col_value = {0.0, 1.0, 0.0, 1.0};
+  sol.col_value = {0.0, 0.0, 1.0};
   postsolve_stack.undoPrimal(options, sol);
   REQUIRE(sol.col_value[0] >= 1.0 - 1e-6);
 
