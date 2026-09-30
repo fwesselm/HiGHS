@@ -10088,20 +10088,22 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
   HighsCliqueTable& cliquetable = mipsolver->mipdata_->cliquetable;
   HighsImplications& implications = mipsolver->mipdata_->implications;
 
-  struct binaryData {
+  struct variableData {
     double val;
-    HighsCDouble weightZero;
-    HighsCDouble weightOne;
+    HighsCDouble weightLower;
+    HighsCDouble weightUpper;
 
-    binaryData() : val(0.0), weightZero(0.0), weightOne(0.0) {}
-    binaryData(double myVal) : val(myVal), weightZero(0.0), weightOne(0.0) {}
+    variableData() : val(0.0), weightLower(0.0), weightUpper(0.0) {}
+    variableData(double myVal)
+        : val(myVal), weightLower(0.0), weightUpper(0.0) {}
 
-    void updateZero(const HighsCDouble& update) { weightZero += update; }
-    void updateOne(const HighsCDouble& update) { weightOne += update; }
+    void updateLower(const HighsCDouble& update) { weightLower += update; }
+    void updateUpper(const HighsCDouble& update) { weightUpper += update; }
   };
 
-  HighsHashTable<HighsInt, double> nonBinNonZeros;
-  HighsHashTable<HighsInt, binaryData> binNonZeros;
+  // data structures
+  HighsHashTable<HighsInt, variableData> binNonZeros;
+  HighsHashTable<HighsInt, variableData> nonBinNonZeros;
   std::vector<HighsInt> sortedBins;
   std::vector<HighsCliqueTable::CliqueVar> candidates;
 
@@ -10118,15 +10120,15 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
       double lb = model->col_lower_[col];
       double ub = model->col_upper_[col];
       if (isBinary(col)) {
-        binNonZeros[col] = binaryData{val};
+        binNonZeros[col] = variableData{val};
         if (val < 0)
-          binNonZeros[col].updateZero(-static_cast<HighsCDouble>(val));
+          binNonZeros[col].updateLower(-static_cast<HighsCDouble>(val));
         else
-          binNonZeros[col].updateOne(static_cast<HighsCDouble>(val));
+          binNonZeros[col].updateUpper(static_cast<HighsCDouble>(val));
       } else {
         if ((val > 0 && lb <= -kHighsInf) || (val < 0 && ub >= kHighsInf))
           return false;
-        nonBinNonZeros[col] = val;
+        nonBinNonZeros[col] = variableData{val};
       }
     }
     return true;
@@ -10154,21 +10156,21 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
       // skip fixed variables (since we are iterating all columns)
       if (lb == ub) continue;
       if (isBinary(col)) {
-        binNonZeros[col] = binaryData{cost};
+        binNonZeros[col] = variableData{cost};
         if (cost < 0)
-          binNonZeros[col].updateZero(-static_cast<HighsCDouble>(cost));
+          binNonZeros[col].updateLower(-static_cast<HighsCDouble>(cost));
         else
-          binNonZeros[col].updateOne(static_cast<HighsCDouble>(cost));
+          binNonZeros[col].updateUpper(static_cast<HighsCDouble>(cost));
       } else {
-        nonBinNonZeros[col] = cost;
+        nonBinNonZeros[col] = variableData{cost};
       }
     }
     return true;
   };
 
   auto getBinaryWeight = [&](const HighsCliqueTable::CliqueVar& clqvar) {
-    return clqvar.val == 1 ? binNonZeros[clqvar.col].weightOne
-                           : binNonZeros[clqvar.col].weightZero;
+    return clqvar.val == 1 ? binNonZeros[clqvar.col].weightUpper
+                           : binNonZeros[clqvar.col].weightLower;
   };
 
   auto findCliques = [&](double threshold) {
@@ -10184,11 +10186,11 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
     for (const auto& bin : binNonZeros) {
       HighsInt col = bin.key();
       if (colDeleted[col]) continue;
-      if (bin.value().weightOne > primal_feastol &&
-          bin.value().weightOne <= threshold + primal_feastol)
+      if (bin.value().weightUpper > primal_feastol &&
+          bin.value().weightUpper <= threshold + primal_feastol)
         candidates.push_back(HighsCliqueTable::CliqueVar{col, 1});
-      if (bin.value().weightZero > primal_feastol &&
-          bin.value().weightZero <= threshold + primal_feastol)
+      if (bin.value().weightLower > primal_feastol &&
+          bin.value().weightLower <= threshold + primal_feastol)
         candidates.push_back(HighsCliqueTable::CliqueVar{col, 0});
     }
 
@@ -10247,7 +10249,7 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
         // taking the max of v1 and v2 to avoid double-counting.
         for (const auto& nz : nonBinNonZeros) {
           HighsInt col = nz.key();
-          double val = nz.value();
+          double val = nz.value().val;
           HighsCDouble best = 0.0;
           for (const auto& v : {v1, v2}) {
             const auto* impl =
@@ -10284,7 +10286,7 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
     // consider variable bound constraints
     for (const auto& nz : nonBinNonZeros) {
       HighsInt col = nz.key();
-      double val = nz.value();
+      double val = nz.value().val;
       if (val < 0) {
         // check VUBs
         HighsCDouble ub = model->col_upper_[col];
@@ -10294,10 +10296,10 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
               if (colDeleted[binCol] || !isBinary(binCol)) return;
               // x_bin = 1 --> x_j <= coef + constant
               HighsCDouble liftOneVal = val * (vub.coef + vub.constant - ub);
-              if (liftOneVal > 0) binNonZeros[binCol].updateOne(liftOneVal);
+              if (liftOneVal > 0) binNonZeros[binCol].updateUpper(liftOneVal);
               // x_bin = 0 --> x_j <= constant
               HighsCDouble liftZeroVal = val * (vub.constant - ub);
-              if (liftZeroVal > 0) binNonZeros[binCol].updateZero(liftZeroVal);
+              if (liftZeroVal > 0) binNonZeros[binCol].updateLower(liftZeroVal);
             });
       } else {
         // check VLBs
@@ -10308,10 +10310,10 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
               if (colDeleted[binCol] || !isBinary(binCol)) return;
               // x_bin = 1 --> x_j >= coef + constant
               HighsCDouble liftOneVal = val * (vlb.coef + vlb.constant - lb);
-              if (liftOneVal > 0) binNonZeros[binCol].updateOne(liftOneVal);
+              if (liftOneVal > 0) binNonZeros[binCol].updateUpper(liftOneVal);
               // x_bin = 0 --> x_j >= constant
               HighsCDouble liftZeroVal = val * (vlb.constant - lb);
-              if (liftZeroVal > 0) binNonZeros[binCol].updateZero(liftZeroVal);
+              if (liftZeroVal > 0) binNonZeros[binCol].updateLower(liftZeroVal);
             });
       }
     }
@@ -10326,9 +10328,9 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
     for (const auto& binVar : binNonZeros) {
       HighsInt col = binVar.key();
       double val = binVar.value().val;
-      const HighsCDouble& weightZero = binVar.value().weightZero;
-      const HighsCDouble& weightOne = binVar.value().weightOne;
-      maxWeight = max(maxWeight, max(weightOne, weightZero));
+      const HighsCDouble& weightLower = binVar.value().weightLower;
+      const HighsCDouble& weightUpper = binVar.value().weightUpper;
+      maxWeight = max(maxWeight, max(weightUpper, weightLower));
       // skip VLB / VUB binaries that have zero coefficient because their
       // contribution (through cliques) is zero
       if (val == 0.0) continue;
@@ -10362,27 +10364,27 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
             if (colDeleted[neighbor.col]) return;
             HighsCDouble update(absval);
             if (neighbor.val == 1)
-              binNonZeros[neighbor.col].updateOne(update);
+              binNonZeros[neighbor.col].updateUpper(update);
             else
-              binNonZeros[neighbor.col].updateZero(update);
+              binNonZeros[neighbor.col].updateLower(update);
             maxWeight =
                 max(maxWeight, neighbor.val == 1
-                                   ? binNonZeros[neighbor.col].weightOne
-                                   : binNonZeros[neighbor.col].weightZero);
+                                   ? binNonZeros[neighbor.col].weightUpper
+                                   : binNonZeros[neighbor.col].weightLower);
           });
     }
 
     // binary fixing
     for (const auto& binVar : binNonZeros) {
       HighsInt col = binVar.key();
-      const HighsCDouble& weightZero = binVar.value().weightZero;
-      const HighsCDouble& weightOne = binVar.value().weightOne;
+      const HighsCDouble& weightLower = binVar.value().weightLower;
+      const HighsCDouble& weightUpper = binVar.value().weightUpper;
 
-      if (weightZero > threshold + primal_feastol) {
+      if (weightLower > threshold + primal_feastol) {
         // fix to upper bound
         numVarsFixed++;
         HPRESOLVE_CHECKED_CALL(fixColToUpper(postsolve_stack, col));
-      } else if (weightOne > threshold + primal_feastol) {
+      } else if (weightUpper > threshold + primal_feastol) {
         // fix to lower bound
         numVarsFixed++;
         HPRESOLVE_CHECKED_CALL(fixColToLower(postsolve_stack, col));
