@@ -1531,6 +1531,7 @@ TEST_CASE("test-impl-aware-paper-example-3-5", "[highs_test_presolve_rules]") {
   // x1 is fixed to 1 and removed by presolve; verify via postsolve
   // that restores the fixed value into the solution
   HighsSolution sol;
+  sol.value_valid = true;
   sol.col_value = {0.0, 1.0, 0.0, 1.0};
   postsolve_stack.undoPrimal(options, sol);
   REQUIRE(sol.col_value[0] >= 1.0 - 1e-6);
