@@ -1442,9 +1442,9 @@ TEST_CASE("test-impl-aware-paper-example-3-5", "[highs_test_presolve_rules]") {
   // Implications: x1=0 => x2>=1, x1=0 => x3>=1, x1=0 => 0.4<=x5<=0.5,
   //               x2=0 => x5>=1, x3=0 => x5<=2
   //
-  // Phase 1 (VLB on x5): x1.weightLower += 0.5*(0.4) = 0.2
-  // Phase 2 (cliques): x1.weightLower += |1| + |0.9| = 1.9
-  // Total x1.weightLower = 2.1 > 2 = threshold → fix x1 = 1
+  // VLB processing (x5): x1.weightLower += 0.5*(0.4) = 0.2
+  // Clique propagation: x1.weightLower += |1| + |0.9| = 1.9
+  // Total x1.weightLower > 2 = threshold → fix x1 = 1
   //
   // Phase 6 (x5 tightening): breakpoints at 1 (lower, excess=1) and
   // 2 (upper, excess=0.9). Walk from ub=3 crosses threshold at 2.2.
@@ -1695,6 +1695,427 @@ TEST_CASE("test-impl-aware-paper-example-7", "[highs_test_presolve_rules]") {
   // x6 lower bound should be tightened from 0 to 3
   REQUIRE(mipsolver.model_->col_lower_[5] >= 3.0 - 1e-6);
   REQUIRE(mipsolver.model_->col_lower_[5] <= 3.0 + 1e-6);
+
+  HighsTaskExecutor::shutdown(true);
+}
+
+TEST_CASE("test-impl-aware-clique-extraction-complemented",
+          "[highs_test_presolve_rules]") {
+  // Complement y1 → ȳ₁ = 10-y1 in the clique extraction test.
+  // Exercises negative non-binary coefficient and VUB (instead of VLB).
+  //
+  // row 0: 3*x0 + 3*x1 - ȳ₁ + y2 ≤ 2
+  // row 1: -5*x0 - ȳ₁ ≥ -10   (from y1 >= 5*x0, substituting y1 = 10-ȳ₁)
+  // row 2: -5*x1 + y2 ≥ 0      (unchanged)
+  // x0, x1 binary, ȳ₁, y2 continuous in [0, 10]
+  //
+  // VUB on ȳ₁: ȳ₁ <= -5*x0 + 10, so x0=1 => ȳ₁ <= 5 (i.e. y1 >= 5)
+  // VLB on y2: y2 >= 5*x1 (unchanged)
+  // Combined implied weight still exceeds threshold → {x0=1, x1=1} clique.
+  HighsLp lp;
+  lp.num_col_ = 4;
+  lp.num_row_ = 3;
+  lp.sense_ = ObjSense::kMinimize;
+  lp.col_cost_ = {0, 0, 0, 0};
+  lp.col_lower_ = {0, 0, 0, 0};
+  lp.col_upper_ = {1, 1, 10, 10};
+  lp.integrality_ = {HighsVarType::kInteger, HighsVarType::kInteger,
+                     HighsVarType::kContinuous, HighsVarType::kContinuous};
+  lp.row_lower_ = {-kHighsInf, -10, 0};
+  lp.row_upper_ = {2, kHighsInf, kHighsInf};
+  lp.a_matrix_.format_ = MatrixFormat::kColwise;
+  lp.a_matrix_.num_col_ = 4;
+  lp.a_matrix_.num_row_ = 3;
+  lp.a_matrix_.start_ = {0, 2, 4, 6, 8};
+  lp.a_matrix_.index_ = {0, 1, 0, 2, 0, 1, 0, 2};
+  lp.a_matrix_.value_ = {3, -5, 3, -5, -1, -1, 1, 1};
+
+  highs::parallel::initialize_scheduler(1);
+
+  Highs highs;
+  highs.setOptionValue("output_flag", dev_run);
+  highs.setOptionValue("presolve_rule_test",
+                       kPresolveRuleImplAwareConstrPropagation);
+  highs.passModel(lp);
+
+  HighsCallback callback(&highs);
+  const HighsOptions& options = highs.getOptions();
+  HighsSolution solution;
+  HighsProfiling profiling;
+
+  HighsMipSolver mipsolver(callback, options, lp, solution);
+  mipsolver.timer_.start();
+  profiling.initialize(mipsolver.timer_, true, true);
+  mipsolver.setProfiling(&profiling);
+  mipsolver.mipdata_ =
+      std::unique_ptr<HighsMipSolverData>(new HighsMipSolverData(mipsolver));
+  mipsolver.mipdata_->init();
+  mipsolver.mipdata_->setupDomainPropagation();
+
+  // Manually populate VUB, VLB and implications (normally done by probing)
+  HighsImplications& implications = mipsolver.mipdata_->implications;
+  // x0=1 implies ȳ₁ <= 5 (VUB: ȳ₁ <= -5*x0 + 10, from y1 >= 5*x0)
+  implications.addVUB(2, 0, -5.0, 10.0, 1);
+  implications.addImplication(0, 1, 2,
+                              HighsImplications::Implication{-kHighsInf, 5.0});
+  // x1=1 implies y2 >= 5 (VLB: y2 >= 5*x1, unchanged)
+  implications.addVLB(3, 1, 5.0, 0.0, 2);
+  implications.addImplication(1, 1, 3,
+                              HighsImplications::Implication{5.0, kHighsInf});
+
+  presolve::HighsPostsolveStack& postsolve_stack =
+      mipsolver.mipdata_->postSolveStack;
+
+  presolve::HPresolve presolve;
+  presolve.setInput(mipsolver, -1);
+  REQUIRE(presolve.okSetupPresolveDataStructures());
+  HighsModelStatus status = presolve.run(postsolve_stack);
+  REQUIRE(status == HighsModelStatus::kNotset);
+
+  // x0=1 and x1=1 can't coexist (same clique as original, via VUB path)
+  HighsCliqueTable& cliquetable = mipsolver.mipdata_->cliquetable;
+  REQUIRE(cliquetable.haveCommonClique({0, 1}, {1, 1}));
+
+  HighsTaskExecutor::shutdown(true);
+}
+
+TEST_CASE("test-impl-aware-nonbinary-tightening-complemented",
+          "[highs_test_presolve_rules]") {
+  // Complement y → ȳ = 10-y in the nonbinary tightening test.
+  // Exercises negative non-binary coefficient and lower-bound tightening.
+  //
+  // row 0: 3*x0 - ȳ ≤ -2
+  // x0 binary, ȳ integer in [0, 10]
+  // Implication: x0=0 => ȳ <= 1  (from x0=0 => y >= 9)
+  //
+  // Standard propagation: threshold=8, so ȳ >= -8 (no tightening).
+  // VI-aware: when ȳ < 5, x0=0 => ȳ <= 1 forces x0=1 when ȳ > 1.
+  // Then 3 - ȳ ≤ -2 gives ȳ >= 5.
+  // The piecewise walk at the lower endpoint detects this.
+  HighsLp lp;
+  lp.num_col_ = 2;
+  lp.num_row_ = 1;
+  lp.sense_ = ObjSense::kMinimize;
+  lp.col_cost_ = {0, 0};
+  lp.col_lower_ = {0, 0};
+  lp.col_upper_ = {1, 10};
+  lp.integrality_ = {HighsVarType::kInteger, HighsVarType::kInteger};
+  lp.row_lower_ = {-kHighsInf};
+  lp.row_upper_ = {-2};
+  lp.a_matrix_.format_ = MatrixFormat::kColwise;
+  lp.a_matrix_.num_col_ = 2;
+  lp.a_matrix_.num_row_ = 1;
+  lp.a_matrix_.start_ = {0, 1, 2};
+  lp.a_matrix_.index_ = {0, 0};
+  lp.a_matrix_.value_ = {3, -1};
+
+  highs::parallel::initialize_scheduler(1);
+
+  Highs highs;
+  highs.setOptionValue("output_flag", dev_run);
+  highs.setOptionValue("presolve_rule_test",
+                       kPresolveRuleImplAwareConstrPropagation);
+  highs.passModel(lp);
+
+  HighsCallback callback(&highs);
+  const HighsOptions& options = highs.getOptions();
+  HighsSolution solution;
+  HighsProfiling profiling;
+
+  HighsMipSolver mipsolver(callback, options, lp, solution);
+  mipsolver.timer_.start();
+  profiling.initialize(mipsolver.timer_, true, true);
+  mipsolver.setProfiling(&profiling);
+  mipsolver.mipdata_ =
+      std::unique_ptr<HighsMipSolverData>(new HighsMipSolverData(mipsolver));
+  mipsolver.mipdata_->init();
+  mipsolver.mipdata_->setupDomainPropagation();
+
+  // x0=0 => ȳ <= 1 (from x0=0 => y >= 9, complemented)
+  HighsImplications& implications = mipsolver.mipdata_->implications;
+  implications.addImplication(0, 0, 1,
+                              HighsImplications::Implication{-kHighsInf, 1.0});
+
+  presolve::HighsPostsolveStack& postsolve_stack =
+      mipsolver.mipdata_->postSolveStack;
+
+  presolve::HPresolve presolve;
+  presolve.setInput(mipsolver, -1);
+  REQUIRE(presolve.okSetupPresolveDataStructures());
+  HighsModelStatus status = presolve.run(postsolve_stack);
+  REQUIRE(status == HighsModelStatus::kNotset);
+
+  // ȳ lower bound tightened from 0 to 5 (original: y upper bound 10→5)
+  REQUIRE(mipsolver.model_->col_lower_[1] >= 5.0 - 1e-6);
+  REQUIRE(mipsolver.model_->col_lower_[1] <= 5.0 + 1e-6);
+
+  HighsTaskExecutor::shutdown(true);
+}
+
+TEST_CASE("test-impl-aware-paper-example-3-5-complemented",
+          "[highs_test_presolve_rules]") {
+  // Complement x5 → x̄₅ = 3-x5 in Chen et al. 2026, Examples 3-5.
+  // Exercises negative non-binary coefficient and VUB path.
+  //
+  // row 0: x2 + 0.9*x3 - 0.5*x̄₅ ≤ 0.5
+  // x1(col0) not in row; x2(col1), x3(col2) binary; x̄₅(col3) integer [0, 3]
+  //
+  // Cliques: {x̄1, x̄2}, {x̄1, x̄3}  (unchanged)
+  // VLBs: x2 >= -x1+1, x3 >= -x1+1  (unchanged)
+  // VUB: x̄₅ <= 0.4*x1+2.6  (from x5 >= -0.4*x1+0.4)
+  // Implications: x1=0 => x2>=1, x1=0 => x3>=1, x1=0 => 2.5<=x̄₅<=2.6,
+  //               x2=0 => x̄₅<=2, x3=0 => x̄₅>=1
+  //
+  // Binary fixing: x1.weightLower > threshold=2 → fix x1 = 1
+  // Non-binary tightening: x̄₅ lower bound walk gives x̄₅ >= 1 (from x5 <= 2)
+  HighsLp lp;
+  lp.num_col_ = 4;
+  lp.num_row_ = 1;
+  lp.sense_ = ObjSense::kMinimize;
+  lp.col_cost_ = {0, 0, 0, 0};
+  lp.col_lower_ = {0, 0, 0, 0};
+  lp.col_upper_ = {1, 1, 1, 3};
+  lp.integrality_ = {HighsVarType::kInteger, HighsVarType::kInteger,
+                     HighsVarType::kInteger, HighsVarType::kInteger};
+  lp.row_lower_ = {-kHighsInf};
+  lp.row_upper_ = {0.5};
+  lp.a_matrix_.format_ = MatrixFormat::kColwise;
+  lp.a_matrix_.num_col_ = 4;
+  lp.a_matrix_.num_row_ = 1;
+  lp.a_matrix_.start_ = {0, 0, 1, 2, 3};
+  lp.a_matrix_.index_ = {0, 0, 0};
+  lp.a_matrix_.value_ = {1, 0.9, -0.5};
+
+  highs::parallel::initialize_scheduler(1);
+
+  Highs highs;
+  highs.setOptionValue("output_flag", dev_run);
+  highs.setOptionValue("presolve_rule_test",
+                       kPresolveRuleImplAwareConstrPropagation);
+  highs.passModel(lp);
+
+  HighsCallback callback(&highs);
+  const HighsOptions& options = highs.getOptions();
+  HighsSolution solution;
+  HighsProfiling profiling;
+
+  HighsMipSolver mipsolver(callback, options, lp, solution);
+  mipsolver.timer_.start();
+  profiling.initialize(mipsolver.timer_, true, true);
+  mipsolver.setProfiling(&profiling);
+  mipsolver.mipdata_ =
+      std::unique_ptr<HighsMipSolverData>(new HighsMipSolverData(mipsolver));
+  mipsolver.mipdata_->init();
+  mipsolver.mipdata_->setupDomainPropagation();
+
+  // Cliques: x̄1 and x̄2 can't coexist, x̄1 and x̄3 can't coexist
+  HighsCliqueTable& cliquetable = mipsolver.mipdata_->cliquetable;
+  HighsCliqueTable::CliqueVar clq1[] = {{0, 0}, {1, 0}};
+  cliquetable.doAddClique(clq1, 2);
+  HighsCliqueTable::CliqueVar clq2[] = {{0, 0}, {2, 0}};
+  cliquetable.doAddClique(clq2, 2);
+
+  // VLBs: x2 >= -x1+1, x3 >= -x1+1 (unchanged from original)
+  // VUB: x̄₅ <= 0.4*x1+2.6 (complemented from x5 >= -0.4*x1+0.4)
+  HighsImplications& implications = mipsolver.mipdata_->implications;
+  implications.addVLB(1, 0, -1.0, 1.0);
+  implications.addVLB(2, 0, -1.0, 1.0);
+  implications.addVUB(3, 0, 0.4, 2.6);
+
+  // Implications (complemented for x̄₅)
+  implications.addImplication(0, 0, 1,
+                              HighsImplications::Implication{1.0, kHighsInf});
+  implications.addImplication(0, 0, 2,
+                              HighsImplications::Implication{1.0, kHighsInf});
+  implications.addImplication(0, 0, 3,
+                              HighsImplications::Implication{2.5, 2.6});
+  implications.addImplication(1, 0, 3,
+                              HighsImplications::Implication{-kHighsInf, 2.0});
+  implications.addImplication(2, 0, 3,
+                              HighsImplications::Implication{1.0, kHighsInf});
+
+  presolve::HighsPostsolveStack& postsolve_stack =
+      mipsolver.mipdata_->postSolveStack;
+
+  presolve::HPresolve presolve;
+  presolve.setInput(mipsolver, -1);
+  REQUIRE(presolve.okSetupPresolveDataStructures());
+  HighsModelStatus status = presolve.run(postsolve_stack);
+  REQUIRE(status == HighsModelStatus::kNotset);
+
+  // x̄₅ lower bound tightened from 0 to 1 (original: x5 upper bound 3→2).
+  // After shrinkProblem x1 removed: presolved cols are x2(0), x3(1), x̄₅(2).
+  REQUIRE(mipsolver.model_->col_lower_[2] >= 1.0 - 1e-6);
+  REQUIRE(mipsolver.model_->col_lower_[2] <= 1.0 + 1e-6);
+
+  // x1 is fixed to 1 and removed by presolve; verify via postsolve.
+  // Presolved model has 3 cols: x2(0), x3(1), x̄₅(2).
+  HighsSolution sol;
+  sol.value_valid = true;
+  sol.col_value = {0.0, 0.0, 2.0};
+  postsolve_stack.undoPrimal(options, sol);
+  REQUIRE(sol.col_value[0] >= 1.0 - 1e-6);
+
+  HighsTaskExecutor::shutdown(true);
+}
+
+TEST_CASE("test-impl-aware-paper-example-6-complemented",
+          "[highs_test_presolve_rules]") {
+  // Complement x3 → x̄₃ = 5-x3 in Chen et al. 2026, Example 6.
+  // Exercises upper-bound tightening on a zero-coefficient discovered variable.
+  //
+  // row 0: x1 + x2 <= 1.5  (unchanged, x̄₃ not in row)
+  // x1(col0), x2(col1) binary; x̄₃(col2) integer [0, 5], NOT in row
+  // Implications: x1=0 => x̄₃<=2, x2=0 => x̄₃<=2  (from x_i=0 => x3>=3)
+  //
+  // Discovery loop finds x̄₃ via getImplications from x1 and x2.
+  // x̄₃ gets nonBinVal=0 (zero coefficient). Upper-type breakpoints at {2,2}.
+  // weightUpper = 2 > threshold = 1.5 → tighten upper bound.
+  // Walk from ub=5: at bp=2, breakpoint deactivates, weight=1 <= 1.5.
+  // Result: x̄₃ <= 2  (original: x3 >= 3).
+  HighsLp lp;
+  lp.num_col_ = 3;
+  lp.num_row_ = 1;
+  lp.sense_ = ObjSense::kMinimize;
+  lp.col_cost_ = {0, 0, 0};
+  lp.col_lower_ = {0, 0, 0};
+  lp.col_upper_ = {1, 1, 5};
+  lp.integrality_ = {HighsVarType::kInteger, HighsVarType::kInteger,
+                     HighsVarType::kInteger};
+  lp.row_lower_ = {-kHighsInf};
+  lp.row_upper_ = {1.5};
+  lp.a_matrix_.format_ = MatrixFormat::kColwise;
+  lp.a_matrix_.num_col_ = 3;
+  lp.a_matrix_.num_row_ = 1;
+  lp.a_matrix_.start_ = {0, 1, 2, 2};
+  lp.a_matrix_.index_ = {0, 0};
+  lp.a_matrix_.value_ = {1, 1};
+
+  highs::parallel::initialize_scheduler(1);
+
+  Highs highs;
+  highs.setOptionValue("output_flag", dev_run);
+  highs.setOptionValue("presolve_rule_test",
+                       kPresolveRuleImplAwareConstrPropagation);
+  highs.passModel(lp);
+
+  HighsCallback callback(&highs);
+  const HighsOptions& options = highs.getOptions();
+  HighsSolution solution;
+  HighsProfiling profiling;
+
+  HighsMipSolver mipsolver(callback, options, lp, solution);
+  mipsolver.timer_.start();
+  profiling.initialize(mipsolver.timer_, true, true);
+  mipsolver.setProfiling(&profiling);
+  mipsolver.mipdata_ =
+      std::unique_ptr<HighsMipSolverData>(new HighsMipSolverData(mipsolver));
+  mipsolver.mipdata_->init();
+  mipsolver.mipdata_->setupDomainPropagation();
+
+  // x1=0 => x̄₃ <= 2, x2=0 => x̄₃ <= 2
+  // x1=0 => x̄₃<=2, x2=0 => x̄₃<=2 (from x_i=0 => x3>=3, complemented)
+  HighsImplications& implications = mipsolver.mipdata_->implications;
+  implications.addImplication(0, 0, 2,
+                              HighsImplications::Implication{-kHighsInf, 2.0});
+  implications.addImplication(1, 0, 2,
+                              HighsImplications::Implication{-kHighsInf, 2.0});
+
+  presolve::HighsPostsolveStack& postsolve_stack =
+      mipsolver.mipdata_->postSolveStack;
+
+  presolve::HPresolve presolve;
+  presolve.setInput(mipsolver, -1);
+  REQUIRE(presolve.okSetupPresolveDataStructures());
+  HighsModelStatus status = presolve.run(postsolve_stack);
+  REQUIRE(status == HighsModelStatus::kNotset);
+
+  // x̄₃ upper bound tightened from 5 to 2 (original: x3 lower bound 0→3)
+  REQUIRE(mipsolver.model_->col_upper_[2] <= 2.0 + 1e-6);
+  REQUIRE(mipsolver.model_->col_upper_[2] >= 2.0 - 1e-6);
+
+  HighsTaskExecutor::shutdown(true);
+}
+
+TEST_CASE("test-impl-aware-paper-example-7-complemented",
+          "[highs_test_presolve_rules]") {
+  // Complement x6 → x̄₆ = 4-x6 in Chen et al. 2026, Example 7.
+  // Exercises negative non-binary coefficient with multiple upper-type
+  // breakpoints at the same value.
+  //
+  // row 0: x1 + x2 + x3 + x4 + 0.1*x5 - 0.2*x̄₆ <= 1.4
+  // x1-x5(col0-4) binary, x̄₆(col5) integer [0, 4]
+  // Implications: x1=0 => x̄₆<=1, x2=0 => x̄₆<=1,
+  //               x3=0 => x̄₆<=2, x4=0 => x̄₆<=2
+  //
+  // x̄₆.weightUpper = 4 (sum of excesses from 4 upper-type breakpoints)
+  // threshold = 2.2, weightUpper > threshold → tighten upper bound.
+  // Walk from ub=4: breakpoints at {1,1,2,2} deactivate weight.
+  // Result: x̄₆ <= 1  (original: x6 >= 3).
+  HighsLp lp;
+  lp.num_col_ = 6;
+  lp.num_row_ = 1;
+  lp.sense_ = ObjSense::kMinimize;
+  lp.col_cost_ = {0, 0, 0, 0, 0, 0};
+  lp.col_lower_ = {0, 0, 0, 0, 0, 0};
+  lp.col_upper_ = {1, 1, 1, 1, 1, 4};
+  lp.integrality_ = {HighsVarType::kInteger, HighsVarType::kInteger,
+                     HighsVarType::kInteger, HighsVarType::kInteger,
+                     HighsVarType::kInteger, HighsVarType::kInteger};
+  lp.row_lower_ = {-kHighsInf};
+  lp.row_upper_ = {1.4};
+  lp.a_matrix_.format_ = MatrixFormat::kColwise;
+  lp.a_matrix_.num_col_ = 6;
+  lp.a_matrix_.num_row_ = 1;
+  lp.a_matrix_.start_ = {0, 1, 2, 3, 4, 5, 6};
+  lp.a_matrix_.index_ = {0, 0, 0, 0, 0, 0};
+  lp.a_matrix_.value_ = {1, 1, 1, 1, 0.1, -0.2};
+
+  highs::parallel::initialize_scheduler(1);
+
+  Highs highs;
+  highs.setOptionValue("output_flag", dev_run);
+  highs.setOptionValue("presolve_rule_test",
+                       kPresolveRuleImplAwareConstrPropagation);
+  highs.passModel(lp);
+
+  HighsCallback callback(&highs);
+  const HighsOptions& options = highs.getOptions();
+  HighsSolution solution;
+  HighsProfiling profiling;
+
+  HighsMipSolver mipsolver(callback, options, lp, solution);
+  mipsolver.timer_.start();
+  profiling.initialize(mipsolver.timer_, true, true);
+  mipsolver.setProfiling(&profiling);
+  mipsolver.mipdata_ =
+      std::unique_ptr<HighsMipSolverData>(new HighsMipSolverData(mipsolver));
+  mipsolver.mipdata_->init();
+  mipsolver.mipdata_->setupDomainPropagation();
+
+  // x1=0 => x̄₆<=1, x2=0 => x̄₆<=1, x3=0 => x̄₆<=2, x4=0 => x̄₆<=2
+  HighsImplications& implications = mipsolver.mipdata_->implications;
+  implications.addImplication(0, 0, 5,
+                              HighsImplications::Implication{-kHighsInf, 1.0});
+  implications.addImplication(1, 0, 5,
+                              HighsImplications::Implication{-kHighsInf, 1.0});
+  implications.addImplication(2, 0, 5,
+                              HighsImplications::Implication{-kHighsInf, 2.0});
+  implications.addImplication(3, 0, 5,
+                              HighsImplications::Implication{-kHighsInf, 2.0});
+
+  presolve::HighsPostsolveStack& postsolve_stack =
+      mipsolver.mipdata_->postSolveStack;
+
+  presolve::HPresolve presolve;
+  presolve.setInput(mipsolver, -1);
+  REQUIRE(presolve.okSetupPresolveDataStructures());
+  HighsModelStatus status = presolve.run(postsolve_stack);
+  REQUIRE(status == HighsModelStatus::kNotset);
+
+  // x̄₆ upper bound tightened from 4 to 1 (original: x6 lower bound 0→3)
+  REQUIRE(mipsolver.model_->col_upper_[5] <= 1.0 + 1e-6);
+  REQUIRE(mipsolver.model_->col_upper_[5] >= 1.0 - 1e-6);
 
   HighsTaskExecutor::shutdown(true);
 }
