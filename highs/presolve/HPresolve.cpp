@@ -10316,20 +10316,24 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
       }
     }
 
-    // consider cliques: sort binaries for early termination
-    // few clique connections first (cheap), large coefficients last
+    // consider cliques: sort binaries for early termination.
+    // few clique connections first (cheap), large coefficients last.
+    // remainingWeight tracks unprocessed clique propagation potential,
+    // maxWeight tracks the largest binary weight seen so far.
     sortedBins.clear();
-    HighsCDouble remaining_weight = 0;
-    HighsCDouble max_weight = 0;
+    HighsCDouble remainingWeight = 0;
+    HighsCDouble maxWeight = 0;
     for (const auto& binVar : binNonZeros) {
       HighsInt col = binVar.key();
-      max_weight = max(
-          max_weight, max(binVar.value().weightOne, binVar.value().weightZero));
+      double val = binVar.value().val;
+      const HighsCDouble& weightZero = binVar.value().weightZero;
+      const HighsCDouble& weightOne = binVar.value().weightOne;
+      maxWeight = max(maxWeight, max(weightOne, weightZero));
       // skip VLB / VUB binaries that have zero coefficient because their
       // contribution (through cliques) is zero
-      if (binVar.value().val == 0.0) continue;
+      if (val == 0.0) continue;
       sortedBins.push_back(col);
-      remaining_weight += std::abs(binVar.value().val);
+      remainingWeight += std::abs(val);
     }
 
     pdqsort(sortedBins.begin(), sortedBins.end(), [&](HighsInt a, HighsInt b) {
@@ -10345,11 +10349,11 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
     for (HighsInt col : sortedBins) {
       double val = binNonZeros[col].val;
       double absval = std::abs(val);
-      remaining_weight -= absval;
+      remainingWeight -= absval;
 
       // no binary's weight can exceed threshold after processing the
       // remaining binaries, so skip clique propagation
-      if (max_weight + remaining_weight <= threshold + primal_feastol) break;
+      if (maxWeight + remainingWeight <= threshold + primal_feastol) break;
 
       // collect neighbors and update weights
       cliquetable.forEachUniqueNeighbor(
@@ -10361,18 +10365,18 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
               binNonZeros[neighbor.col].updateOne(update);
             else
               binNonZeros[neighbor.col].updateZero(update);
-            max_weight =
-                max(max_weight, neighbor.val == 1
-                                    ? binNonZeros[neighbor.col].weightOne
-                                    : binNonZeros[neighbor.col].weightZero);
+            maxWeight =
+                max(maxWeight, neighbor.val == 1
+                                   ? binNonZeros[neighbor.col].weightOne
+                                   : binNonZeros[neighbor.col].weightZero);
           });
     }
 
     // binary fixing
-    for (const auto& bin : binNonZeros) {
-      HighsInt col = bin.key();
-      const HighsCDouble& weightZero = bin.value().weightZero;
-      const HighsCDouble& weightOne = bin.value().weightOne;
+    for (const auto& binVar : binNonZeros) {
+      HighsInt col = binVar.key();
+      const HighsCDouble& weightZero = binVar.value().weightZero;
+      const HighsCDouble& weightOne = binVar.value().weightOne;
 
       if (weightZero > threshold + primal_feastol) {
         // fix to upper bound
