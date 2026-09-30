@@ -6835,7 +6835,8 @@ HPresolve::Result HPresolve::presolve(HighsPostsolveStack& postsolve_stack) {
         if (problemSizeReduction() > 0.05) continue;
       }
 
-      if (mipsolver != nullptr) {
+      if (mipsolver != nullptr &&
+          this->allow_rule_[kPresolveRuleImplAwareConstrPropagation]) {
         storeCurrentProblemSize();
         HPRESOLVE_CHECKED_CALL(implAwareConstrPropagation(postsolve_stack));
         if (problemSizeReduction() > 0.05) continue;

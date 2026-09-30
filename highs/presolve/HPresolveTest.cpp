@@ -20,6 +20,9 @@ HPresolve::Result HPresolve::presolveRuleTest(
     return presolveRuleTestProbing(postsolve_stack);
   } else if (options->presolve_rule_test == kPresolveRuleFourierMotzkin) {
     return presolveRuleTestFourierMotzkin(postsolve_stack);
+  } else if (options->presolve_rule_test ==
+             kPresolveRuleImplAwareConstrPropagation) {
+    return presolveRuleTestImplAwareConstrPropagation(postsolve_stack);
   }
   return Result::kOk;
 }
@@ -65,5 +68,14 @@ HPresolve::Result HPresolve::presolveRuleTestFourierMotzkin(
                "HPresolve::presolveRuleTestFourierMotzkin\n");
   HighsInt numColsEliminated;
   return fourierMotzkin(postsolve_stack, numColsEliminated);
+}
+HPresolve::Result HPresolve::presolveRuleTestImplAwareConstrPropagation(
+    HighsPostsolveStack& postsolve_stack) {
+  assert(options->presolve_rule_test ==
+         kPresolveRuleImplAwareConstrPropagation);
+  highsLogUser(options->log_options, HighsLogType::kInfo,
+               "HPresolve::presolveRuleTestImplAwareConstrPropagation\n");
+  if (mipsolver == nullptr) return Result::kStopped;
+  return implAwareConstrPropagation(postsolve_stack);
 }
 }  // namespace presolve
