@@ -1333,10 +1333,12 @@ TEST_CASE("test-impl-aware-clique-extraction", "[highs_test_presolve_rules]") {
   HighsImplications& implications = mipsolver.mipdata_->implications;
   // x0=1 implies y1 >= 5 (VLB: y1 >= 5*x0)
   implications.addVLB(2, 0, 5.0, 0.0, 1);
-  implications.addImplication(0, 1, 2, {5.0, kHighsInf});
+  implications.addImplication(0, 1, 2,
+                              HighsImplications::Implication{5.0, kHighsInf});
   // x1=1 implies y2 >= 5 (VLB: y2 >= 5*x1)
   implications.addVLB(3, 1, 5.0, 0.0, 2);
-  implications.addImplication(1, 1, 3, {5.0, kHighsInf});
+  implications.addImplication(1, 1, 3,
+                              HighsImplications::Implication{5.0, kHighsInf});
 
   presolve::HighsPostsolveStack& postsolve_stack =
       mipsolver.mipdata_->postSolveStack;
