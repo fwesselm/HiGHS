@@ -10320,8 +10320,11 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
     // few clique connections first (cheap), large coefficients last
     sortedBins.clear();
     HighsCDouble remaining_weight = 0;
+    HighsCDouble max_weight = 0;
     for (const auto& binVar : binNonZeros) {
       HighsInt col = binVar.key();
+      max_weight = max(
+          max_weight, max(binVar.value().weightOne, binVar.value().weightZero));
       // skip VLB / VUB binaries that have zero coefficient because their
       // contribution (through cliques) is zero
       if (binVar.value().val == 0.0) continue;
@@ -10338,14 +10341,6 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
                     10.0 * std::abs(bval) / threshold;
       return akey < bkey;
     });
-
-    // clique propagation with early termination:
-    // if max_weight + remaining_weight <= threshold, no binary can
-    // exceed the threshold, so stop processing
-    HighsCDouble max_weight = 0;
-    for (const auto& bin : binNonZeros)
-      max_weight =
-          max(max_weight, max(bin.value().weightOne, bin.value().weightZero));
 
     for (HighsInt col : sortedBins) {
       double val = binNonZeros[col].val;
