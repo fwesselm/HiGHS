@@ -10110,27 +10110,39 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
   HighsInt numVarsFixed = 0;
   HighsInt numCliquesAdded = 0;
 
+  auto addNonZero = [&](HighsInt col, double val) {
+    if (isBinary(col)) {
+      binNonZeros[col] = variableData{val};
+      if (val < 0)
+        binNonZeros[col].updateLower(-static_cast<HighsCDouble>(val));
+      else
+        binNonZeros[col].updateUpper(static_cast<HighsCDouble>(val));
+    } else {
+      if ((val > 0 && model->col_lower_[col] <= -kHighsInf) ||
+          (val < 0 && model->col_upper_[col] >= kHighsInf))
+        return false;
+      nonBinNonZeros[col] = variableData{val};
+      if (model->col_lower_[col] > -kHighsInf &&
+          model->col_upper_[col] < kHighsInf) {
+        HighsCDouble range =
+            std::abs(val) * (static_cast<HighsCDouble>(model->col_upper_[col]) -
+                             model->col_lower_[col]);
+        if (val < 0)
+          nonBinNonZeros[col].updateLower(range);
+        else
+          nonBinNonZeros[col].updateUpper(range);
+      }
+    }
+    return true;
+  };
+
   auto loadModelRow = [&](HighsInt row, HighsInt direction) {
     binNonZeros.clear();
     nonBinNonZeros.clear();
 
-    for (const auto& nz : getRowVector(row)) {
-      HighsInt col = nz.index();
-      double val = direction * nz.value();
-      double lb = model->col_lower_[col];
-      double ub = model->col_upper_[col];
-      if (isBinary(col)) {
-        binNonZeros[col] = variableData{val};
-        if (val < 0)
-          binNonZeros[col].updateLower(-static_cast<HighsCDouble>(val));
-        else
-          binNonZeros[col].updateUpper(static_cast<HighsCDouble>(val));
-      } else {
-        if ((val > 0 && lb <= -kHighsInf) || (val < 0 && ub >= kHighsInf))
-          return false;
-        nonBinNonZeros[col] = variableData{val};
-      }
-    }
+    for (const auto& nz : getRowVector(row))
+      // add non-zero
+      if (!addNonZero(nz.index(), direction * nz.value())) return false;
     return true;
   };
 
@@ -10155,15 +10167,8 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
       }
       // skip fixed variables (since we are iterating all columns)
       if (lb == ub) continue;
-      if (isBinary(col)) {
-        binNonZeros[col] = variableData{cost};
-        if (cost < 0)
-          binNonZeros[col].updateLower(-static_cast<HighsCDouble>(cost));
-        else
-          binNonZeros[col].updateUpper(static_cast<HighsCDouble>(cost));
-      } else {
-        nonBinNonZeros[col] = variableData{cost};
-      }
+      // add non-zero
+      if (!addNonZero(col, cost)) return false;
     }
     return true;
   };
