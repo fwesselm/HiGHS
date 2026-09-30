@@ -10088,31 +10088,39 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
   HighsCliqueTable& cliquetable = mipsolver->mipdata_->cliquetable;
   HighsImplications& implications = mipsolver->mipdata_->implications;
 
-  struct variableData {
+  struct VariableData {
     double val;
     HighsCDouble weightLower;
     HighsCDouble weightUpper;
 
-    variableData() : val(0.0), weightLower(0.0), weightUpper(0.0) {}
-    variableData(double myVal)
+    VariableData() : val(0.0), weightLower(0.0), weightUpper(0.0) {}
+    VariableData(double myVal)
         : val(myVal), weightLower(0.0), weightUpper(0.0) {}
 
     void updateLower(const HighsCDouble& update) { weightLower += update; }
     void updateUpper(const HighsCDouble& update) { weightUpper += update; }
   };
 
+  struct Breakpoint {
+    double value;
+    double excess;
+    bool isLowerType;
+  };
+
   // data structures
-  HighsHashTable<HighsInt, variableData> binNonZeros;
-  HighsHashTable<HighsInt, variableData> nonBinNonZeros;
+  HighsHashTable<HighsInt, VariableData> binNonZeros;
+  HighsHashTable<HighsInt, VariableData> nonBinNonZeros;
   std::vector<HighsInt> sortedBins;
   std::vector<HighsCliqueTable::CliqueVar> candidates;
+  std::vector<Breakpoint> breakpoints;
 
   HighsInt numVarsFixed = 0;
   HighsInt numCliquesAdded = 0;
+  HighsInt numBoundsTightened = 0;
 
   auto addNonZero = [&](HighsInt col, double val) {
     if (isBinary(col)) {
-      binNonZeros[col] = variableData{val};
+      binNonZeros[col] = VariableData{val};
       if (val < 0)
         binNonZeros[col].updateLower(-static_cast<HighsCDouble>(val));
       else
@@ -10121,7 +10129,7 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
       if ((val > 0 && model->col_lower_[col] <= -kHighsInf) ||
           (val < 0 && model->col_upper_[col] >= kHighsInf))
         return false;
-      nonBinNonZeros[col] = variableData{val};
+      nonBinNonZeros[col] = VariableData{val};
       if (model->col_lower_[col] > -kHighsInf &&
           model->col_upper_[col] < kHighsInf) {
         HighsCDouble range =
@@ -10287,6 +10295,30 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
     }
   };
 
+  auto collectBreakpoints = [&](HighsInt col) {
+    // collect breakpoints for this variable
+    breakpoints.clear();
+    for (const auto& binVar : binNonZeros) {
+      HighsInt binCol = binVar.key();
+      double binVal = binVar.value().val;
+
+      for (HighsInt val = 0; val <= 1; val++) {
+        if ((binVal < 0 || val == 1) && (binVal > 0 || val == 0)) continue;
+        double absBinVal = std::abs(binVal);
+
+        const auto* impl = implications.getImplications(binCol, val).find(col);
+        if (impl == nullptr) continue;
+
+        if (model->col_lower_[col] > -kHighsInf &&
+            impl->lb > model->col_lower_[col] + primal_feastol)
+          breakpoints.push_back({impl->lb, absBinVal, true});
+        if (model->col_upper_[col] < kHighsInf &&
+            impl->ub < model->col_upper_[col] - primal_feastol)
+          breakpoints.push_back({impl->ub, absBinVal, false});
+      }
+    }
+  };
+
   auto checkRow = [&](double threshold) {
     // consider variable bound constraints
     for (const auto& nz : nonBinNonZeros) {
@@ -10399,32 +10431,134 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
     // two-column clique extraction
     findCliques(threshold);
 
-    // update non-binary weights from binary implications
-    for (const auto& binVar : binNonZeros) {
-      HighsInt binCol = binVar.key();
-      double binVal = binVar.value().val;
+    // update non-binary weights from binary implications and tighten bounds
+    for (auto& nz : nonBinNonZeros) {
+      HighsInt nonBinCol = nz.key();
+      double nonBinVal = nz.value().val;
+      const HighsCDouble& weightLower = nz.value().weightLower;
+      const HighsCDouble& weightUpper = nz.value().weightUpper;
+      bool nonBinColIsInteger =
+          model->integrality_[nonBinCol] != HighsVarType::kContinuous;
 
-      for (HighsInt val = 0; val <= 1; val++) {
-        // excess activity when x_i is forced to (1-val)
-        if ((binVal < 0 || val == 1) && (binVal > 0 || val == 0)) continue;
-        double absBinVal = std::abs(binVal);
+      // get bounds for non-binary variable
+      double lb = model->col_lower_[nonBinCol];
+      double ub = model->col_upper_[nonBinCol];
 
-        implications.getImplications(binCol, val)
-            .for_each([&](HighsInt implCol,
-                          const HighsImplications::Implication& impl) {
-              auto* nzData = nonBinNonZeros.find(implCol);
-              if (nzData == nullptr) return;
+      // weights incomplete when a bound is infinite (own-coefficient not set)
+      if (lb <= -kHighsInf || ub >= kHighsInf) continue;
 
-              // x_i = val => x_r >= λ: at x_r = lb < λ, x_i forced
-              if (model->col_lower_[implCol] > -kHighsInf &&
-                  impl.lb > model->col_lower_[implCol] + primal_feastol)
-                nzData->updateLower(absBinVal);
+      // collect breakpoints and update endpoint weights in one pass
+      collectBreakpoints(nonBinCol);
+      for (const auto& bp : breakpoints) {
+        if (bp.isLowerType)
+          nz.value().updateLower(bp.excess);
+        else
+          nz.value().updateUpper(bp.excess);
+      }
 
-              // x_i = val => x_r <= μ: at x_r = ub > μ, x_i forced
-              if (model->col_upper_[implCol] < kHighsInf &&
-                  impl.ub < model->col_upper_[implCol] - primal_feastol)
-                nzData->updateUpper(absBinVal);
-            });
+      bool tightenLower = weightLower > threshold + primal_feastol;
+      bool tightenUpper = weightUpper > threshold + primal_feastol;
+      if (!tightenLower && !tightenUpper) continue;
+
+      pdqsort(breakpoints.begin(), breakpoints.end(),
+              [](const Breakpoint& a, const Breakpoint& b) {
+                return a.value < b.value;
+              });
+
+      const auto computeBound = [&](double val, const HighsCDouble& inputWeight,
+                                    double colBound, double otherColBound,
+                                    HighsInt direction, double& newColBound) {
+        HighsCDouble weight = inputWeight;
+        double d = colBound;
+        newColBound = colBound;
+        bool found = false;
+
+        HighsInt start;
+        HighsInt end;
+        HighsInt step;
+        if (direction > 0) {
+          start = 0;
+          end = static_cast<HighsInt>(breakpoints.size()) - 1;
+          step = 1;
+        } else {
+          start = static_cast<HighsInt>(breakpoints.size()) - 1;
+          end = 0;
+          step = -1;
+        }
+
+        for (HighsInt i = start; direction * i <= direction * end; i += step) {
+          double bp = breakpoints[i].value;
+          if (direction * bp <= direction * d + primal_feastol ||
+              direction * bp >= direction * otherColBound - primal_feastol)
+            continue;
+
+          HighsCDouble weightAtBreakpoint =
+              weight + val * (bp - static_cast<HighsCDouble>(d));
+          if (weight > threshold + primal_feastol &&
+              weightAtBreakpoint <= threshold + primal_feastol) {
+            newColBound = static_cast<double>(d + (threshold - weight) / val);
+            found = true;
+            break;
+          }
+
+          // update
+          weight = weightAtBreakpoint;
+
+          // going right: lower-type deactivates, upper-type activates
+          if (breakpoints[i].isLowerType)
+            weight -= direction * breakpoints[i].excess;
+          else
+            weight += direction * breakpoints[i].excess;
+          d = bp;
+
+          if (weight <= threshold + primal_feastol) {
+            newColBound = bp;
+            found = true;
+            break;
+          }
+        }
+
+        if (!found && weight > threshold + primal_feastol) {
+          HighsCDouble weightAtBound =
+              weight + val * (otherColBound - static_cast<HighsCDouble>(d));
+          if (weightAtBound <= threshold + primal_feastol) {
+            newColBound = static_cast<double>(d + (threshold - weight) / val);
+            found = true;
+          }
+        }
+        return found;
+      };
+
+      // tighten lower bound: walk from lb toward ub
+      if (tightenLower) {
+        double newLowerBnd;
+        if (computeBound(nonBinVal, weightLower, lb, ub, +1, newLowerBnd)) {
+          if (nonBinColIsInteger)
+            newLowerBnd = std::ceil(newLowerBnd - primal_feastol);
+          if (newLowerBnd == model->col_upper_[nonBinCol]) {
+            numVarsFixed++;
+            HPRESOLVE_CHECKED_CALL(fixColToUpper(postsolve_stack, nonBinCol));
+          } else if (nonBinColIsInteger) {
+            numBoundsTightened++;
+            HPRESOLVE_CHECKED_CALL(changeColLower(nonBinCol, newLowerBnd));
+          }
+        }
+      }
+
+      // tighten upper bound: walk from ub toward lb
+      if (!colDeleted[nonBinCol] && tightenUpper) {
+        double newUpperBnd;
+        if (computeBound(nonBinVal, weightUpper, ub, lb, -1, newUpperBnd)) {
+          if (nonBinColIsInteger)
+            newUpperBnd = std::floor(newUpperBnd + primal_feastol);
+          if (newUpperBnd == model->col_lower_[nonBinCol]) {
+            numVarsFixed++;
+            HPRESOLVE_CHECKED_CALL(fixColToLower(postsolve_stack, nonBinCol));
+          } else if (nonBinColIsInteger) {
+            numBoundsTightened++;
+            HPRESOLVE_CHECKED_CALL(changeColUpper(nonBinCol, newUpperBnd));
+          }
+        }
       }
     }
 
@@ -10452,12 +10586,13 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
           impliedRowBounds.getSumUpperOrig(row, -model->row_lower_[row])));
   }
 
-  if (numVarsFixed > 0 || numCliquesAdded > 0)
+  if (numVarsFixed > 0 || numCliquesAdded > 0 || numBoundsTightened > 0)
     highsLogDev(
         options->log_options, HighsLogType::kInfo,
         "Implication-aware constraint propagation fixed %" HIGHSINT_FORMAT
-        " columns, added %" HIGHSINT_FORMAT " cliques\n",
-        numVarsFixed, numCliquesAdded);
+        " columns, added %" HIGHSINT_FORMAT
+        " cliques, tightened %" HIGHSINT_FORMAT " bounds\n",
+        numVarsFixed, numCliquesAdded, numBoundsTightened);
 
   return Result::kOk;
 }
