@@ -10515,6 +10515,7 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
               weight + val * (bp - static_cast<HighsCDouble>(d));
           if (weight > threshold + primal_feastol &&
               weightAtBreakpoint <= threshold + primal_feastol) {
+            assert(val != 0.0);
             newColBound = static_cast<double>(d + (threshold - weight) / val);
             found = true;
             break;
@@ -10541,6 +10542,7 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
           HighsCDouble weightAtBound =
               weight + val * (otherColBound - static_cast<HighsCDouble>(d));
           if (weightAtBound <= threshold + primal_feastol) {
+            assert(val != 0.0);
             newColBound = static_cast<double>(d + (threshold - weight) / val);
             found = true;
           }
