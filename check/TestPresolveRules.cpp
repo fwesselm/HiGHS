@@ -1277,6 +1277,84 @@ TEST_CASE("test-clique-implied-equality", "[highs_test_presolve_rules]") {
   highs.resetGlobalScheduler(true);
 }
 
+TEST_CASE("test-impl-aware-clique-extraction", "[highs_test_presolve_rules]") {
+  // Two-column clique discovered via implied bounds on non-binaries.
+  //
+  // row 0: 3*x0 + 3*x1 + y1 + y2 <= 12
+  // row 1: y1 >= 5*x0    (stored as -5*x0 + y1 >= 0)
+  // row 2: y2 >= 5*x1    (stored as -5*x1 + y2 >= 0)
+  // x0, x1 binary, y1, y2 continuous in [0, 10]
+  //
+  // Standard clique extraction on row 0 fails: binary coefficients 3+3=6 < 12.
+  // Probing x0=1 gives y1 >= 5 but 3 + 3*x1 + 5 + y2 <= 12 doesn't fix x1.
+  // implAwareConstrPropagation uses both implications simultaneously:
+  // combined weight = 3 + 3 + max(5,0) + max(0,5) = 16 > 12.
+  HighsLp lp;
+  lp.num_col_ = 4;
+  lp.num_row_ = 3;
+  lp.sense_ = ObjSense::kMinimize;
+  lp.col_cost_ = {0, 0, 0, 0};
+  lp.col_lower_ = {0, 0, 0, 0};
+  lp.col_upper_ = {1, 1, 10, 10};
+  lp.integrality_ = {HighsVarType::kInteger, HighsVarType::kInteger,
+                     HighsVarType::kContinuous, HighsVarType::kContinuous};
+  lp.row_lower_ = {-kHighsInf, 0, 0};
+  lp.row_upper_ = {12, kHighsInf, kHighsInf};
+  lp.a_matrix_.format_ = MatrixFormat::kColwise;
+  lp.a_matrix_.num_col_ = 4;
+  lp.a_matrix_.num_row_ = 3;
+  lp.a_matrix_.start_ = {0, 2, 4, 6, 8};
+  lp.a_matrix_.index_ = {0, 1, 0, 2, 0, 1, 0, 2};
+  lp.a_matrix_.value_ = {3, -5, 3, -5, 1, 1, 1, 1};
+
+  highs::parallel::initialize_scheduler(1);
+
+  Highs highs;
+  highs.setOptionValue("output_flag", dev_run);
+  highs.setOptionValue("presolve_rule_test",
+                       kPresolveRuleImplAwareConstrPropagation);
+  highs.passModel(lp);
+
+  HighsCallback callback(&highs);
+  const HighsOptions& options = highs.getOptions();
+  HighsSolution solution;
+  HighsProfiling profiling;
+
+  HighsMipSolver mipsolver(callback, options, lp, solution);
+  mipsolver.timer_.start();
+  profiling.initialize(mipsolver.timer_, true, true);
+  mipsolver.setProfiling(&profiling);
+  mipsolver.mipdata_ =
+      std::unique_ptr<HighsMipSolverData>(new HighsMipSolverData(mipsolver));
+  mipsolver.mipdata_->init();
+  mipsolver.mipdata_->setupDomainPropagation();
+
+  // Manually populate VLBs and implications (normally done by probing)
+  HighsImplications& implications = mipsolver.mipdata_->implications;
+  // x0=1 implies y1 >= 5 (VLB: y1 >= 5*x0)
+  implications.addVLB(2, 0, 5.0, 0.0, 1);
+  implications.addImplication(0, 1, 2, {5.0, kHighsInf});
+  // x1=1 implies y2 >= 5 (VLB: y2 >= 5*x1)
+  implications.addVLB(3, 1, 5.0, 0.0, 2);
+  implications.addImplication(1, 1, 3, {5.0, kHighsInf});
+
+  presolve::HighsPostsolveStack& postsolve_stack =
+      mipsolver.mipdata_->postSolveStack;
+
+  presolve::HPresolve presolve;
+  presolve.setInput(mipsolver, -1);
+  REQUIRE(presolve.okSetupPresolveDataStructures());
+  HighsModelStatus status = presolve.run(postsolve_stack);
+  REQUIRE(status == HighsModelStatus::kNotset);
+
+  // implAwareConstrPropagation should have found that x0=1 and x1=1
+  // can't coexist (combined implied activity exceeds row 0's upper bound)
+  HighsCliqueTable& cliquetable = mipsolver.mipdata_->cliquetable;
+  REQUIRE(cliquetable.haveCommonClique({0, 1}, {1, 1}));
+
+  HighsTaskExecutor::shutdown(true);
+}
+
 void solveAndCheck(const std::string& message, const HighsLp& lp, Highs& h,
                    const std::string& solver, bool use_presolve,
                    const HighsInt require_presolved_model_num_col,

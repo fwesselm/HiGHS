@@ -2019,7 +2019,6 @@ void HighsCliqueTable::runCliqueMerging(HighsDomain& globaldomain,
                                         bool equation) {
   CliqueVar extensionstart;
   HighsInt numcliques = kHighsIInf;
-  iscandidate.resize(invertedHashList.size());
   std::vector<HighsInt> neighbourhoodInds;
   neighbourhoodInds.reserve(invertedHashList.size());
 
@@ -2117,7 +2116,6 @@ void HighsCliqueTable::runCliqueMerging(HighsDomain& globaldomain,
 
 void HighsCliqueTable::runCliqueMerging(HighsDomain& globaldomain) {
   std::vector<CliqueVar> extensionvars;
-  iscandidate.resize(invertedHashList.size());
   std::vector<HighsInt> neighbourhoodInds;
   neighbourhoodInds.reserve(invertedHashList.size());
 

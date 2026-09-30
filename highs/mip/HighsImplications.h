@@ -49,6 +49,8 @@ class HighsImplications {
 
   bool computeImplications(HighsInt col, bool val);
 
+  void addImplication(ImplIdx idx, HighsInt implCol, Implication implic);
+
  public:
   struct VarBound {
     double coef;
@@ -133,7 +135,10 @@ class HighsImplications {
     return hasProbed[ImplIdx{col, val}];
   }
 
-  void addImplication(ImplIdx idx, HighsInt implCol, Implication implic);
+  void addImplication(HighsInt col, HighsInt val, HighsInt implCol,
+                      Implication implic) {
+    addImplication(ImplIdx{col, val}, implCol, implic);
+  }
 
   bool tooManyVarBounds() const { return numVarBounds >= maxVarBounds; }
 
