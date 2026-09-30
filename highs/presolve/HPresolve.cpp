@@ -10355,6 +10355,25 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
       }
     }
 
+    // discover non-binary variables outside the row that have implications
+    // from binaries in the row; their bounds can be tightened via the
+    // piecewise walk even though their row coefficient is zero
+    for (const auto& binVar : binNonZeros) {
+      HighsInt binCol = binVar.key();
+      for (HighsInt val = 0; val <= 1; ++val) {
+        implications.getImplications(binCol, val)
+            .for_each([&](HighsInt targetCol,
+                          const HighsImplications::Implication& impl) {
+              if (colDeleted[targetCol] || isBinary(targetCol)) return;
+              if (nonBinNonZeros.find(targetCol) != nullptr) return;
+              if (model->col_lower_[targetCol] <= -kHighsInf ||
+                  model->col_upper_[targetCol] >= kHighsInf)
+                return;
+              nonBinNonZeros[targetCol] = VariableData(0.0);
+            });
+      }
+    }
+
     // consider cliques: sort binaries for early termination.
     // few clique connections first (cheap), large coefficients last.
     // remainingWeight tracks unprocessed clique propagation potential,
@@ -10388,11 +10407,11 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
     for (HighsInt col : sortedBins) {
       double val = binNonZeros[col].val;
       double absval = std::abs(val);
-      remainingWeight -= absval;
 
       // no binary's weight can exceed threshold after processing the
-      // remaining binaries, so skip clique propagation
+      // current and remaining binaries, so skip clique propagation
       if (maxWeight + remainingWeight <= threshold + primal_feastol) break;
+      remainingWeight -= absval;
 
       // collect neighbors and update weights
       cliquetable.forEachUniqueNeighbor(
@@ -10488,7 +10507,7 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
 
         for (HighsInt i = start; direction * i <= direction * end; i += step) {
           double bp = breakpoints[i].value;
-          if (direction * bp <= direction * d + primal_feastol ||
+          if (direction * bp < direction * d - primal_feastol ||
               direction * bp >= direction * otherColBound - primal_feastol)
             continue;
 
