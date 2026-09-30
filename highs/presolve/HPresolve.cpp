@@ -10438,10 +10438,20 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
 
       if (weightLower > threshold + primal_feastol) {
         // fix to upper bound
+        printf(
+            "DEBUG implAware: fixing binary col %" HIGHSINT_FORMAT
+            " to upper (val=%g wL=%g threshold=%g)\n",
+            col, binVar.value().val, double(weightLower),
+            threshold + primal_feastol);
         numVarsFixed++;
         HPRESOLVE_CHECKED_CALL(fixColToUpper(postsolve_stack, col));
       } else if (weightUpper > threshold + primal_feastol) {
         // fix to lower bound
+        printf(
+            "DEBUG implAware: fixing binary col %" HIGHSINT_FORMAT
+            " to lower (val=%g wU=%g threshold=%g)\n",
+            col, binVar.value().val, double(weightUpper),
+            threshold + primal_feastol);
         numVarsFixed++;
         HPRESOLVE_CHECKED_CALL(fixColToLower(postsolve_stack, col));
       }
@@ -10487,6 +10497,14 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
       const auto computeBound = [&](double val, const HighsCDouble& inputWeight,
                                     double colBound, double otherColBound,
                                     HighsInt direction, double& newColBound) {
+        if (val == 0.0)
+          printf(
+              "DEBUG implAware: computeBound val=0 col=%" HIGHSINT_FORMAT
+              " dir=%" HIGHSINT_FORMAT " colBound=%g otherBound=%g weight=%g "
+              "threshold=%g numBP=%zu\n",
+              nonBinCol, direction, colBound, otherColBound,
+              double(inputWeight), threshold + primal_feastol,
+              breakpoints.size());
         HighsCDouble weight = inputWeight;
         double d = colBound;
         newColBound = colBound;
@@ -10515,7 +10533,13 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
               weight + val * (bp - static_cast<HighsCDouble>(d));
           if (weight > threshold + primal_feastol &&
               weightAtBreakpoint <= threshold + primal_feastol) {
-            assert(val != 0.0);
+            if (val == 0.0)
+              printf(
+                  "BUG: val==0 at interpolation site 1, weight=%g "
+                  "weightAtBP=%g threshold=%g d=%g bp=%g\n",
+                  double(weight), double(weightAtBreakpoint),
+                  threshold + primal_feastol, d, bp);
+            // assert(val != 0.0);
             newColBound = static_cast<double>(d + (threshold - weight) / val);
             found = true;
             break;
@@ -10542,7 +10566,13 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
           HighsCDouble weightAtBound =
               weight + val * (otherColBound - static_cast<HighsCDouble>(d));
           if (weightAtBound <= threshold + primal_feastol) {
-            assert(val != 0.0);
+            if (val == 0.0)
+              printf(
+                  "BUG: val==0 at interpolation site 2, weight=%g "
+                  "weightAtBound=%g threshold=%g d=%g otherBound=%g\n",
+                  double(weight), double(weightAtBound),
+                  threshold + primal_feastol, d, otherColBound);
+            // assert(val != 0.0);
             newColBound = static_cast<double>(d + (threshold - weight) / val);
             found = true;
           }
@@ -10558,9 +10588,18 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
           if (nonBinColIsInteger)
             newLowerBnd = std::ceil(newLowerBnd - primal_feastol);
           if (newLowerBnd == model->col_upper_[nonBinCol]) {
+            printf(
+                "DEBUG implAware: fixToUpper nonbin col=%" HIGHSINT_FORMAT
+                " val=%g lb=%g ub=%g wL=%g\n",
+                nonBinCol, nonBinVal, lb, ub, double(weightLower));
             numVarsFixed++;
             HPRESOLVE_CHECKED_CALL(fixColToUpper(postsolve_stack, nonBinCol));
           } else if (nonBinColIsInteger) {
+            printf(
+                "DEBUG implAware: tightenLower nonbin col=%" HIGHSINT_FORMAT
+                " val=%g old=%g new=%g ub=%g wL=%g\n",
+                nonBinCol, nonBinVal, lb, newLowerBnd, ub,
+                double(weightLower));
             numBoundsTightened++;
             HPRESOLVE_CHECKED_CALL(changeColLower(nonBinCol, newLowerBnd));
           }
@@ -10575,9 +10614,18 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
           if (nonBinColIsInteger)
             newUpperBnd = std::floor(newUpperBnd + primal_feastol);
           if (newUpperBnd == model->col_lower_[nonBinCol]) {
+            printf(
+                "DEBUG implAware: fixToLower nonbin col=%" HIGHSINT_FORMAT
+                " val=%g lb=%g ub=%g wU=%g\n",
+                nonBinCol, nonBinVal, lb, ub, double(weightUpper));
             numVarsFixed++;
             HPRESOLVE_CHECKED_CALL(fixColToLower(postsolve_stack, nonBinCol));
           } else if (nonBinColIsInteger) {
+            printf(
+                "DEBUG implAware: tightenUpper nonbin col=%" HIGHSINT_FORMAT
+                " val=%g old=%g new=%g lb=%g wU=%g\n",
+                nonBinCol, nonBinVal, ub, newUpperBnd, lb,
+                double(weightUpper));
             numBoundsTightened++;
             HPRESOLVE_CHECKED_CALL(changeColUpper(nonBinCol, newUpperBnd));
           }
