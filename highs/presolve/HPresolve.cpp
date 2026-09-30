@@ -10532,7 +10532,8 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
       // tighten lower bound: walk from lb toward ub
       if (tightenLower) {
         double newLowerBnd;
-        if (computeBound(nonBinVal, weightLower, lb, ub, +1, newLowerBnd)) {
+        if (computeBound(nonBinVal, weightLower, lb, ub, HighsInt{1},
+                         newLowerBnd)) {
           if (nonBinColIsInteger)
             newLowerBnd = std::ceil(newLowerBnd - primal_feastol);
           if (newLowerBnd == model->col_upper_[nonBinCol]) {
@@ -10548,7 +10549,8 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
       // tighten upper bound: walk from ub toward lb
       if (!colDeleted[nonBinCol] && tightenUpper) {
         double newUpperBnd;
-        if (computeBound(nonBinVal, weightUpper, ub, lb, -1, newUpperBnd)) {
+        if (computeBound(nonBinVal, weightUpper, ub, lb, HighsInt{-1},
+                         newUpperBnd)) {
           if (nonBinColIsInteger)
             newUpperBnd = std::floor(newUpperBnd + primal_feastol);
           if (newUpperBnd == model->col_lower_[nonBinCol]) {
