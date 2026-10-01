@@ -10558,14 +10558,13 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
         if (direction > 0) {
           start = 0;
           end = static_cast<HighsInt>(breakpoints.size()) - 1;
-          step = 1;
         } else {
           start = static_cast<HighsInt>(breakpoints.size()) - 1;
           end = 0;
-          step = -1;
         }
 
-        for (HighsInt i = start; direction * i <= direction * end; i += step) {
+        for (HighsInt i = start; direction * i <= direction * end;
+             i += direction) {
           double bp = breakpoints[i].value;
           if (direction * bp < direction * d - primal_feastol ||
               direction * bp >= direction * otherColBound - primal_feastol)
