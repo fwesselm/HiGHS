@@ -10349,13 +10349,27 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
   };
 
   auto collectBreakpoints = [&](HighsInt ninBinCol) {
-    // collect breakpoints for a non-binary variable
+    // the implied activity w(d) for non-binary x_r at value d is piecewise
+    // linear: between breakpoints, it changes linearly with slope a_r (the
+    // row coefficient). at breakpoints, discrete jumps occur because binary
+    // implications activate or deactivate.
+    //
+    // a breakpoint arises from a binary->non-binary implication read in
+    // reverse (contrapositive). for binary x_i at its min-activity value v:
+    //   (x_i=v -> x_r >= lambda)  implies  (x_r < lambda -> x_i != v)
+    //   (x_i=v -> x_r <= mu)      implies  (x_r > mu     -> x_i != v)
+    // forcing x_i away from its min-activity value costs |a_i| in activity.
+    //
+    // lower-type breakpoint at lambda: active when x_r < lambda (cost |a_i|)
+    // upper-type breakpoint at mu:     active when x_r > mu     (cost |a_i|)
     breakpoints.clear();
     for (const auto& binVar : binNonZeros) {
       HighsInt binCol = binVar.key();
       double binVal = binVar.value().val;
       double absBinVal = std::abs(binVal);
 
+      // look up implications from the binary's min-activity value:
+      // a_i > 0: min at x_i=0, a_i < 0: min at x_i=1
       for (HighsInt val = 0; val <= 1; val++) {
         if ((binVal < 0 || val == 1) && (binVal > 0 || val == 0)) continue;
 
@@ -10371,6 +10385,11 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
           breakpoints.push_back({impl->ub, absBinVal, false});
       }
     }
+    // sort by increasing threshold so computeBound can walk from either end
+    pdqsort(breakpoints.begin(), breakpoints.end(),
+            [](const Breakpoint& a, const Breakpoint& b) {
+              return a.value < b.value;
+            });
   };
 
   auto checkRow = [&](double threshold) {
@@ -10504,12 +10523,10 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
     // two-column clique extraction
     findCliques(threshold);
 
-    // update non-binary weights from binary implications and tighten bounds
+    // non-binary piecewise bound tightening
     for (auto& nz : nonBinNonZeros) {
       HighsInt nonBinCol = nz.key();
       double nonBinVal = nz.value().val;
-      const HighsCDouble& weightLower = nz.value().weightLower;
-      const HighsCDouble& weightUpper = nz.value().weightUpper;
       bool nonBinColIsInteger =
           model->integrality_[nonBinCol] != HighsVarType::kContinuous;
 
@@ -10520,7 +10537,9 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
       // weights incomplete when a bound is infinite (own-coefficient not set)
       if (lb <= -kHighsInf || ub >= kHighsInf) continue;
 
-      // collect breakpoints and update endpoint weights in one pass
+      // collect breakpoints and update endpoint weights: at x_r = lb all
+      // lower-type breakpoints are active (x_r < lambda holds), at x_r = ub
+      // all upper-type breakpoints are active (x_r > mu holds)
       collectBreakpoints(nonBinCol);
       for (const auto& bp : breakpoints) {
         if (bp.isLowerType)
@@ -10529,22 +10548,30 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
           nz.value().updateUpper(bp.excess);
       }
 
+      // w(lb) > threshold means lb is infeasible; walk right to find new lb
+      // w(ub) > threshold means ub is infeasible; walk left to find new ub
+      const HighsCDouble& weightLower = nz.value().weightLower;
+      const HighsCDouble& weightUpper = nz.value().weightUpper;
       bool tightenLower = weightLower > threshold + primal_feastol;
       bool tightenUpper = weightUpper > threshold + primal_feastol;
       if (!tightenLower && !tightenUpper) continue;
 
-      pdqsort(breakpoints.begin(), breakpoints.end(),
-              [](const Breakpoint& a, const Breakpoint& b) {
-                return a.value < b.value;
-              });
-
+      // walk the piecewise linear implied activity w(d) from colBound toward
+      // otherColBound, looking for where w drops from above threshold to
+      // below. between breakpoints w changes with slope val (the non-binary
+      // row coefficient). At each breakpoint a discrete jump occurs:
+      // 1. walking right (+1): lower-type deactivates,
+      //                        upper-type activates
+      // 2. walking left  (-1): upper-type deactivates,
+      //                        lower-type activates
+      // the new bound is found by interpolation within a segment, or
+      // snapped to the breakpoint where the jump crosses the threshold.
       const auto computeBound = [&](double val, const HighsCDouble& inputWeight,
                                     double colBound, double otherColBound,
                                     HighsInt direction, double& newColBound) {
         HighsCDouble weight = inputWeight;
         double d = colBound;
         newColBound = colBound;
-        bool found = false;
 
         HighsInt start;
         HighsInt end;
@@ -10565,43 +10592,51 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
               direction * bp >= direction * otherColBound - primal_feastol)
             continue;
 
+          // linear change from d to bp: w changes by val * (bp - d)
           HighsCDouble weightAtBreakpoint =
               weight + val * (bp - static_cast<HighsCDouble>(d));
+
+          // threshold crossed mid-segment: interpolate exact crossing point
           if (weight > threshold + primal_feastol &&
               weightAtBreakpoint <= threshold + primal_feastol) {
             assert(val != 0.0);
             newColBound = static_cast<double>(d + (threshold - weight) / val);
-            found = true;
-            break;
+            return true;
           }
 
-          // update
           weight = weightAtBreakpoint;
 
-          // going right: lower-type deactivates, upper-type activates
+          // discrete jump at the breakpoint; direction multiplier handles
+          // both cases:
+          // 1. going right -> lower-type deactivates / upper activates,
+          // 2. going left  -> upper-type deactivates / lower activates
           if (breakpoints[i].isLowerType)
             weight -= direction * breakpoints[i].excess;
           else
             weight += direction * breakpoints[i].excess;
           d = bp;
 
+          // threshold crossed at the discrete jump: snap bound to bp.
+          // must be checked here — the next iteration's interpolation check
+          // requires weight > threshold at the segment start, which no longer
+          // holds after the jump
           if (weight <= threshold + primal_feastol) {
             newColBound = bp;
-            found = true;
-            break;
+            return true;
           }
         }
 
-        if (!found && weight > threshold + primal_feastol) {
+        // check the final segment from last breakpoint to otherColBound
+        if (weight > threshold + primal_feastol) {
           HighsCDouble weightAtBound =
               weight + val * (otherColBound - static_cast<HighsCDouble>(d));
           if (weightAtBound <= threshold + primal_feastol) {
             assert(val != 0.0);
             newColBound = static_cast<double>(d + (threshold - weight) / val);
-            found = true;
+            return true;
           }
         }
-        return found;
+        return false;
       };
 
       // tighten lower bound: walk from lb toward ub
