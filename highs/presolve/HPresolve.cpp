@@ -10552,16 +10552,9 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
         double d = colBound;
         newColBound = colBound;
 
-        HighsInt start;
-        HighsInt end;
-        HighsInt step;
-        if (direction > 0) {
-          start = 0;
-          end = static_cast<HighsInt>(breakpoints.size()) - 1;
-        } else {
-          start = static_cast<HighsInt>(breakpoints.size()) - 1;
-          end = 0;
-        }
+        HighsInt start = 0;
+        HighsInt end = static_cast<HighsInt>(breakpoints.size()) - 1;
+        if (direction < 0) std::swap(start, end);
 
         for (HighsInt i = start; direction * i <= direction * end;
              i += direction) {
