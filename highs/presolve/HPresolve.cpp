@@ -10465,8 +10465,8 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
     //
     // a breakpoint arises from a binary->non-binary implication read in
     // reverse (contrapositive). for binary x_i at its min-activity value v:
-    //   (x_i=v -> x_r >= lambda)  implies  (x_r < lambda -> x_i != v)
-    //   (x_i=v -> x_r <= mu)      implies  (x_r > mu     -> x_i != v)
+    //   (x_i = v -> x_r >= lambda)  implies  (x_r < lambda -> x_i != v)
+    //   (x_i = v -> x_r <= mu)      implies  (x_r > mu     -> x_i != v)
     // forcing x_i away from its min-activity value costs |a_i| in activity.
     //
     // lower-type breakpoint at lambda: active when x_r < lambda (cost |a_i|)
@@ -10478,7 +10478,7 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
       double absBinVal = std::abs(binVal);
 
       // look up implications from the binary's min-activity value:
-      // a_i > 0: min at x_i=0, a_i < 0: min at x_i=1
+      // a_i > 0: min at x_i = 0, a_i < 0: min at x_i = 1
       for (HighsInt val = 0; val <= 1; val++) {
         if ((binVal < 0 || val == 1) && (binVal > 0 || val == 0)) continue;
 
