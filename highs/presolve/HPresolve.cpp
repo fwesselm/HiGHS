@@ -10145,11 +10145,9 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
   std::vector<HighsInt> sortedBins;
   std::vector<HighsCliqueTable::CliqueVar> candidates;
   std::vector<Breakpoint> breakpoints;
-  std::vector<HighsInt> changedRows;
-  std::vector<HighsInt> newChangedRows;
-  std::vector<HighsBool> newChangedRowFlags;
+  std::vector<HighsInt> modifiedRows;
+  std::vector<HighsBool> modifiedRowFlags;
   bool objectiveAffected = false;
-  bool newObjectiveAffected = false;
 
   HighsInt numVarsFixed = 0;
   HighsInt numCliquesAdded = 0;
@@ -10157,17 +10155,17 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
 
   auto trackColChange = [&](HighsInt col) {
     for (const auto& nz : getColumnVector(col)) {
-      if (!newChangedRowFlags[nz.index()]) {
-        newChangedRows.push_back(nz.index());
-        newChangedRowFlags[nz.index()] = true;
+      if (!modifiedRowFlags[nz.index()]) {
+        modifiedRows.push_back(nz.index());
+        modifiedRowFlags[nz.index()] = true;
       }
     }
-    if (model->col_cost_[col] != 0.0) newObjectiveAffected = true;
+    if (model->col_cost_[col] != 0.0) objectiveAffected = true;
   };
 
   auto clearChangedRowFlags = [&]() {
-    for (HighsInt row : newChangedRows) newChangedRowFlags[row] = false;
-    newObjectiveAffected = false;
+    for (HighsInt row : modifiedRows) modifiedRowFlags[row] = false;
+    objectiveAffected = false;
   };
 
   auto addNonZero = [&](HighsInt col, double val) {
@@ -10683,19 +10681,22 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
     return Result::kOk;
   };
 
-  // resize vector with flags
-  newChangedRowFlags.resize(model->num_row_);
+  // prepare vectors
+  modifiedRows.reserve(model->num_row_);
+  modifiedRowFlags.resize(model->num_row_);
 
   // treat all rows as changed
-  objectiveAffected = true;
+  bool myObjectiveAffected = true;
+  std::vector<HighsInt> myModifiedRows;
+  myModifiedRows.reserve(model->num_row_);
   for (HighsInt row = 0; row < model->num_row_; row++)
-    if (!rowDeleted[row]) changedRows.push_back(row);
+    if (!rowDeleted[row]) myModifiedRows.push_back(row);
 
   // check rows
-  while (objectiveAffected || !changedRows.empty()) {
+  while (myObjectiveAffected || !myModifiedRows.empty()) {
     // check objective function
     HighsCDouble objectiveLower;
-    if (objectiveAffected && mipsolver->mipdata_->upper_bound < kHighsInf &&
+    if (myObjectiveAffected && mipsolver->mipdata_->upper_bound < kHighsInf &&
         loadObjective(objectiveLower)) {
       double threshold = static_cast<double>(
           static_cast<HighsCDouble>(mipsolver->mipdata_->upper_bound) -
@@ -10703,7 +10704,7 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
       HPRESOLVE_CHECKED_CALL(checkRow(threshold));
     }
 
-    for (HighsInt row : changedRows) {
+    for (HighsInt row : myModifiedRows) {
       if (rowDeleted[row]) continue;
       if (model->row_upper_[row] < kHighsInf && loadModelRow(row, HighsInt{1}))
         HPRESOLVE_CHECKED_CALL(checkRow(
@@ -10715,10 +10716,10 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
     }
 
     // re-check changed rows
-    objectiveAffected = newObjectiveAffected;
+    myObjectiveAffected = objectiveAffected;
     clearChangedRowFlags();
-    std::swap(changedRows, newChangedRows);
-    newChangedRows.clear();
+    std::swap(modifiedRows, myModifiedRows);
+    modifiedRows.clear();
   }
 
   if (numVarsFixed > 0 || numCliquesAdded > 0 || numBoundsTightened > 0)
