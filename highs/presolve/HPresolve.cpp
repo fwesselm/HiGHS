@@ -10236,6 +10236,115 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
                            : binNonZeros[clqvar.col].weightLower;
   };
 
+  auto updateBinaryWeights = [&](double threshold) {
+    // consider variable bound constraints
+    for (const auto& nz : nonBinNonZeros) {
+      HighsInt col = nz.key();
+      double val = nz.value().val;
+      if (val < 0) {
+        // check VUBs
+        HighsCDouble ub = model->col_upper_[col];
+        implications.getVubs(col).for_each(
+            [&](HighsInt binCol, const HighsImplications::VarBound& vub) {
+              // skip deleted or fixed binary variables
+              if (colDeleted[binCol] || !isBinary(binCol)) return;
+              // x_bin = 1 --> x_j <= coef + constant
+              HighsCDouble liftOneVal = val * (vub.coef + vub.constant - ub);
+              if (liftOneVal > 0) binNonZeros[binCol].updateUpper(liftOneVal);
+              // x_bin = 0 --> x_j <= constant
+              HighsCDouble liftZeroVal = val * (vub.constant - ub);
+              if (liftZeroVal > 0) binNonZeros[binCol].updateLower(liftZeroVal);
+            });
+      } else {
+        // check VLBs
+        HighsCDouble lb = model->col_lower_[col];
+        implications.getVlbs(col).for_each(
+            [&](HighsInt binCol, const HighsImplications::VarBound& vlb) {
+              // skip deleted or fixed binary variables
+              if (colDeleted[binCol] || !isBinary(binCol)) return;
+              // x_bin = 1 --> x_j >= coef + constant
+              HighsCDouble liftOneVal = val * (vlb.coef + vlb.constant - lb);
+              if (liftOneVal > 0) binNonZeros[binCol].updateUpper(liftOneVal);
+              // x_bin = 0 --> x_j >= constant
+              HighsCDouble liftZeroVal = val * (vlb.constant - lb);
+              if (liftZeroVal > 0) binNonZeros[binCol].updateLower(liftZeroVal);
+            });
+      }
+    }
+
+    // discover non-binary variables outside the row that have implications
+    // from binaries in the row; their bounds can be tightened via the
+    // piecewise walk even though their row coefficient is zero
+    for (const auto& binVar : binNonZeros) {
+      HighsInt binCol = binVar.key();
+      for (HighsInt val = 0; val <= 1; ++val) {
+        implications.getImplications(binCol, val)
+            .for_each([&](HighsInt targetCol,
+                          const HighsImplications::Implication& impl) {
+              if (colDeleted[targetCol] || isBinary(targetCol)) return;
+              if (nonBinNonZeros.find(targetCol) != nullptr) return;
+              if (model->col_lower_[targetCol] <= -kHighsInf ||
+                  model->col_upper_[targetCol] >= kHighsInf)
+                return;
+              nonBinNonZeros[targetCol] = VariableData(0.0);
+            });
+      }
+    }
+
+    // consider cliques: sort binaries for early termination.
+    // few clique connections first (cheap), large coefficients last.
+    // remainingWeight tracks unprocessed clique propagation potential,
+    // maxWeight tracks the largest binary weight seen so far.
+    sortedBins.clear();
+    HighsCDouble remainingWeight = 0;
+    HighsCDouble maxWeight = 0;
+    for (const auto& binVar : binNonZeros) {
+      HighsInt col = binVar.key();
+      double val = binVar.value().val;
+      const HighsCDouble& weightLower = binVar.value().weightLower;
+      const HighsCDouble& weightUpper = binVar.value().weightUpper;
+      maxWeight = max(maxWeight, max(weightUpper, weightLower));
+      // skip VLB / VUB binaries that have zero coefficient because their
+      // contribution (through cliques) is zero
+      if (val == 0.0) continue;
+      sortedBins.push_back(col);
+      remainingWeight += std::abs(val);
+    }
+
+    pdqsort(sortedBins.begin(), sortedBins.end(), [&](HighsInt a, HighsInt b) {
+      double aval = binNonZeros[a].val;
+      double bval = binNonZeros[b].val;
+      double akey = cliquetable.numCliques(a, aval < 0) -
+                    10.0 * std::abs(aval) / threshold;
+      double bkey = cliquetable.numCliques(b, bval < 0) -
+                    10.0 * std::abs(bval) / threshold;
+      return akey < bkey;
+    });
+
+    for (HighsInt col : sortedBins) {
+      double val = binNonZeros[col].val;
+      double absval = std::abs(val);
+
+      // no binary's weight can exceed threshold after processing the
+      // current and remaining binaries, so skip clique propagation
+      if (maxWeight + remainingWeight <= threshold + primal_feastol) break;
+      remainingWeight -= absval;
+
+      // collect neighbors and update weights
+      cliquetable.forEachUniqueNeighbor(
+          HighsCliqueTable::CliqueVar(col, val < 0 ? 1 : 0),
+          [&](HighsCliqueTable::CliqueVar neighbor) {
+            if (colDeleted[neighbor.col]) return;
+            HighsCDouble update(absval);
+            if (neighbor.val == 1)
+              binNonZeros[neighbor.col].updateUpper(update);
+            else
+              binNonZeros[neighbor.col].updateLower(update);
+            maxWeight = max(maxWeight, getBinaryWeight(neighbor));
+          });
+    }
+  };
+
   auto findCliques = [&](double threshold) {
     // two-column clique extraction
     if (threshold <= primal_feastol) return;
@@ -10392,137 +10501,7 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
             });
   };
 
-  auto checkRow = [&](double threshold) {
-    // consider variable bound constraints
-    for (const auto& nz : nonBinNonZeros) {
-      HighsInt col = nz.key();
-      double val = nz.value().val;
-      if (val < 0) {
-        // check VUBs
-        HighsCDouble ub = model->col_upper_[col];
-        implications.getVubs(col).for_each(
-            [&](HighsInt binCol, const HighsImplications::VarBound& vub) {
-              // skip deleted or fixed binary variables
-              if (colDeleted[binCol] || !isBinary(binCol)) return;
-              // x_bin = 1 --> x_j <= coef + constant
-              HighsCDouble liftOneVal = val * (vub.coef + vub.constant - ub);
-              if (liftOneVal > 0) binNonZeros[binCol].updateUpper(liftOneVal);
-              // x_bin = 0 --> x_j <= constant
-              HighsCDouble liftZeroVal = val * (vub.constant - ub);
-              if (liftZeroVal > 0) binNonZeros[binCol].updateLower(liftZeroVal);
-            });
-      } else {
-        // check VLBs
-        HighsCDouble lb = model->col_lower_[col];
-        implications.getVlbs(col).for_each(
-            [&](HighsInt binCol, const HighsImplications::VarBound& vlb) {
-              // skip deleted or fixed binary variables
-              if (colDeleted[binCol] || !isBinary(binCol)) return;
-              // x_bin = 1 --> x_j >= coef + constant
-              HighsCDouble liftOneVal = val * (vlb.coef + vlb.constant - lb);
-              if (liftOneVal > 0) binNonZeros[binCol].updateUpper(liftOneVal);
-              // x_bin = 0 --> x_j >= constant
-              HighsCDouble liftZeroVal = val * (vlb.constant - lb);
-              if (liftZeroVal > 0) binNonZeros[binCol].updateLower(liftZeroVal);
-            });
-      }
-    }
-
-    // discover non-binary variables outside the row that have implications
-    // from binaries in the row; their bounds can be tightened via the
-    // piecewise walk even though their row coefficient is zero
-    for (const auto& binVar : binNonZeros) {
-      HighsInt binCol = binVar.key();
-      for (HighsInt val = 0; val <= 1; ++val) {
-        implications.getImplications(binCol, val)
-            .for_each([&](HighsInt targetCol,
-                          const HighsImplications::Implication& impl) {
-              if (colDeleted[targetCol] || isBinary(targetCol)) return;
-              if (nonBinNonZeros.find(targetCol) != nullptr) return;
-              if (model->col_lower_[targetCol] <= -kHighsInf ||
-                  model->col_upper_[targetCol] >= kHighsInf)
-                return;
-              nonBinNonZeros[targetCol] = VariableData(0.0);
-            });
-      }
-    }
-
-    // consider cliques: sort binaries for early termination.
-    // few clique connections first (cheap), large coefficients last.
-    // remainingWeight tracks unprocessed clique propagation potential,
-    // maxWeight tracks the largest binary weight seen so far.
-    sortedBins.clear();
-    HighsCDouble remainingWeight = 0;
-    HighsCDouble maxWeight = 0;
-    for (const auto& binVar : binNonZeros) {
-      HighsInt col = binVar.key();
-      double val = binVar.value().val;
-      const HighsCDouble& weightLower = binVar.value().weightLower;
-      const HighsCDouble& weightUpper = binVar.value().weightUpper;
-      maxWeight = max(maxWeight, max(weightUpper, weightLower));
-      // skip VLB / VUB binaries that have zero coefficient because their
-      // contribution (through cliques) is zero
-      if (val == 0.0) continue;
-      sortedBins.push_back(col);
-      remainingWeight += std::abs(val);
-    }
-
-    pdqsort(sortedBins.begin(), sortedBins.end(), [&](HighsInt a, HighsInt b) {
-      double aval = binNonZeros[a].val;
-      double bval = binNonZeros[b].val;
-      double akey = cliquetable.numCliques(a, aval < 0) -
-                    10.0 * std::abs(aval) / threshold;
-      double bkey = cliquetable.numCliques(b, bval < 0) -
-                    10.0 * std::abs(bval) / threshold;
-      return akey < bkey;
-    });
-
-    for (HighsInt col : sortedBins) {
-      double val = binNonZeros[col].val;
-      double absval = std::abs(val);
-
-      // no binary's weight can exceed threshold after processing the
-      // current and remaining binaries, so skip clique propagation
-      if (maxWeight + remainingWeight <= threshold + primal_feastol) break;
-      remainingWeight -= absval;
-
-      // collect neighbors and update weights
-      cliquetable.forEachUniqueNeighbor(
-          HighsCliqueTable::CliqueVar(col, val < 0 ? 1 : 0),
-          [&](HighsCliqueTable::CliqueVar neighbor) {
-            if (colDeleted[neighbor.col]) return;
-            HighsCDouble update(absval);
-            if (neighbor.val == 1)
-              binNonZeros[neighbor.col].updateUpper(update);
-            else
-              binNonZeros[neighbor.col].updateLower(update);
-            maxWeight =
-                max(maxWeight, neighbor.val == 1
-                                   ? binNonZeros[neighbor.col].weightUpper
-                                   : binNonZeros[neighbor.col].weightLower);
-          });
-    }
-
-    // binary fixing
-    for (const auto& binVar : binNonZeros) {
-      HighsInt col = binVar.key();
-      const HighsCDouble& weightLower = binVar.value().weightLower;
-      const HighsCDouble& weightUpper = binVar.value().weightUpper;
-
-      if (weightLower > threshold + primal_feastol) {
-        numVarsFixed++;
-        trackColChange(col);
-        HPRESOLVE_CHECKED_CALL(fixColToUpper(postsolve_stack, col));
-      } else if (weightUpper > threshold + primal_feastol) {
-        numVarsFixed++;
-        trackColChange(col);
-        HPRESOLVE_CHECKED_CALL(fixColToLower(postsolve_stack, col));
-      }
-    }
-
-    // two-column clique extraction
-    findCliques(threshold);
-
+  auto tightenNonBinaryBounds = [&](double threshold) {
     // non-binary piecewise bound tightening
     for (auto& nz : nonBinNonZeros) {
       HighsInt nonBinCol = nz.key();
@@ -10677,6 +10656,35 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
         }
       }
     }
+    return Result::kOk;
+  };
+
+  auto checkRow = [&](double threshold) {
+    // lift / update binary weights
+    updateBinaryWeights(threshold);
+
+    // binary fixing
+    for (const auto& binVar : binNonZeros) {
+      HighsInt col = binVar.key();
+      const HighsCDouble& weightLower = binVar.value().weightLower;
+      const HighsCDouble& weightUpper = binVar.value().weightUpper;
+
+      if (weightLower > threshold + primal_feastol) {
+        numVarsFixed++;
+        trackColChange(col);
+        HPRESOLVE_CHECKED_CALL(fixColToUpper(postsolve_stack, col));
+      } else if (weightUpper > threshold + primal_feastol) {
+        numVarsFixed++;
+        trackColChange(col);
+        HPRESOLVE_CHECKED_CALL(fixColToLower(postsolve_stack, col));
+      }
+    }
+
+    // two-column clique extraction
+    findCliques(threshold);
+
+    // non-binary piecewise bound tightening
+    HPRESOLVE_CHECKED_CALL(tightenNonBinaryBounds(threshold));
 
     return Result::kOk;
   };
