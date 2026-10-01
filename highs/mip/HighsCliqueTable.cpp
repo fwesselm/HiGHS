@@ -243,8 +243,8 @@ void HighsCliqueTable::bronKerboschRecurse(BronKerboschData& data,
 
   std::vector<CliqueVar> PminusNu;
   PminusNu.reserve(Plen);
-  queryNeighbourhood(data.neighbourhoodInds, data.numNeighbourhoodQueries,
-                     pivot, data.P.data(), Plen);
+  queryNeighbourhood(data.neighbourhoodInds, data.marks,
+                     data.numNeighbourhoodQueries, pivot, data.P.data(), Plen);
   data.neighbourhoodInds.push_back(Plen);
   HighsInt k = 0;
   for (HighsInt i : data.neighbourhoodInds) {
@@ -261,12 +261,12 @@ void HighsCliqueTable::bronKerboschRecurse(BronKerboschData& data,
   localX.insert(localX.end(), X, X + Xlen);
 
   for (CliqueVar v : PminusNu) {
-    HighsInt newPlen = partitionNeighbourhood(data.neighbourhoodInds,
-                                              data.numNeighbourhoodQueries, v,
-                                              data.P.data(), Plen);
-    HighsInt newXlen = partitionNeighbourhood(data.neighbourhoodInds,
-                                              data.numNeighbourhoodQueries, v,
-                                              localX.data(), localX.size());
+    HighsInt newPlen = partitionNeighbourhood(
+        data.neighbourhoodInds, data.marks, data.numNeighbourhoodQueries, v,
+        data.P.data(), Plen);
+    HighsInt newXlen = partitionNeighbourhood(
+        data.neighbourhoodInds, data.marks, data.numNeighbourhoodQueries, v,
+        localX.data(), localX.size());
 
     // add v to R, update the weight, and do the recursive call
     data.R.push_back(v);
@@ -478,11 +478,54 @@ struct ThreadNeighbourhoodQueryData {
 };
 
 void HighsCliqueTable::queryNeighbourhood(
-    std::vector<HighsInt>& neighbourhoodInds, int64_t& numQueries, CliqueVar v,
-    CliqueVar* q, HighsInt N) const {
+    std::vector<HighsInt>& neighbourhoodInds, NeighbourhoodMarks& marks,
+    int64_t& numQueries, CliqueVar v, CliqueVar* q, HighsInt N) const {
   neighbourhoodInds.clear();
 
   if (numCliques(v) == 0) return;
+
+  // Unless v's cliques have many more entries than there are candidates, mark
+  // their entries and scan the candidates once instead of N pairwise hash-tree
+  // intersections. Result and query count match the pairwise queries.
+  const int64_t kPairwiseQueryCost = 64;
+  int64_t markWork = 0;
+  auto addWork = [&](HighsInt cliqueid) {
+    markWork += cliques[cliqueid].end - cliques[cliqueid].start;
+  };
+  invertedHashList[v.index()].for_each(addWork);
+  invertedHashListSizeTwo[v.index()].for_each(addWork);
+  if (markWork <= kPairwiseQueryCost * N) {
+    std::vector<uint32_t>& mark = marks.mark;
+    if (mark.size() < numcliquesvar.size())
+      mark.resize(numcliquesvar.size(), 0);
+    if (++marks.stamp == 0) {
+      std::fill(mark.begin(), mark.end(), 0);
+      marks.stamp = 1;
+    }
+    const uint32_t stamp = marks.stamp;
+    // entries of deleted columns stay in their cliques but are unlinked
+    auto markClique = [&](HighsInt cliqueid) {
+      for (HighsInt k = cliques[cliqueid].start; k != cliques[cliqueid].end;
+           ++k)
+        if (!colDeleted[cliqueentries[k].col])
+          mark[cliqueentries[k].index()] = stamp;
+    };
+    invertedHashList[v.index()].for_each(markClique);
+    invertedHashListSizeTwo[v.index()].for_each(markClique);
+    // haveCommonClique is false, and not counted, for literals of v's column
+    mark[v.index()] = 0;
+    mark[v.complement().index()] = 0;
+
+    HighsInt numQueried = N;
+    for (HighsInt i = 0; i < N; ++i) {
+      if (mark[q[i].index()] == stamp)
+        neighbourhoodInds.push_back(i);
+      else if (q[i].col == v.col)
+        --numQueried;
+    }
+    numQueries += numQueried;
+    return;
+  }
 
   if (!allowParallel ||
       numEntries - sizeTwoCliques.size() * 2 < minEntriesForParallelism) {
@@ -519,9 +562,9 @@ void HighsCliqueTable::queryNeighbourhood(
 }
 
 HighsInt HighsCliqueTable::partitionNeighbourhood(
-    std::vector<HighsInt>& neighbourhoodInds, int64_t& numQueries, CliqueVar v,
-    CliqueVar* q, HighsInt N) const {
-  queryNeighbourhood(neighbourhoodInds, numQueries, v, q, N);
+    std::vector<HighsInt>& neighbourhoodInds, NeighbourhoodMarks& marks,
+    int64_t& numQueries, CliqueVar v, CliqueVar* q, HighsInt N) const {
+  queryNeighbourhood(neighbourhoodInds, marks, numQueries, v, q, N);
 
   for (size_t i = 0; i < neighbourhoodInds.size(); ++i)
     std::swap(q[i], q[neighbourhoodInds[i]]);
@@ -532,7 +575,8 @@ HighsInt HighsCliqueTable::partitionNeighbourhood(
 HighsInt HighsCliqueTable::shrinkToNeighbourhood(
     std::vector<HighsInt>& neighbourhoodInds, int64_t& numQueries, CliqueVar v,
     CliqueVar* q, HighsInt N) {
-  queryNeighbourhood(neighbourhoodInds, numQueries, v, q, N);
+  queryNeighbourhood(neighbourhoodInds, neighbourhoodMarks, numQueries, v, q,
+                     N);
 
   for (size_t i = 0; i < neighbourhoodInds.size(); ++i)
     q[i] = q[neighbourhoodInds[i]];
@@ -1007,11 +1051,11 @@ HighsInt HighsCliqueTable::extendClique(
                          candidateOrder);
     CliqueVar v = clqVars[i];
     HighsInt extensionStart = i + 1;
-    extensionEnd =
-        partitionNeighbourhood(neighbourhoodInds, numNeighbourhoodQueries, v,
-                               clqVars.data() + extensionStart,
-                               extensionEnd - extensionStart) +
-        extensionStart;
+    extensionEnd = partitionNeighbourhood(neighbourhoodInds, neighbourhoodMarks,
+                                          numNeighbourhoodQueries, v,
+                                          clqVars.data() + extensionStart,
+                                          extensionEnd - extensionStart) +
+                   extensionStart;
   }
   return extensionEnd;
 }
@@ -1078,11 +1122,11 @@ void HighsCliqueTable::cliquePartition(const std::vector<double>& objective,
     }
     CliqueVar v = clqVars[i];
     HighsInt extensionStart = i + 1;
-    extensionEnd =
-        partitionNeighbourhood(neighbourhoodInds, numNeighbourhoodQueries, v,
-                               clqVars.data() + extensionStart,
-                               extensionEnd - extensionStart) +
-        extensionStart;
+    extensionEnd = partitionNeighbourhood(neighbourhoodInds, neighbourhoodMarks,
+                                          numNeighbourhoodQueries, v,
+                                          clqVars.data() + extensionStart,
+                                          extensionEnd - extensionStart) +
+                   extensionStart;
     if (!neighbourhoodInds.empty())
       lastSwappedIndex =
           std::max(neighbourhoodInds.back() + extensionStart, lastSwappedIndex);
@@ -1792,7 +1836,7 @@ void HighsCliqueTable::separateCliques(const HighsMipSolver& mipsolver,
 #ifdef ADD_ZERO_WEIGHT_VARS
     HighsInt extensionend = static_cast<HighsInt>(data.Z.size());
     for (CliqueVar v : clique) {
-      extensionend = partitionNeighbourhood(data.neighbourhoodInds,
+      extensionend = partitionNeighbourhood(data.neighbourhoodInds, data.marks,
                                             data.numNeighbourhoodQueries, v,
                                             data.Z.data(), extensionend);
       if (extensionend == 0) break;
@@ -1804,7 +1848,7 @@ void HighsCliqueTable::separateCliques(const HighsMipSolver& mipsolver,
       for (HighsInt i = 0; i < extensionend; ++i) {
         HighsInt k = i + 1;
         extensionend =
-            k + partitionNeighbourhood(data.neighbourhoodInds,
+            k + partitionNeighbourhood(data.neighbourhoodInds, data.marks,
                                        data.numNeighbourhoodQueries, data.Z[i],
                                        data.Z.data() + k, extensionend - k);
       }

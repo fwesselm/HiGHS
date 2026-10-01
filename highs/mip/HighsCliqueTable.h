@@ -70,6 +70,13 @@ class HighsCliqueTable {
     CliqueVar replace;
   };
 
+  // Work buffer for neighbourhood queries; callers that may run concurrently
+  // must each use their own
+  struct NeighbourhoodMarks {
+    std::vector<uint32_t> mark;
+    uint32_t stamp = 0;
+  };
+
  private:
   std::vector<CliqueVar> cliqueentries;
 
@@ -93,6 +100,8 @@ class HighsCliqueTable {
   std::vector<HighsInt> cliquehitinds;
 
   // HighsHashTable<std::pair<CliqueVar, CliqueVar>> invertedEdgeCache;
+
+  NeighbourhoodMarks neighbourhoodMarks;
 
   HighsRandom randgen;
   HighsInt nfixings;
@@ -129,6 +138,7 @@ class HighsCliqueTable {
     std::vector<CliqueVar> Z;
     std::vector<std::vector<CliqueVar>> cliques;
     std::vector<HighsInt> neighbourhoodInds;
+    NeighbourhoodMarks marks;
 
     double wR = 0.0;
     double minW = 1.05;
@@ -161,6 +171,7 @@ class HighsCliqueTable {
   void propagateAndCleanup(HighsDomain& globaldom);
 
   void queryNeighbourhood(std::vector<HighsInt>& neighbourhoodInds,
+                          NeighbourhoodMarks& marks,
                           int64_t& numNeighbourhoodqueries, CliqueVar v,
                           CliqueVar* q, HighsInt N) const;
 
@@ -211,6 +222,7 @@ class HighsCliqueTable {
   int64_t& getNumNeighbourhoodQueries() { return numNeighbourhoodQueries; }
 
   HighsInt partitionNeighbourhood(std::vector<HighsInt>& neighbourhoodInds,
+                                  NeighbourhoodMarks& marks,
                                   int64_t& numNeighbourhoodqueries, CliqueVar v,
                                   CliqueVar* q, HighsInt N) const;
 
