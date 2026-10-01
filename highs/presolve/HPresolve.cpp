@@ -10147,20 +10147,30 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
   std::vector<Breakpoint> breakpoints;
   std::vector<HighsInt> modifiedRows;
   std::vector<HighsBool> modifiedRowFlags;
+  std::vector<HighsInt> objInds;
+  std::vector<double> objVals;
   bool objectiveAffected = false;
 
+  // counters
   HighsInt numVarsFixed = 0;
   HighsInt numCliquesAdded = 0;
   HighsInt numBoundsTightened = 0;
 
+  // maximum number of non-zeros in rows or objective
+  const HighsInt maxRowSize = 400;
+  const HighsInt maxObjSize = 30000;
+
   auto trackColChange = [&](HighsInt col) {
     for (const auto& nz : getColumnVector(col)) {
-      if (!modifiedRowFlags[nz.index()]) {
+      if (!modifiedRowFlags[nz.index()] && rowsize[nz.index()] > 1 &&
+          rowsize[nz.index()] <= maxRowSize) {
         modifiedRows.push_back(nz.index());
         modifiedRowFlags[nz.index()] = true;
       }
     }
-    if (model->col_cost_[col] != 0.0) objectiveAffected = true;
+    if (static_cast<HighsInt>(objInds.size()) <= maxObjSize &&
+        model->col_cost_[col] != 0.0)
+      objectiveAffected = true;
   };
 
   auto clearChangedRowFlags = [&]() {
@@ -10209,10 +10219,10 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
     nonBinNonZeros.clear();
     objectiveLower = 0;
 
-    for (HighsInt col = 0; col < model->num_col_; col++) {
+    for (HighsInt i = 0; i < static_cast<HighsInt>(objInds.size()); i++) {
+      HighsInt col = objInds[i];
       if (colDeleted[col]) continue;
-      double cost = model->col_cost_[col];
-      if (cost == 0.0) continue;
+      double cost = objVals[i];
       double lb = model->col_lower_[col];
       double ub = model->col_upper_[col];
       // accumulate standard minimum
@@ -10682,15 +10692,26 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
   };
 
   // prepare vectors
+  objInds.reserve(model->num_col_);
+  objVals.reserve(model->num_col_);
   modifiedRows.reserve(model->num_row_);
   modifiedRowFlags.resize(model->num_row_);
 
-  // treat all rows as changed
-  bool myObjectiveAffected = true;
+  // packed storage for objective
+  for (HighsInt col = 0; col < model->num_col_; col++) {
+    if (colDeleted[col] || model->col_cost_[col] == 0.0) continue;
+    objInds.push_back(col);
+    objVals.push_back(model->col_cost_[col]);
+  }
+
+  // initialise
+  bool myObjectiveAffected =
+      static_cast<HighsInt>(objInds.size()) <= maxObjSize;
   std::vector<HighsInt> myModifiedRows;
   myModifiedRows.reserve(model->num_row_);
   for (HighsInt row = 0; row < model->num_row_; row++)
-    if (!rowDeleted[row]) myModifiedRows.push_back(row);
+    if (!rowDeleted[row] && rowsize[row] > 1 && rowsize[row] <= maxRowSize)
+      myModifiedRows.push_back(row);
 
   // check rows
   while (myObjectiveAffected || !myModifiedRows.empty()) {
