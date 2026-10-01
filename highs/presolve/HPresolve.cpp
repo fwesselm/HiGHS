@@ -10115,6 +10115,8 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
     HighsPostsolveStack& postsolve_stack) {
   if (mipsolver == nullptr) return Result::kOk;
 
+  mipsolver->profiling_->start(kMipClockImplAwareConstrPropagation);
+
   HighsCliqueTable& cliquetable = mipsolver->mipdata_->cliquetable;
   HighsImplications& implications = mipsolver->mipdata_->implications;
 
@@ -10648,7 +10650,8 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
         }
       }
     }
-    return Result::kOk;
+    mipsolver->profiling_->stop(kMipClockImplAwareConstrPropagation);
+    return checkLimits(postsolve_stack);
   };
 
   auto checkRow = [&](double threshold) {

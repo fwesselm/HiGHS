@@ -112,8 +112,9 @@ enum iClockMip : int {
   kMipClockSubMipSolve,
 
   kMipClockProbingImplications,
+  kMipClockImplAwareConstrPropagation,
 
-  kLastMipClock = kMipClockProbingImplications,
+  kLastMipClock = kMipClockImplAwareConstrPropagation,
   kToMipClock = kLastMipClock + 1
 };
 
@@ -209,6 +210,8 @@ inline void initialiseMipProfilingNames(std::vector<std::string>& name) {
   name[kMipClockStoreBasis] = "Store basis";
 
   name[kMipClockProbingImplications] = "Probing - implications";
+  name[kMipClockImplAwareConstrPropagation] =
+      "Implication-aware constraint propagation";
 };
 
 class MipTimer {
@@ -387,6 +390,8 @@ class MipTimer {
 
     clock[kMipClockProbingImplications] =
         timer_pointer->clock_def("Probing - implications");
+    clock[kMipClockImplAwareConstrPropagation] =
+        timer_pointer->clock_def("Implication-aware constraint propagation");
     //    clock[] = timer_pointer->clock_def("");
   };
 
@@ -491,8 +496,9 @@ class MipTimer {
   };
 
   void reportMipPresolveClock(const HighsTimerClock& mip_timer_clock) {
-    const std::vector<HighsInt> mip_clock_list{kMipClockProbingPresolve,
-                                               kMipClockEnumerationPresolve};
+    const std::vector<HighsInt> mip_clock_list{
+        kMipClockProbingPresolve, kMipClockEnumerationPresolve,
+        kMipClockImplAwareConstrPropagation};
     reportMipClockList("MipPrslv", mip_clock_list, mip_timer_clock,
                        kMipClockRunPresolve, kMipClockTolerancePercentReport);
   };
