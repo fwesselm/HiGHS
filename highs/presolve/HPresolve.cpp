@@ -10113,10 +10113,30 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
   std::vector<HighsInt> sortedBins;
   std::vector<HighsCliqueTable::CliqueVar> candidates;
   std::vector<Breakpoint> breakpoints;
+  std::vector<HighsInt> changedRows;
+  std::vector<HighsInt> newChangedRows;
+  std::vector<HighsBool> newChangedRowFlags;
+  bool objectiveAffected = false;
+  bool newObjectiveAffected = false;
 
   HighsInt numVarsFixed = 0;
   HighsInt numCliquesAdded = 0;
   HighsInt numBoundsTightened = 0;
+
+  auto trackColChange = [&](HighsInt col) {
+    for (const auto& nz : getColumnVector(col)) {
+      if (!newChangedRowFlags[nz.index()]) {
+        newChangedRows.push_back(nz.index());
+        newChangedRowFlags[nz.index()] = true;
+      }
+    }
+    if (model->col_cost_[col] != 0.0) newObjectiveAffected = true;
+  };
+
+  auto clearChangedRowFlags = [&]() {
+    for (HighsInt row : newChangedRows) newChangedRowFlags[row] = false;
+    newObjectiveAffected = false;
+  };
 
   auto addNonZero = [&](HighsInt col, double val) {
     if (isBinary(col)) {
@@ -10288,6 +10308,9 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
           cliquetable.addClique(*mipsolver, clique.data(), 2);
           numCliquesAdded++;
           consecutiveNoClique = 0;
+          // remember affected columns
+          trackColChange(v1.col);
+          trackColChange(v2.col);
         } else {
           if (++consecutiveNoClique >= maxConsecutiveNoClique) return;
         }
@@ -10295,25 +10318,26 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
     }
   };
 
-  auto collectBreakpoints = [&](HighsInt col) {
-    // collect breakpoints for this variable
+  auto collectBreakpoints = [&](HighsInt ninBinCol) {
+    // collect breakpoints for a non-binary variable
     breakpoints.clear();
     for (const auto& binVar : binNonZeros) {
       HighsInt binCol = binVar.key();
       double binVal = binVar.value().val;
+      double absBinVal = std::abs(binVal);
 
       for (HighsInt val = 0; val <= 1; val++) {
         if ((binVal < 0 || val == 1) && (binVal > 0 || val == 0)) continue;
-        double absBinVal = std::abs(binVal);
 
-        const auto* impl = implications.getImplications(binCol, val).find(col);
+        const auto* impl =
+            implications.getImplications(binCol, val).find(ninBinCol);
         if (impl == nullptr) continue;
 
-        if (model->col_lower_[col] > -kHighsInf &&
-            impl->lb > model->col_lower_[col] + primal_feastol)
+        if (model->col_lower_[ninBinCol] > -kHighsInf &&
+            impl->lb > model->col_lower_[ninBinCol] + primal_feastol)
           breakpoints.push_back({impl->lb, absBinVal, true});
-        if (model->col_upper_[col] < kHighsInf &&
-            impl->ub < model->col_upper_[col] - primal_feastol)
+        if (model->col_upper_[ninBinCol] < kHighsInf &&
+            impl->ub < model->col_upper_[ninBinCol] - primal_feastol)
           breakpoints.push_back({impl->ub, absBinVal, false});
       }
     }
@@ -10438,9 +10462,11 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
 
       if (weightLower > threshold + primal_feastol) {
         numVarsFixed++;
+        trackColChange(col);
         HPRESOLVE_CHECKED_CALL(fixColToUpper(postsolve_stack, col));
       } else if (weightUpper > threshold + primal_feastol) {
         numVarsFixed++;
+        trackColChange(col);
         HPRESOLVE_CHECKED_CALL(fixColToLower(postsolve_stack, col));
       }
     }
@@ -10549,7 +10575,7 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
       };
 
       // tighten lower bound: walk from lb toward ub
-      if (tightenLower) {
+      if (!colDeleted[nonBinCol] && tightenLower) {
         double newLowerBnd;
         if (computeBound(nonBinVal, weightLower, lb, ub, HighsInt{1},
                          newLowerBnd)) {
@@ -10557,9 +10583,11 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
             newLowerBnd = std::ceil(newLowerBnd - primal_feastol);
           if (newLowerBnd == model->col_upper_[nonBinCol]) {
             numVarsFixed++;
+            trackColChange(nonBinCol);
             HPRESOLVE_CHECKED_CALL(fixColToUpper(postsolve_stack, nonBinCol));
           } else if (nonBinColIsInteger) {
             numBoundsTightened++;
+            trackColChange(nonBinCol);
             HPRESOLVE_CHECKED_CALL(changeColLower(nonBinCol, newLowerBnd));
           }
         }
@@ -10574,9 +10602,11 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
             newUpperBnd = std::floor(newUpperBnd + primal_feastol);
           if (newUpperBnd == model->col_lower_[nonBinCol]) {
             numVarsFixed++;
+            trackColChange(nonBinCol);
             HPRESOLVE_CHECKED_CALL(fixColToLower(postsolve_stack, nonBinCol));
           } else if (nonBinColIsInteger) {
             numBoundsTightened++;
+            trackColChange(nonBinCol);
             HPRESOLVE_CHECKED_CALL(changeColUpper(nonBinCol, newUpperBnd));
           }
         }
@@ -10586,25 +10616,42 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
     return Result::kOk;
   };
 
-  // check objective function
-  HighsCDouble objectiveLower;
-  if (mipsolver->mipdata_->upper_bound < kHighsInf &&
-      loadObjective(objectiveLower)) {
-    double threshold = static_cast<double>(
-        static_cast<HighsCDouble>(mipsolver->mipdata_->upper_bound) -
-        objectiveLower);
-    HPRESOLVE_CHECKED_CALL(checkRow(threshold));
-  }
+  // resize vector with flags
+  newChangedRowFlags.resize(model->num_row_);
+
+  // treat all rows as changed
+  objectiveAffected = true;
+  for (HighsInt row = 0; row < model->num_row_; row++)
+    if (!rowDeleted[row]) changedRows.push_back(row);
 
   // check rows
-  for (HighsInt row = 0; row < model->num_row_; row++) {
-    if (rowDeleted[row]) continue;
-    if (model->row_upper_[row] < kHighsInf && loadModelRow(row, HighsInt{1}))
-      HPRESOLVE_CHECKED_CALL(checkRow(
-          -impliedRowBounds.getSumLowerOrig(row, -model->row_upper_[row])));
-    if (model->row_lower_[row] > -kHighsInf && loadModelRow(row, HighsInt{-1}))
-      HPRESOLVE_CHECKED_CALL(checkRow(
-          impliedRowBounds.getSumUpperOrig(row, -model->row_lower_[row])));
+  while (objectiveAffected || !changedRows.empty()) {
+    // check objective function
+    HighsCDouble objectiveLower;
+    if (objectiveAffected && mipsolver->mipdata_->upper_bound < kHighsInf &&
+        loadObjective(objectiveLower)) {
+      double threshold = static_cast<double>(
+          static_cast<HighsCDouble>(mipsolver->mipdata_->upper_bound) -
+          objectiveLower);
+      HPRESOLVE_CHECKED_CALL(checkRow(threshold));
+    }
+
+    for (HighsInt row : changedRows) {
+      if (rowDeleted[row]) continue;
+      if (model->row_upper_[row] < kHighsInf && loadModelRow(row, HighsInt{1}))
+        HPRESOLVE_CHECKED_CALL(checkRow(
+            -impliedRowBounds.getSumLowerOrig(row, -model->row_upper_[row])));
+      if (model->row_lower_[row] > -kHighsInf &&
+          loadModelRow(row, HighsInt{-1}))
+        HPRESOLVE_CHECKED_CALL(checkRow(
+            impliedRowBounds.getSumUpperOrig(row, -model->row_lower_[row])));
+    }
+
+    // re-check changed rows
+    objectiveAffected = newObjectiveAffected;
+    clearChangedRowFlags();
+    std::swap(changedRows, newChangedRows);
+    newChangedRows.clear();
   }
 
   if (numVarsFixed > 0 || numCliquesAdded > 0 || numBoundsTightened > 0)
