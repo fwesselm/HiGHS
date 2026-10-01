@@ -10650,8 +10650,7 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
         }
       }
     }
-    mipsolver->profiling_->stop(kMipClockImplAwareConstrPropagation);
-    return checkLimits(postsolve_stack);
+    return Result::kOk;
   };
 
   auto checkRow = [&](double threshold) {
@@ -10730,7 +10729,8 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
         " cliques, tightened %" HIGHSINT_FORMAT " bounds\n",
         numVarsFixed, numCliquesAdded, numBoundsTightened);
 
-  return Result::kOk;
+  mipsolver->profiling_->stop(kMipClockImplAwareConstrPropagation);
+  return checkLimits(postsolve_stack);
 }
 
 HPresolve::Result HPresolve::sparsify(HighsPostsolveStack& postsolve_stack) {
