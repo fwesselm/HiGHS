@@ -1542,6 +1542,268 @@ TEST_CASE("test-impl-aware-paper-example-3-5", "[highs_test_presolve_rules]") {
   HighsTaskExecutor::shutdown(true);
 }
 
+TEST_CASE("test-impl-aware-paper-example-3-5-geq",
+          "[highs_test_presolve_rules]") {
+  // Chen et al. 2026, Examples 3-5 with the row negated into a >= row, so
+  // that the row is propagated in the negated direction.
+  //
+  // row 0: -x2 - 0.9*x3 - 0.5*x5 >= -2
+  // x1(col0), x2(col1), x3(col2) binary; x5(col3) integer [0, 3]
+  // x1 has zero coefficient in the row.
+  //
+  // VLBs, cliques and implications as in test-impl-aware-paper-example-3-5.
+  // expected result is the same: x1 = 1 and x5 <= 2.
+  HighsLp lp;
+  lp.num_col_ = 4;
+  lp.num_row_ = 1;
+  lp.sense_ = ObjSense::kMinimize;
+  lp.col_cost_ = {0, 0, 0, 0};
+  lp.col_lower_ = {0, 0, 0, 0};
+  lp.col_upper_ = {1, 1, 1, 3};
+  lp.integrality_ = {HighsVarType::kInteger, HighsVarType::kInteger,
+                     HighsVarType::kInteger, HighsVarType::kInteger};
+  lp.row_lower_ = {-2};
+  lp.row_upper_ = {kHighsInf};
+  // x1 not in row; x2(col1)=-1, x3(col2)=-0.9, x5(col3)=-0.5
+  lp.a_matrix_.format_ = MatrixFormat::kColwise;
+  lp.a_matrix_.num_col_ = 4;
+  lp.a_matrix_.num_row_ = 1;
+  lp.a_matrix_.start_ = {0, 0, 1, 2, 3};
+  lp.a_matrix_.index_ = {0, 0, 0};
+  lp.a_matrix_.value_ = {-1, -0.9, -0.5};
+
+  highs::parallel::initialize_scheduler(1);
+
+  Highs highs;
+  highs.setOptionValue("output_flag", dev_run);
+  highs.setOptionValue("presolve_rule_test",
+                       kPresolveRuleImplAwareConstrPropagation);
+  highs.passModel(lp);
+
+  HighsCallback callback(&highs);
+  const HighsOptions& options = highs.getOptions();
+  HighsSolution solution;
+  HighsProfiling profiling;
+
+  HighsMipSolver mipsolver(callback, options, lp, solution);
+  mipsolver.timer_.start();
+  profiling.initialize(mipsolver.timer_, true, true);
+  mipsolver.setProfiling(&profiling);
+  mipsolver.mipdata_ =
+      std::unique_ptr<HighsMipSolverData>(new HighsMipSolverData(mipsolver));
+  mipsolver.mipdata_->init();
+  mipsolver.mipdata_->setupDomainPropagation();
+
+  // cliques: x̄1 and x̄2 can't coexist, x̄1 and x̄3 can't coexist
+  HighsCliqueTable& cliquetable = mipsolver.mipdata_->cliquetable;
+  HighsCliqueTable::CliqueVar clq1[] = {{0, 0}, {1, 0}};
+  cliquetable.doAddClique(clq1, 2);
+  HighsCliqueTable::CliqueVar clq2[] = {{0, 0}, {2, 0}};
+  cliquetable.doAddClique(clq2, 2);
+
+  // VLBs: x2 >= -x1+1, x3 >= -x1+1, x5 >= -0.4*x1+0.4
+  HighsImplications& implications = mipsolver.mipdata_->implications;
+  implications.addVLB(1, 0, -1.0, 1.0);
+  implications.addVLB(2, 0, -1.0, 1.0);
+  implications.addVLB(3, 0, -0.4, 0.4);
+
+  // implications
+  implications.addImplication(0, 0, 1,
+                              HighsImplications::Implication{1.0, kHighsInf});
+  implications.addImplication(0, 0, 2,
+                              HighsImplications::Implication{1.0, kHighsInf});
+  implications.addImplication(0, 0, 3,
+                              HighsImplications::Implication{0.4, 0.5});
+  implications.addImplication(1, 0, 3,
+                              HighsImplications::Implication{1.0, kHighsInf});
+  implications.addImplication(2, 0, 3,
+                              HighsImplications::Implication{-kHighsInf, 2.0});
+
+  presolve::HighsPostsolveStack& postsolve_stack =
+      mipsolver.mipdata_->postSolveStack;
+
+  presolve::HPresolve presolve;
+  presolve.setInput(mipsolver, -1);
+  REQUIRE(presolve.okSetupPresolveDataStructures());
+  HighsModelStatus status = presolve.run(postsolve_stack);
+  REQUIRE(status == HighsModelStatus::kNotset);
+
+  // x1 (col 0) is fixed and removed by shrinkProblem, so original col 3 (x5)
+  // is now at presolved index 2
+  REQUIRE(mipsolver.model_->col_upper_[2] <= 2.0 + 1e-6);
+  REQUIRE(mipsolver.model_->col_upper_[2] >= 2.0 - 1e-6);
+
+  // postsolve restores x1 = 1
+  HighsSolution sol;
+  sol.value_valid = true;
+  sol.col_value = {0.0, 0.0, 1.0};
+  postsolve_stack.undoPrimal(options, sol);
+  REQUIRE(sol.col_value[0] >= 1.0 - 1e-6);
+
+  HighsTaskExecutor::shutdown(true);
+}
+
+TEST_CASE("test-impl-aware-fixed-col", "[highs_test_presolve_rules]") {
+  // fixed column that has not been removed before the impl-aware propagation
+  // runs (rule test mode skips the initial row and column presolve).
+  //
+  // row 0: 3*x0 + y + 2*z <= 10
+  // x0 binary, y integer in [0, 10], z integer fixed at 1
+  // implication: x0=0 => y >= 9
+  //
+  // the fixed column contributes 2 to the minimum activity, so the threshold
+  // is 8 and the result equals test-impl-aware-nonbinary-tightening: y <= 5.
+  // ignoring z's contribution would give threshold 10 and y <= 7. z itself
+  // must stay fixed at 1 and x0 must not be fixed.
+  HighsLp lp;
+  lp.num_col_ = 3;
+  lp.num_row_ = 1;
+  lp.sense_ = ObjSense::kMinimize;
+  lp.col_cost_ = {0, 0, 0};
+  lp.col_lower_ = {0, 0, 1};
+  lp.col_upper_ = {1, 10, 1};
+  lp.integrality_ = {HighsVarType::kInteger, HighsVarType::kInteger,
+                     HighsVarType::kInteger};
+  lp.row_lower_ = {-kHighsInf};
+  lp.row_upper_ = {10};
+  lp.a_matrix_.format_ = MatrixFormat::kColwise;
+  lp.a_matrix_.num_col_ = 3;
+  lp.a_matrix_.num_row_ = 1;
+  lp.a_matrix_.start_ = {0, 1, 2, 3};
+  lp.a_matrix_.index_ = {0, 0, 0};
+  lp.a_matrix_.value_ = {3, 1, 2};
+
+  highs::parallel::initialize_scheduler(1);
+
+  Highs highs;
+  highs.setOptionValue("output_flag", dev_run);
+  highs.setOptionValue("presolve_rule_test",
+                       kPresolveRuleImplAwareConstrPropagation);
+  highs.passModel(lp);
+
+  HighsCallback callback(&highs);
+  const HighsOptions& options = highs.getOptions();
+  HighsSolution solution;
+  HighsProfiling profiling;
+
+  HighsMipSolver mipsolver(callback, options, lp, solution);
+  mipsolver.timer_.start();
+  profiling.initialize(mipsolver.timer_, true, true);
+  mipsolver.setProfiling(&profiling);
+  mipsolver.mipdata_ =
+      std::unique_ptr<HighsMipSolverData>(new HighsMipSolverData(mipsolver));
+  mipsolver.mipdata_->init();
+  mipsolver.mipdata_->setupDomainPropagation();
+
+  // implication: x0=0 => y >= 9
+  HighsImplications& implications = mipsolver.mipdata_->implications;
+  implications.addImplication(0, 0, 1,
+                              HighsImplications::Implication{9.0, kHighsInf});
+
+  presolve::HighsPostsolveStack& postsolve_stack =
+      mipsolver.mipdata_->postSolveStack;
+
+  presolve::HPresolve presolve;
+  presolve.setInput(mipsolver, -1);
+  REQUIRE(presolve.okSetupPresolveDataStructures());
+  HighsModelStatus status = presolve.run(postsolve_stack);
+  REQUIRE(status == HighsModelStatus::kNotset);
+
+  // no column is removed, so indices are unchanged
+  REQUIRE(mipsolver.model_->num_col_ == 3);
+  REQUIRE(mipsolver.model_->col_lower_[0] == 0.0);
+  REQUIRE(mipsolver.model_->col_upper_[0] == 1.0);
+  REQUIRE(mipsolver.model_->col_upper_[1] <= 5.0 + 1e-6);
+  REQUIRE(mipsolver.model_->col_upper_[1] >= 5.0 - 1e-6);
+  REQUIRE(mipsolver.model_->col_lower_[2] == 1.0);
+  REQUIRE(mipsolver.model_->col_upper_[2] == 1.0);
+
+  HighsTaskExecutor::shutdown(true);
+}
+
+TEST_CASE("test-impl-aware-objective-cutoff", "[highs_test_presolve_rules]") {
+  // impl-aware propagation of the objective cutoff, including the objective
+  // offset and a fixed column that has not been removed yet.
+  //
+  // min 3*x0 + y + 2*z + 4
+  // row 0: x0 + y <= 100 (redundant)
+  // x0 binary, y integer in [0, 10], z integer fixed at 1
+  // implication: x0=0 => y >= 9
+  //
+  // the objective bound 14 gives upper_limit = 14 in the original frame, so
+  // 3*x0 + y + 2*z <= 14 - 4 = 10. z contributes 2 to the minimum, so the
+  // threshold is 8 and, as in test-impl-aware-nonbinary-tightening, y <= 5.
+  // ignoring the offset (threshold 12) or z (threshold 10) gives a weaker
+  // bound on y.
+  HighsLp lp;
+  lp.num_col_ = 3;
+  lp.num_row_ = 1;
+  lp.sense_ = ObjSense::kMinimize;
+  lp.offset_ = 4;
+  lp.col_cost_ = {3, 1, 2};
+  lp.col_lower_ = {0, 0, 1};
+  lp.col_upper_ = {1, 10, 1};
+  lp.integrality_ = {HighsVarType::kInteger, HighsVarType::kInteger,
+                     HighsVarType::kInteger};
+  lp.row_lower_ = {-kHighsInf};
+  lp.row_upper_ = {100};
+  lp.a_matrix_.format_ = MatrixFormat::kColwise;
+  lp.a_matrix_.num_col_ = 3;
+  lp.a_matrix_.num_row_ = 1;
+  lp.a_matrix_.start_ = {0, 1, 2, 2};
+  lp.a_matrix_.index_ = {0, 0};
+  lp.a_matrix_.value_ = {1, 1};
+
+  highs::parallel::initialize_scheduler(1);
+
+  Highs highs;
+  highs.setOptionValue("output_flag", dev_run);
+  highs.setOptionValue("presolve_rule_test",
+                       kPresolveRuleImplAwareConstrPropagation);
+  highs.setOptionValue("objective_bound", 14.0);
+  highs.passModel(lp);
+
+  HighsCallback callback(&highs);
+  const HighsOptions& options = highs.getOptions();
+  HighsSolution solution;
+  HighsProfiling profiling;
+
+  HighsMipSolver mipsolver(callback, options, lp, solution);
+  mipsolver.timer_.start();
+  profiling.initialize(mipsolver.timer_, true, true);
+  mipsolver.setProfiling(&profiling);
+  mipsolver.mipdata_ =
+      std::unique_ptr<HighsMipSolverData>(new HighsMipSolverData(mipsolver));
+  mipsolver.mipdata_->init();
+  mipsolver.mipdata_->setupDomainPropagation();
+  REQUIRE(mipsolver.mipdata_->upper_limit == 14.0);
+
+  // implication: x0=0 => y >= 9
+  HighsImplications& implications = mipsolver.mipdata_->implications;
+  implications.addImplication(0, 0, 1,
+                              HighsImplications::Implication{9.0, kHighsInf});
+
+  presolve::HighsPostsolveStack& postsolve_stack =
+      mipsolver.mipdata_->postSolveStack;
+
+  presolve::HPresolve presolve;
+  presolve.setInput(mipsolver, -1);
+  REQUIRE(presolve.okSetupPresolveDataStructures());
+  HighsModelStatus status = presolve.run(postsolve_stack);
+  REQUIRE(status == HighsModelStatus::kNotset);
+
+  // no column is removed, so indices are unchanged
+  REQUIRE(mipsolver.model_->num_col_ == 3);
+  REQUIRE(mipsolver.model_->col_lower_[0] == 0.0);
+  REQUIRE(mipsolver.model_->col_upper_[0] == 1.0);
+  REQUIRE(mipsolver.model_->col_upper_[1] <= 5.0 + 1e-6);
+  REQUIRE(mipsolver.model_->col_upper_[1] >= 5.0 - 1e-6);
+  REQUIRE(mipsolver.model_->col_lower_[2] == 1.0);
+  REQUIRE(mipsolver.model_->col_upper_[2] == 1.0);
+
+  HighsTaskExecutor::shutdown(true);
+}
+
 TEST_CASE("test-impl-aware-paper-example-6", "[highs_test_presolve_rules]") {
   // Chen et al. 2026, Example 6: non-binary variable NOT in the row
   // has its lower bound tightened via implications from binaries in the row.

@@ -10179,6 +10179,9 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
   };
 
   auto addNonZero = [&](HighsInt col, double val) {
+    // skip fixed columns that have not been removed yet; their contribution is
+    // already accounted for in the threshold
+    if (model->col_lower_[col] == model->col_upper_[col]) return true;
     if (isBinary(col)) {
       binNonZeros[col] = VariableData{val};
       if (val < 0)
@@ -10233,8 +10236,6 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
         if (ub >= kHighsInf) return false;
         objectiveLower += cost * static_cast<HighsCDouble>(ub);
       }
-      // skip fixed variables (since we are iterating all columns)
-      if (lb == ub) continue;
       // add non-zero
       if (!addNonZero(col, cost)) return false;
     }
@@ -10715,13 +10716,14 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
 
   // check rows
   while (myObjectiveAffected || !myModifiedRows.empty()) {
-    // check objective function
+    // check objective function; during presolve the objective upper limit
+    // refers to the original model, so the current offset is subtracted
     HighsCDouble objectiveLower;
-    if (myObjectiveAffected && mipsolver->mipdata_->upper_bound < kHighsInf &&
+    if (myObjectiveAffected && mipsolver->mipdata_->upper_limit < kHighsInf &&
         loadObjective(objectiveLower)) {
       double threshold = static_cast<double>(
-          static_cast<HighsCDouble>(mipsolver->mipdata_->upper_bound) -
-          objectiveLower);
+          static_cast<HighsCDouble>(mipsolver->mipdata_->upper_limit) -
+          model->offset_ - objectiveLower);
       HPRESOLVE_CHECKED_CALL(checkRow(threshold));
     }
 
