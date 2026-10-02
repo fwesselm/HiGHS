@@ -73,8 +73,8 @@ class HighsCliqueTable {
   // Work buffer for neighbourhood queries; callers that may run concurrently
   // must each use their own
   struct NeighbourhoodMarks {
-    std::vector<uint32_t> mark;
-    uint32_t stamp = 0;
+    std::vector<HighsBool> mark;
+    std::vector<HighsInt> markedInds;
   };
 
  private:

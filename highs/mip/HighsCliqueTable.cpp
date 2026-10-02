@@ -495,35 +495,38 @@ void HighsCliqueTable::queryNeighbourhood(
   invertedHashList[v.index()].for_each(addWork);
   invertedHashListSizeTwo[v.index()].for_each(addWork);
   if (markWork <= kPairwiseQueryCost * N) {
-    std::vector<uint32_t>& mark = marks.mark;
+    std::vector<HighsBool>& mark = marks.mark;
+    std::vector<HighsInt>& markedInds = marks.markedInds;
     if (mark.size() < numcliquesvar.size())
-      mark.resize(numcliquesvar.size(), 0);
-    if (++marks.stamp == 0) {
-      std::fill(mark.begin(), mark.end(), 0);
-      marks.stamp = 1;
-    }
-    const uint32_t stamp = marks.stamp;
+      mark.resize(numcliquesvar.size(), false);
     // entries of deleted columns stay in their cliques but are unlinked
     auto markClique = [&](HighsInt cliqueid) {
       for (HighsInt k = cliques[cliqueid].start; k != cliques[cliqueid].end;
-           ++k)
-        if (!colDeleted[cliqueentries[k].col])
-          mark[cliqueentries[k].index()] = stamp;
+           ++k) {
+        HighsInt index = cliqueentries[k].index();
+        if (!colDeleted[cliqueentries[k].col] && !mark[index]) {
+          mark[index] = true;
+          markedInds.push_back(index);
+        }
+      }
     };
     invertedHashList[v.index()].for_each(markClique);
     invertedHashListSizeTwo[v.index()].for_each(markClique);
     // haveCommonClique is false, and not counted, for literals of v's column
-    mark[v.index()] = 0;
-    mark[v.complement().index()] = 0;
+    mark[v.index()] = false;
+    mark[v.complement().index()] = false;
 
     HighsInt numQueried = N;
     for (HighsInt i = 0; i < N; ++i) {
-      if (mark[q[i].index()] == stamp)
+      if (mark[q[i].index()])
         neighbourhoodInds.push_back(i);
       else if (q[i].col == v.col)
         --numQueried;
     }
     numQueries += numQueried;
+    // reset the marks
+    for (HighsInt index : markedInds) mark[index] = false;
+    markedInds.clear();
     return;
   }
 
