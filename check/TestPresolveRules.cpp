@@ -1804,6 +1804,72 @@ TEST_CASE("test-impl-aware-objective-cutoff", "[highs_test_presolve_rules]") {
   HighsTaskExecutor::shutdown(true);
 }
 
+TEST_CASE("test-impl-aware-binary-infeasible", "[highs_test_presolve_rules]") {
+  // infeasibility detection when neither value of a binary satisfies the row.
+  //
+  // row 0: 3*x0 + y + z <= 8
+  // x0 binary, y and z integer in [0, 10]
+  // VLBs: y >= -9*x0 + 9 (x0=0 => y >= 9), z >= 6*x0 (x0=1 => z >= 6)
+  //
+  // x0.weightLower = 9 > 8 and x0.weightUpper = 3 + 6 = 9 > 8, so the
+  // problem is infeasible.
+  HighsLp lp;
+  lp.num_col_ = 3;
+  lp.num_row_ = 1;
+  lp.sense_ = ObjSense::kMinimize;
+  lp.col_cost_ = {0, 0, 0};
+  lp.col_lower_ = {0, 0, 0};
+  lp.col_upper_ = {1, 10, 10};
+  lp.integrality_ = {HighsVarType::kInteger, HighsVarType::kInteger,
+                     HighsVarType::kInteger};
+  lp.row_lower_ = {-kHighsInf};
+  lp.row_upper_ = {8};
+  lp.a_matrix_.format_ = MatrixFormat::kColwise;
+  lp.a_matrix_.num_col_ = 3;
+  lp.a_matrix_.num_row_ = 1;
+  lp.a_matrix_.start_ = {0, 1, 2, 3};
+  lp.a_matrix_.index_ = {0, 0, 0};
+  lp.a_matrix_.value_ = {3, 1, 1};
+
+  highs::parallel::initialize_scheduler(1);
+
+  Highs highs;
+  highs.setOptionValue("output_flag", dev_run);
+  highs.setOptionValue("presolve_rule_test",
+                       kPresolveRuleImplAwareConstrPropagation);
+  highs.passModel(lp);
+
+  HighsCallback callback(&highs);
+  const HighsOptions& options = highs.getOptions();
+  HighsSolution solution;
+  HighsProfiling profiling;
+
+  HighsMipSolver mipsolver(callback, options, lp, solution);
+  mipsolver.timer_.start();
+  profiling.initialize(mipsolver.timer_, true, true);
+  mipsolver.setProfiling(&profiling);
+  mipsolver.mipdata_ =
+      std::unique_ptr<HighsMipSolverData>(new HighsMipSolverData(mipsolver));
+  mipsolver.mipdata_->init();
+  mipsolver.mipdata_->setupDomainPropagation();
+
+  // VLBs: y >= -9*x0 + 9, z >= 6*x0
+  HighsImplications& implications = mipsolver.mipdata_->implications;
+  implications.addVLB(1, 0, -9.0, 9.0);
+  implications.addVLB(2, 0, 6.0, 0.0);
+
+  presolve::HighsPostsolveStack& postsolve_stack =
+      mipsolver.mipdata_->postSolveStack;
+
+  presolve::HPresolve presolve;
+  presolve.setInput(mipsolver, -1);
+  REQUIRE(presolve.okSetupPresolveDataStructures());
+  HighsModelStatus status = presolve.run(postsolve_stack);
+  REQUIRE(status == HighsModelStatus::kInfeasible);
+
+  HighsTaskExecutor::shutdown(true);
+}
+
 TEST_CASE("test-impl-aware-paper-example-6", "[highs_test_presolve_rules]") {
   // Chen et al. 2026, Example 6: non-binary variable NOT in the row
   // has its lower bound tightened via implications from binaries in the row.

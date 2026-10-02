@@ -10672,11 +10672,15 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
       const HighsCDouble& weightLower = binVar.value().weightLower;
       const HighsCDouble& weightUpper = binVar.value().weightUpper;
 
-      if (weightLower > threshold + primal_feastol) {
+      bool lowerInfeasible = weightLower > threshold + primal_feastol;
+      bool upperInfeasible = weightUpper > threshold + primal_feastol;
+      // neither value of the binary satisfies the row
+      if (lowerInfeasible && upperInfeasible) return Result::kPrimalInfeasible;
+      if (lowerInfeasible) {
         numVarsFixed++;
         trackColChange(col);
         HPRESOLVE_CHECKED_CALL(fixColToUpper(postsolve_stack, col));
-      } else if (weightUpper > threshold + primal_feastol) {
+      } else if (upperInfeasible) {
         numVarsFixed++;
         trackColChange(col);
         HPRESOLVE_CHECKED_CALL(fixColToLower(postsolve_stack, col));
