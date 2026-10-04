@@ -10139,12 +10139,25 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
     bool isLowerType;
   };
 
+  struct ImpliedBoundKey {
+    HighsInt binCol;
+    HighsInt binVal;
+    HighsInt nonBinCol;
+    bool operator==(const ImpliedBoundKey& other) const {
+      return binCol == other.binCol && binVal == other.binVal &&
+             nonBinCol == other.nonBinCol;
+    }
+  };
+
   // data structures
   HighsHashTable<HighsInt, VariableData> binNonZeros;
   HighsHashTable<HighsInt, VariableData> nonBinNonZeros;
   std::vector<HighsInt> sortedBins;
   std::vector<HighsCliqueTable::CliqueVar> candidates;
   std::vector<Breakpoint> breakpoints;
+  // bounds on non-binaries implied by binaries
+  HighsHashTable<ImpliedBoundKey, HighsImplications::Implication> impliedBounds;
+  std::vector<HighsInt> liftedBins;
   std::vector<HighsInt> modifiedRows;
   std::vector<HighsBool> modifiedRowFlags;
   std::vector<HighsInt> objInds;
@@ -10247,7 +10260,73 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
                            : binNonZeros[clqvar.col].weightLower;
   };
 
+  auto addImpliedBound = [&](HighsInt binCol, HighsInt binVal,
+                             HighsInt nonBinCol, double lb, double ub) {
+    // keep the tightest bounds
+    HighsImplications::Implication& bound =
+        impliedBounds[ImpliedBoundKey{binCol, binVal, nonBinCol}];
+    bound.lb = std::max(bound.lb, lb);
+    bound.ub = std::min(bound.ub, ub);
+  };
+
+  auto addVarBounds = [&](HighsInt col) {
+    // bounds on a non-binary implied by variable bound constraints
+    implications.getVlbs(col).for_each(
+        [&](HighsInt binCol, const HighsImplications::VarBound& vlb) {
+          if (colDeleted[binCol] || !isBinary(binCol)) return;
+          // x_bin = 1 --> x_j >= coef + constant
+          addImpliedBound(binCol, 1, col, vlb.coef + vlb.constant, kHighsInf);
+          // x_bin = 0 --> x_j >= constant
+          addImpliedBound(binCol, 0, col, vlb.constant, kHighsInf);
+        });
+    implications.getVubs(col).for_each(
+        [&](HighsInt binCol, const HighsImplications::VarBound& vub) {
+          if (colDeleted[binCol] || !isBinary(binCol)) return;
+          // x_bin = 1 --> x_j <= coef + constant
+          addImpliedBound(binCol, 1, col, -kHighsInf, vub.coef + vub.constant);
+          // x_bin = 0 --> x_j <= constant
+          addImpliedBound(binCol, 0, col, -kHighsInf, vub.constant);
+        });
+  };
+
+  auto addBinaryImplications = [&](HighsInt binCol, bool discover) {
+    // bounds on non-binaries implied by a binary. if requested, non-binary
+    // variables outside the row are discovered; their bounds can be tightened
+    // via the piecewise walk even though their row coefficient is zero
+    for (HighsInt val = 0; val <= 1; ++val) {
+      implications.getImplications(binCol, val)
+          .for_each([&](HighsInt targetCol,
+                        const HighsImplications::Implication& impl) {
+            if (colDeleted[targetCol] || isBinary(targetCol)) return;
+            if (nonBinNonZeros.find(targetCol) == nullptr) {
+              if (!discover || model->col_lower_[targetCol] <= -kHighsInf ||
+                  model->col_upper_[targetCol] >= kHighsInf)
+                return;
+              nonBinNonZeros[targetCol] = VariableData(0.0);
+              addVarBounds(targetCol);
+            }
+            addImpliedBound(binCol, val, targetCol, impl.lb, impl.ub);
+          });
+    }
+  };
+
+  auto collectImpliedBounds = [&]() {
+    // collect the bounds on non-binaries implied by the binaries in the row,
+    // merging variable bound constraints and implications
+    impliedBounds.clear();
+    for (const auto& nz : nonBinNonZeros) addVarBounds(nz.key());
+    for (const auto& binVar : binNonZeros)
+      addBinaryImplications(binVar.key(), true);
+  };
+
   auto updateBinaryWeights = [&](double threshold) {
+    // binaries outside the row that are added by lifting
+    liftedBins.clear();
+    auto getLiftedBinary = [&](HighsInt binCol) -> VariableData& {
+      if (binNonZeros.find(binCol) == nullptr) liftedBins.push_back(binCol);
+      return binNonZeros[binCol];
+    };
+
     // consider variable bound constraints
     for (const auto& nz : nonBinNonZeros) {
       HighsInt col = nz.key();
@@ -10261,10 +10340,12 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
               if (colDeleted[binCol] || !isBinary(binCol)) return;
               // x_bin = 1 --> x_j <= coef + constant
               HighsCDouble liftOneVal = val * (vub.coef + vub.constant - ub);
-              if (liftOneVal > 0) binNonZeros[binCol].updateUpper(liftOneVal);
+              if (liftOneVal > 0)
+                getLiftedBinary(binCol).updateUpper(liftOneVal);
               // x_bin = 0 --> x_j <= constant
               HighsCDouble liftZeroVal = val * (vub.constant - ub);
-              if (liftZeroVal > 0) binNonZeros[binCol].updateLower(liftZeroVal);
+              if (liftZeroVal > 0)
+                getLiftedBinary(binCol).updateLower(liftZeroVal);
             });
       } else {
         // check VLBs
@@ -10275,32 +10356,18 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
               if (colDeleted[binCol] || !isBinary(binCol)) return;
               // x_bin = 1 --> x_j >= coef + constant
               HighsCDouble liftOneVal = val * (vlb.coef + vlb.constant - lb);
-              if (liftOneVal > 0) binNonZeros[binCol].updateUpper(liftOneVal);
+              if (liftOneVal > 0)
+                getLiftedBinary(binCol).updateUpper(liftOneVal);
               // x_bin = 0 --> x_j >= constant
               HighsCDouble liftZeroVal = val * (vlb.constant - lb);
-              if (liftZeroVal > 0) binNonZeros[binCol].updateLower(liftZeroVal);
+              if (liftZeroVal > 0)
+                getLiftedBinary(binCol).updateLower(liftZeroVal);
             });
       }
     }
 
-    // discover non-binary variables outside the row that have implications
-    // from binaries in the row; their bounds can be tightened via the
-    // piecewise walk even though their row coefficient is zero
-    for (const auto& binVar : binNonZeros) {
-      HighsInt binCol = binVar.key();
-      for (HighsInt val = 0; val <= 1; ++val) {
-        implications.getImplications(binCol, val)
-            .for_each([&](HighsInt targetCol,
-                          const HighsImplications::Implication& impl) {
-              if (colDeleted[targetCol] || isBinary(targetCol)) return;
-              if (nonBinNonZeros.find(targetCol) != nullptr) return;
-              if (model->col_lower_[targetCol] <= -kHighsInf ||
-                  model->col_upper_[targetCol] >= kHighsInf)
-                return;
-              nonBinNonZeros[targetCol] = VariableData(0.0);
-            });
-      }
-    }
+    // collect implied bounds of the lifted binaries
+    for (HighsInt binCol : liftedBins) addBinaryImplications(binCol, true);
 
     // consider cliques: sort binaries for early termination.
     // few clique connections first (cheap), large coefficients last.
@@ -10346,6 +10413,12 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
           HighsCliqueTable::CliqueVar(col, val < 0 ? 1 : 0),
           [&](HighsCliqueTable::CliqueVar neighbor) {
             if (colDeleted[neighbor.col]) return;
+            // collect implied bounds of binaries outside the row; no
+            // discovery since the non-binaries have been loaded already
+            if (binNonZeros.find(neighbor.col) == nullptr) {
+              binNonZeros[neighbor.col] = VariableData();
+              addBinaryImplications(neighbor.col, false);
+            }
             HighsCDouble update(absval);
             if (neighbor.val == 1)
               binNonZeros[neighbor.col].updateUpper(update);
@@ -10404,56 +10477,72 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
         // "simulate" setting v1 and v2 active: what is the effect on the
         // constraint's minimum activity?
         //
-        // binary contributions: add |a_j| for each binary forced away from
-        // its min-contribution value when v1 or v2 is active (via clique)
-        HighsCDouble sum = 0;
-        for (const auto& bin : binNonZeros) {
-          HighsInt bcol = bin.key();
-          double bval = bin.value().val;
-          double absbval = std::abs(bval);
-          if (absbval == 0.0) continue;
-
-          // (col, val) setting that minimises this binary's contribution
-          HighsCliqueTable::CliqueVar minContribCliqueVar(bcol,
-                                                          bval < 0 ? 1 : 0);
-
-          // binary is forced away from min-contribution if v1 or v2
-          // is the complement, or shares a clique with it
-          if (v1 == minContribCliqueVar.complement() ||
-              v2 == minContribCliqueVar.complement() ||
-              cliquetable.haveCommonClique(v1, minContribCliqueVar) ||
-              cliquetable.haveCommonClique(v2, minContribCliqueVar))
-            sum += absbval;
-        }
-
         // non-binary contributions: when v1 or v2 is active, implied bounds
         // may tighten a non-binary's feasible range, increasing its minimum
-        // contribution to the row. add this excess over the standard bound,
-        // taking the max of v1 and v2 to avoid double-counting.
+        // contribution to the row. intersect the bounds implied by v1 and v2
+        // and add the excess over the standard bound. if the intersection is
+        // empty, v1 and v2 imply contradicting bounds and form a clique
+        // independently of the row.
+        HighsCDouble sum = 0;
+        bool conflict = false;
         for (const auto& nz : nonBinNonZeros) {
           HighsInt col = nz.key();
           double val = nz.value().val;
-          HighsCDouble best = 0.0;
+          double impliedLower = model->col_lower_[col];
+          double impliedUpper = model->col_upper_[col];
           for (const auto& v : {v1, v2}) {
-            const auto* impl =
-                implications.getImplications(v.col, v.val).find(col);
+            const auto* impl = impliedBounds.find(
+                ImpliedBoundKey{static_cast<HighsInt>(v.col),
+                                static_cast<HighsInt>(v.val), col});
             if (impl == nullptr) continue;
-            // compute excess activity from implied bound over standard bound:
-            // a_j > 0: use implied lower bound, a_j < 0: use implied upper
-            HighsCDouble change = 0.0;
-            if (val > 0 && impl->lb > -kHighsInf)
-              change = val * (static_cast<HighsCDouble>(impl->lb) -
-                              model->col_lower_[col]);
-            else if (val < 0 && impl->ub < kHighsInf)
-              change = val * (static_cast<HighsCDouble>(impl->ub) -
-                              model->col_upper_[col]);
-            best = max(best, change);
+            impliedLower = std::max(impliedLower, impl->lb);
+            impliedUpper = std::min(impliedUpper, impl->ub);
           }
-          sum += best;
+          if (model->integrality_[col] != HighsVarType::kContinuous) {
+            impliedLower = std::ceil(impliedLower - primal_feastol);
+            impliedUpper = std::floor(impliedUpper + primal_feastol);
+          }
+          if (impliedLower > impliedUpper + primal_feastol) {
+            conflict = true;
+            break;
+          }
+          // a_j > 0: use implied lower bound, a_j < 0: use implied upper.
+          // the standard bound is finite since addNonZero rejects columns
+          // with an infinite bound on the min-activity side
+          if (val > 0)
+            sum += val * (static_cast<HighsCDouble>(impliedLower) -
+                          model->col_lower_[col]);
+          else if (val < 0)
+            sum += val * (static_cast<HighsCDouble>(impliedUpper) -
+                          model->col_upper_[col]);
         }
 
-        // combined weight exceeds threshold: v1 and v2 form a clique
-        if (sum > threshold + primal_feastol) {
+        // binary contributions: add |a_j| for each binary forced away from
+        // its min-contribution value when v1 or v2 is active (via clique)
+        if (!conflict) {
+          for (const auto& bin : binNonZeros) {
+            HighsInt bcol = bin.key();
+            double bval = bin.value().val;
+            double absbval = std::abs(bval);
+            if (absbval == 0.0) continue;
+
+            // (col, val) setting that minimises this binary's contribution
+            HighsCliqueTable::CliqueVar minContribCliqueVar(bcol,
+                                                            bval < 0 ? 1 : 0);
+
+            // binary is forced away from min-contribution if v1 or v2
+            // is the complement, or shares a clique with it
+            if (v1 == minContribCliqueVar.complement() ||
+                v2 == minContribCliqueVar.complement() ||
+                cliquetable.haveCommonClique(v1, minContribCliqueVar) ||
+                cliquetable.haveCommonClique(v2, minContribCliqueVar))
+              sum += absbval;
+          }
+        }
+
+        // contradicting implied bounds or combined weight exceeds threshold:
+        // v1 and v2 form a clique
+        if (conflict || sum > threshold + primal_feastol) {
           std::vector<HighsCliqueTable::CliqueVar> clique = {v1, v2};
           cliquetable.addClique(*mipsolver, clique.data(), 2);
           numCliquesAdded++;
@@ -10494,7 +10583,7 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
         if ((binVal < 0 || val == 1) && (binVal > 0 || val == 0)) continue;
 
         const auto* impl =
-            implications.getImplications(binCol, val).find(ninBinCol);
+            impliedBounds.find(ImpliedBoundKey{binCol, val, ninBinCol});
         if (impl == nullptr) continue;
 
         if (model->col_lower_[ninBinCol] > -kHighsInf &&
@@ -10663,6 +10752,9 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
   };
 
   auto checkRow = [&](double threshold) {
+    // collect implied bounds on non-binaries
+    collectImpliedBounds();
+
     // lift / update binary weights
     updateBinaryWeights(threshold);
 
