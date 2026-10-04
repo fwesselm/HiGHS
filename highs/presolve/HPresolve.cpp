@@ -10216,6 +10216,13 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
     return Result::kOk;
   };
 
+  auto isBinary = [&](HighsInt col) {
+    // implicit integers are binary as well, consistent with the clique table
+    // and the implications
+    return model->integrality_[col] != HighsVarType::kContinuous &&
+           model->col_lower_[col] == 0.0 && model->col_upper_[col] == 1.0;
+  };
+
   auto clearChangedRowFlags = [&]() {
     for (HighsInt row : modifiedRows) modifiedRowFlags[row] = false;
     objectiveAffected = false;
