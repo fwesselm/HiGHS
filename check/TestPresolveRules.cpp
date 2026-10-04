@@ -1446,7 +1446,8 @@ TEST_CASE("test-impl-aware-nonbinary-tightening",
   // Standard propagation: min_activity=0, threshold=8, so y <= 8.
   // VI-aware: when y > 5, the implication x0=0 => y >= 9 means x0=0
   // is infeasible, forcing x0=1.  Then 3+y <= 8 gives y <= 5.
-  // The piecewise walk at the upper endpoint detects this.
+  // The piecewise walk at the upper endpoint detects this. the implication
+  // also lifts x0.weightLower to 9 > 8, so x0 is fixed to 1 and removed.
   HighsLp lp;
   lp.num_col_ = 2;
   lp.num_row_ = 1;
@@ -1500,9 +1501,18 @@ TEST_CASE("test-impl-aware-nonbinary-tightening",
   HighsModelStatus status = presolve.run(postsolve_stack);
   REQUIRE(status == HighsModelStatus::kNotset);
 
-  // The piecewise walk should tighten y's upper bound from 10 to 5
-  REQUIRE(mipsolver.model_->col_upper_[1] <= 5.0 + 1e-6);
-  REQUIRE(mipsolver.model_->col_upper_[1] >= 5.0 - 1e-6);
+  // x0 is fixed and removed, so y is at presolved index 0. the piecewise
+  // walk should tighten y's upper bound from 10 to 5
+  REQUIRE(mipsolver.model_->num_col_ == 1);
+  REQUIRE(mipsolver.model_->col_upper_[0] <= 5.0 + 1e-6);
+  REQUIRE(mipsolver.model_->col_upper_[0] >= 5.0 - 1e-6);
+
+  // x0 is restored to 1 by postsolve
+  HighsSolution sol;
+  sol.value_valid = true;
+  sol.col_value = {5.0};
+  postsolve_stack.undoPrimal(options, sol);
+  REQUIRE(sol.col_value[0] >= 1.0 - 1e-6);
 
   HighsTaskExecutor::shutdown(true);
 }
@@ -1730,9 +1740,10 @@ TEST_CASE("test-impl-aware-fixed-col", "[highs_test_presolve_rules]") {
   // implication: x0=0 => y >= 9
   //
   // the fixed column contributes 2 to the minimum activity, so the threshold
-  // is 8 and the result equals test-impl-aware-nonbinary-tightening: y <= 5.
-  // ignoring z's contribution would give threshold 10 and y <= 7. z itself
-  // must stay fixed at 1 and x0 must not be fixed.
+  // is 8 and the result equals test-impl-aware-nonbinary-tightening: x0 is
+  // fixed to 1 (x0.weightLower = 9 > 8) and y <= 5. ignoring z's
+  // contribution would give threshold 10, x0 would not be fixed and y <= 7.
+  // z itself must stay fixed at 1.
   HighsLp lp;
   lp.num_col_ = 3;
   lp.num_row_ = 1;
@@ -1787,14 +1798,19 @@ TEST_CASE("test-impl-aware-fixed-col", "[highs_test_presolve_rules]") {
   HighsModelStatus status = presolve.run(postsolve_stack);
   REQUIRE(status == HighsModelStatus::kNotset);
 
-  // no column is removed, so indices are unchanged
-  REQUIRE(mipsolver.model_->num_col_ == 3);
-  REQUIRE(mipsolver.model_->col_lower_[0] == 0.0);
-  REQUIRE(mipsolver.model_->col_upper_[0] == 1.0);
-  REQUIRE(mipsolver.model_->col_upper_[1] <= 5.0 + 1e-6);
-  REQUIRE(mipsolver.model_->col_upper_[1] >= 5.0 - 1e-6);
-  REQUIRE(mipsolver.model_->col_lower_[2] == 1.0);
-  REQUIRE(mipsolver.model_->col_upper_[2] == 1.0);
+  // x0 is fixed and removed, so y and z are at presolved indices 0 and 1
+  REQUIRE(mipsolver.model_->num_col_ == 2);
+  REQUIRE(mipsolver.model_->col_upper_[0] <= 5.0 + 1e-6);
+  REQUIRE(mipsolver.model_->col_upper_[0] >= 5.0 - 1e-6);
+  REQUIRE(mipsolver.model_->col_lower_[1] == 1.0);
+  REQUIRE(mipsolver.model_->col_upper_[1] == 1.0);
+
+  // x0 is restored to 1 by postsolve
+  HighsSolution sol;
+  sol.value_valid = true;
+  sol.col_value = {5.0, 1.0};
+  postsolve_stack.undoPrimal(options, sol);
+  REQUIRE(sol.col_value[0] >= 1.0 - 1e-6);
 
   HighsTaskExecutor::shutdown(true);
 }
@@ -1810,9 +1826,9 @@ TEST_CASE("test-impl-aware-objective-cutoff", "[highs_test_presolve_rules]") {
   //
   // the objective bound 14 gives upper_limit = 14 in the original frame, so
   // 3*x0 + y + 2*z <= 14 - 4 = 10. z contributes 2 to the minimum, so the
-  // threshold is 8 and, as in test-impl-aware-nonbinary-tightening, y <= 5.
-  // ignoring the offset (threshold 12) or z (threshold 10) gives a weaker
-  // bound on y.
+  // threshold is 8 and, as in test-impl-aware-nonbinary-tightening, x0 is
+  // fixed to 1 and y <= 5. ignoring the offset (threshold 12) or z
+  // (threshold 10) leaves x0 unfixed and gives a weaker bound on y.
   HighsLp lp;
   lp.num_col_ = 3;
   lp.num_row_ = 1;
@@ -1870,14 +1886,19 @@ TEST_CASE("test-impl-aware-objective-cutoff", "[highs_test_presolve_rules]") {
   HighsModelStatus status = presolve.run(postsolve_stack);
   REQUIRE(status == HighsModelStatus::kNotset);
 
-  // no column is removed, so indices are unchanged
-  REQUIRE(mipsolver.model_->num_col_ == 3);
-  REQUIRE(mipsolver.model_->col_lower_[0] == 0.0);
-  REQUIRE(mipsolver.model_->col_upper_[0] == 1.0);
-  REQUIRE(mipsolver.model_->col_upper_[1] <= 5.0 + 1e-6);
-  REQUIRE(mipsolver.model_->col_upper_[1] >= 5.0 - 1e-6);
-  REQUIRE(mipsolver.model_->col_lower_[2] == 1.0);
-  REQUIRE(mipsolver.model_->col_upper_[2] == 1.0);
+  // x0 is fixed and removed, so y and z are at presolved indices 0 and 1
+  REQUIRE(mipsolver.model_->num_col_ == 2);
+  REQUIRE(mipsolver.model_->col_upper_[0] <= 5.0 + 1e-6);
+  REQUIRE(mipsolver.model_->col_upper_[0] >= 5.0 - 1e-6);
+  REQUIRE(mipsolver.model_->col_lower_[1] == 1.0);
+  REQUIRE(mipsolver.model_->col_upper_[1] == 1.0);
+
+  // x0 is restored to 1 by postsolve
+  HighsSolution sol;
+  sol.value_valid = true;
+  sol.col_value = {5.0, 1.0};
+  postsolve_stack.undoPrimal(options, sol);
+  REQUIRE(sol.col_value[0] >= 1.0 - 1e-6);
 
   HighsTaskExecutor::shutdown(true);
 }
@@ -2276,7 +2297,8 @@ TEST_CASE("test-impl-aware-nonbinary-tightening-complemented",
   // Standard propagation: threshold=8, so ȳ >= -8 (no tightening).
   // VI-aware: when ȳ < 5, x0=0 => ȳ <= 1 forces x0=1 when ȳ > 1.
   // Then 3 - ȳ ≤ -2 gives ȳ >= 5.
-  // The piecewise walk at the lower endpoint detects this.
+  // The piecewise walk at the lower endpoint detects this. the implication
+  // also lifts x0.weightLower to 9 > 8, so x0 is fixed to 1 and removed.
   HighsLp lp;
   lp.num_col_ = 2;
   lp.num_row_ = 1;
@@ -2330,9 +2352,18 @@ TEST_CASE("test-impl-aware-nonbinary-tightening-complemented",
   HighsModelStatus status = presolve.run(postsolve_stack);
   REQUIRE(status == HighsModelStatus::kNotset);
 
-  // ȳ lower bound tightened from 0 to 5 (original: y upper bound 10→5)
-  REQUIRE(mipsolver.model_->col_lower_[1] >= 5.0 - 1e-6);
-  REQUIRE(mipsolver.model_->col_lower_[1] <= 5.0 + 1e-6);
+  // x0 is fixed and removed, so ȳ is at presolved index 0. ȳ lower bound
+  // tightened from 0 to 5 (original: y upper bound 10→5)
+  REQUIRE(mipsolver.model_->num_col_ == 1);
+  REQUIRE(mipsolver.model_->col_lower_[0] >= 5.0 - 1e-6);
+  REQUIRE(mipsolver.model_->col_lower_[0] <= 5.0 + 1e-6);
+
+  // x0 is restored to 1 by postsolve
+  HighsSolution sol;
+  sol.value_valid = true;
+  sol.col_value = {5.0};
+  postsolve_stack.undoPrimal(options, sol);
+  REQUIRE(sol.col_value[0] >= 1.0 - 1e-6);
 
   HighsTaskExecutor::shutdown(true);
 }

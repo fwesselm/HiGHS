@@ -10305,69 +10305,70 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
               nonBinNonZeros[targetCol] = VariableData(0.0);
               addVarBounds(targetCol);
             }
+            assert(nonBinNonZeros.find(targetCol) != nullptr);
             addImpliedBound(binCol, val, targetCol, impl.lb, impl.ub);
           });
     }
   };
 
+  auto computeLift = [&](HighsInt nonBinCol,
+                         const HighsImplications::Implication& impl) {
+    // increase of a non-binary's minimum contribution to the row due to an
+    // implied bound: a_j > 0 uses the implied lower bound, a_j < 0 the
+    // implied upper bound
+    const VariableData* nonBinVar = nonBinNonZeros.find(nonBinCol);
+    // implied bounds are only collected for loaded non-binaries
+    assert(nonBinVar != nullptr);
+    double val = nonBinVar->val;
+    // addNonZero rejects columns with an infinite bound on the
+    // min-activity side
+    assert(val <= 0 || model->col_lower_[nonBinCol] > -kHighsInf);
+    assert(val >= 0 || model->col_upper_[nonBinCol] < kHighsInf);
+    if (val > 0 && impl.lb > -kHighsInf)
+      return val * (static_cast<HighsCDouble>(impl.lb) -
+                    model->col_lower_[nonBinCol]);
+    if (val < 0 && impl.ub < kHighsInf)
+      return val * (static_cast<HighsCDouble>(impl.ub) -
+                    model->col_upper_[nonBinCol]);
+    return HighsCDouble(0.0);
+  };
+
   auto collectImpliedBounds = [&]() {
-    // collect the bounds on non-binaries implied by the binaries in the row,
-    // merging variable bound constraints and implications
+    // collect the bounds on non-binaries implied by binaries, merging
+    // variable bound constraints and implications
     impliedBounds.clear();
     for (const auto& nz : nonBinNonZeros) addVarBounds(nz.key());
     for (const auto& binVar : binNonZeros)
       addBinaryImplications(binVar.key(), true);
+
+    // binaries outside the row whose variable bounds lift them; their
+    // implications may lift them further
+    liftedBins.clear();
+    for (const auto& entry : impliedBounds) {
+      HighsInt binCol = entry.key().binCol;
+      if (binNonZeros.find(binCol) != nullptr) continue;
+      if (computeLift(entry.key().nonBinCol, entry.value()) <= 0) continue;
+      liftedBins.push_back(binCol);
+    }
+    // a binary may lift several non-binaries
+    pdqsort(liftedBins.begin(), liftedBins.end());
+    liftedBins.erase(std::unique(liftedBins.begin(), liftedBins.end()),
+                     liftedBins.end());
+    for (HighsInt binCol : liftedBins) addBinaryImplications(binCol, true);
   };
 
   auto updateBinaryWeights = [&](double threshold) {
-    // binaries outside the row that are added by lifting
-    liftedBins.clear();
-    auto getLiftedBinary = [&](HighsInt binCol) -> VariableData& {
-      if (binNonZeros.find(binCol) == nullptr) liftedBins.push_back(binCol);
-      return binNonZeros[binCol];
-    };
-
-    // consider variable bound constraints
-    for (const auto& nz : nonBinNonZeros) {
-      HighsInt col = nz.key();
-      double val = nz.value().val;
-      if (val < 0) {
-        // check VUBs
-        HighsCDouble ub = model->col_upper_[col];
-        implications.getVubs(col).for_each(
-            [&](HighsInt binCol, const HighsImplications::VarBound& vub) {
-              // skip deleted or fixed binary variables
-              if (colDeleted[binCol] || !isBinary(binCol)) return;
-              // x_bin = 1 --> x_j <= coef + constant
-              HighsCDouble liftOneVal = val * (vub.coef + vub.constant - ub);
-              if (liftOneVal > 0)
-                getLiftedBinary(binCol).updateUpper(liftOneVal);
-              // x_bin = 0 --> x_j <= constant
-              HighsCDouble liftZeroVal = val * (vub.constant - ub);
-              if (liftZeroVal > 0)
-                getLiftedBinary(binCol).updateLower(liftZeroVal);
-            });
-      } else {
-        // check VLBs
-        HighsCDouble lb = model->col_lower_[col];
-        implications.getVlbs(col).for_each(
-            [&](HighsInt binCol, const HighsImplications::VarBound& vlb) {
-              // skip deleted or fixed binary variables
-              if (colDeleted[binCol] || !isBinary(binCol)) return;
-              // x_bin = 1 --> x_j >= coef + constant
-              HighsCDouble liftOneVal = val * (vlb.coef + vlb.constant - lb);
-              if (liftOneVal > 0)
-                getLiftedBinary(binCol).updateUpper(liftOneVal);
-              // x_bin = 0 --> x_j >= constant
-              HighsCDouble liftZeroVal = val * (vlb.constant - lb);
-              if (liftZeroVal > 0)
-                getLiftedBinary(binCol).updateLower(liftZeroVal);
-            });
-      }
+    // lift binaries: their implied bounds increase the minimum contribution
+    // of non-binaries to the row
+    for (const auto& entry : impliedBounds) {
+      const ImpliedBoundKey& key = entry.key();
+      HighsCDouble lift = computeLift(key.nonBinCol, entry.value());
+      if (lift <= 0) continue;
+      if (key.binVal == 1)
+        binNonZeros[key.binCol].updateUpper(lift);
+      else
+        binNonZeros[key.binCol].updateLower(lift);
     }
-
-    // collect implied bounds of the lifted binaries
-    for (HighsInt binCol : liftedBins) addBinaryImplications(binCol, true);
 
     // consider cliques: sort binaries for early termination.
     // few clique connections first (cheap), large coefficients last.
@@ -10488,6 +10489,10 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
         for (const auto& nz : nonBinNonZeros) {
           HighsInt col = nz.key();
           double val = nz.value().val;
+          // addNonZero rejects columns with an infinite bound on the
+          // min-activity side
+          assert(val <= 0 || model->col_lower_[col] > -kHighsInf);
+          assert(val >= 0 || model->col_upper_[col] < kHighsInf);
           double impliedLower = model->col_lower_[col];
           double impliedUpper = model->col_upper_[col];
           for (const auto& v : {v1, v2}) {
@@ -10502,10 +10507,8 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
             impliedLower = std::ceil(impliedLower - primal_feastol);
             impliedUpper = std::floor(impliedUpper + primal_feastol);
           }
-          if (impliedLower > impliedUpper + primal_feastol) {
-            conflict = true;
-            break;
-          }
+          conflict = impliedLower > impliedUpper + primal_feastol;
+          if (conflict) break;
           // a_j > 0: use implied lower bound, a_j < 0: use implied upper.
           // the standard bound is finite since addNonZero rejects columns
           // with an infinite bound on the min-activity side
