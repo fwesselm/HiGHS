@@ -57,6 +57,9 @@ class HPresolveCliqueTable {
                  HighsInt numcliquevars,
                  std::vector<HighsCliqueTable::CliqueVar>& impliedFixings);
 
+  bool haveCommonClique(HighsCliqueTable::CliqueVar v1,
+                        HighsCliqueTable::CliqueVar v2) const;
+
   bool substituteCol(HighsInt substCol, HighsCliqueTable::CliqueVar replacement,
                      std::vector<HighsCliqueTable::CliqueVar>& impliedFixings);
 };

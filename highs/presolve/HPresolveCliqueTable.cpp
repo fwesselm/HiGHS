@@ -203,6 +203,16 @@ bool HPresolveCliqueTable::addClique(const HighsMipSolver& mipsolver,
   return true;
 }
 
+bool HPresolveCliqueTable::haveCommonClique(CliqueVar v1, CliqueVar v2) const {
+  // cliques are stored for the replacement of substituted columns. the
+  // clique table may substitute columns when adding cliques, without
+  // presolve knowing, so substituted columns may still be active in presolve
+  // and their literals are no longer contained in any clique
+  table->resolveSubstitution(v1);
+  table->resolveSubstitution(v2);
+  return table->haveCommonClique(v1, v2);
+}
+
 bool HPresolveCliqueTable::substituteCol(
     const HighsInt substCol, const CliqueVar replacement,
     std::vector<CliqueVar>& impliedFixings) {
