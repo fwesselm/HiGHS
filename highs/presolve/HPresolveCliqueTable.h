@@ -52,6 +52,11 @@ class HPresolveCliqueTable {
 
   void eliminateCol(HighsInt col);
 
+  bool addClique(const HighsMipSolver& mipsolver,
+                 HighsCliqueTable::CliqueVar* cliquevars,
+                 HighsInt numcliquevars,
+                 std::vector<HighsCliqueTable::CliqueVar>& impliedFixings);
+
   bool substituteCol(HighsInt substCol, HighsCliqueTable::CliqueVar replacement,
                      std::vector<HighsCliqueTable::CliqueVar>& impliedFixings);
 };

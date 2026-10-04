@@ -1365,10 +1365,9 @@ TEST_CASE("test-impl-aware-conflict-clique", "[highs_test_presolve_rules]") {
   // VLBs: y >= 3*x0, y >= 3*x1
   // implications: x0=1 => z >= 6, x1=1 => z <= 4
   //
-  // threshold = 12, x0.weightUpper = x1.weightUpper = 4 + 3 = 7, so the pair
-  // passes the combined-weight test (14 > 12). its implied activity is only
-  // 4 + 4 + max(3, 3) = 11 <= 12, but x0=1 and x1=1 imply contradicting
-  // bounds on z (z >= 6 and z <= 4), so they form a clique.
+  // threshold = 12 and the implied activity of x0=1 and x1=1 is only
+  // 4 + 4 + max(3, 3) = 11 <= 12, but they imply contradicting bounds on z
+  // (z >= 6 and z <= 4), so they form a clique independently of the row.
   HighsLp lp;
   lp.num_col_ = 4;
   lp.num_row_ = 1;
@@ -1965,6 +1964,84 @@ TEST_CASE("test-impl-aware-binary-infeasible", "[highs_test_presolve_rules]") {
   REQUIRE(presolve.okSetupPresolveDataStructures());
   HighsModelStatus status = presolve.run(postsolve_stack);
   REQUIRE(status == HighsModelStatus::kInfeasible);
+
+  HighsTaskExecutor::shutdown(true);
+}
+
+TEST_CASE("test-impl-aware-infeasible-literal", "[highs_test_presolve_rules]") {
+  // binary fixing from a literal whose implied bounds contradict the bounds of
+  // a non-binary, independently of the row's threshold.
+  //
+  // row 0: x0 + y <= 10
+  // x0 binary; y continuous in [0, 10]; z continuous in [0, 4], not in any row
+  // implication: x0=0 => z >= 6
+  //
+  // the implication does not lift x0 since z has a zero coefficient, so
+  // x0.weightLower = 0 <= 10. but z >= 6 contradicts z <= 4, so x0=0 is
+  // infeasible and x0 is fixed to 1.
+  HighsLp lp;
+  lp.num_col_ = 3;
+  lp.num_row_ = 1;
+  lp.sense_ = ObjSense::kMinimize;
+  lp.col_cost_ = {0, 0, 0};
+  lp.col_lower_ = {0, 0, 0};
+  lp.col_upper_ = {1, 10, 4};
+  lp.integrality_ = {HighsVarType::kInteger, HighsVarType::kContinuous,
+                     HighsVarType::kContinuous};
+  lp.row_lower_ = {-kHighsInf};
+  lp.row_upper_ = {10};
+  lp.a_matrix_.format_ = MatrixFormat::kColwise;
+  lp.a_matrix_.num_col_ = 3;
+  lp.a_matrix_.num_row_ = 1;
+  lp.a_matrix_.start_ = {0, 1, 2, 2};
+  lp.a_matrix_.index_ = {0, 0};
+  lp.a_matrix_.value_ = {1, 1};
+
+  highs::parallel::initialize_scheduler(1);
+
+  Highs highs;
+  highs.setOptionValue("output_flag", dev_run);
+  highs.setOptionValue("presolve_rule_test",
+                       kPresolveRuleImplAwareConstrPropagation);
+  highs.passModel(lp);
+
+  HighsCallback callback(&highs);
+  const HighsOptions& options = highs.getOptions();
+  HighsSolution solution;
+  HighsProfiling profiling;
+
+  HighsMipSolver mipsolver(callback, options, lp, solution);
+  mipsolver.timer_.start();
+  profiling.initialize(mipsolver.timer_, true, true);
+  mipsolver.setProfiling(&profiling);
+  mipsolver.mipdata_ =
+      std::unique_ptr<HighsMipSolverData>(new HighsMipSolverData(mipsolver));
+  mipsolver.mipdata_->init();
+  mipsolver.mipdata_->setupDomainPropagation();
+
+  // x0=0 => z >= 6
+  HighsImplications& implications = mipsolver.mipdata_->implications;
+  implications.addImplication(0, 0, 2,
+                              HighsImplications::Implication{6.0, kHighsInf});
+
+  presolve::HighsPostsolveStack& postsolve_stack =
+      mipsolver.mipdata_->postSolveStack;
+
+  presolve::HPresolve presolve;
+  presolve.setInput(mipsolver, -1);
+  REQUIRE(presolve.okSetupPresolveDataStructures());
+  HighsModelStatus status = presolve.run(postsolve_stack);
+  REQUIRE(status == HighsModelStatus::kNotset);
+
+  // x0 is fixed and removed
+  REQUIRE(mipsolver.model_->num_col_ == 2);
+
+  // x0 is restored to 1 by postsolve
+  HighsSolution sol;
+  sol.value_valid = true;
+  sol.col_value.assign(mipsolver.model_->num_col_, 0.0);
+  postsolve_stack.undoPrimal(options, sol);
+  REQUIRE(sol.col_value[0] >= 1.0 - 1e-6);
 
   HighsTaskExecutor::shutdown(true);
 }

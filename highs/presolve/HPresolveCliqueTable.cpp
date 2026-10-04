@@ -11,6 +11,7 @@
 #include <cassert>
 
 #include "../extern/pdqsort/pdqsort.h"
+#include "mip/HighsMipSolverData.h"
 
 using CliqueVar = HighsCliqueTable::CliqueVar;
 using Clique = HighsCliqueTable::Clique;
@@ -174,6 +175,32 @@ void HPresolveCliqueTable::eliminateCol(const HighsInt col) {
     if (!table->inPresolveProbing)
       checkCompactClique(cliqueId, 10, activeSize, actualSize, false, -1);
   }
+}
+
+bool HPresolveCliqueTable::addClique(const HighsMipSolver& mipsolver,
+                                     CliqueVar* cliquevars,
+                                     const HighsInt numcliquevars,
+                                     std::vector<CliqueVar>& impliedFixings) {
+  // adding a clique may fix columns in the global domain, e.g. if the new
+  // clique and an existing one force a binary to a value
+  impliedFixings.clear();
+  HighsDomain& domain = mipsolver.mipdata_->getDomain();
+  const auto& domchgstack = domain.getDomainChangeStack();
+  HighsInt start = domchgstack.size();
+  table->addClique(mipsolver, cliquevars, numcliquevars);
+  if (domain.infeasible()) return false;
+  HighsInt end = domchgstack.size();
+
+  for (HighsInt k = start; k != end; ++k) {
+    HighsInt col = domchgstack[k].column;
+    if (!domain.isFixed(col)) continue;
+    if (domain.col_lower_[col] != 1.0 && domain.col_lower_[col] != 0.0)
+      continue;
+
+    HighsInt fixval = static_cast<HighsInt>(domain.col_lower_[col]);
+    impliedFixings.emplace_back(col, fixval);
+  }
+  return true;
 }
 
 bool HPresolveCliqueTable::substituteCol(

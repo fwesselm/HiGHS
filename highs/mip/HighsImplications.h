@@ -200,6 +200,10 @@ class HighsImplications {
       HighsInt col, HighsInt val) const {
     return implications[ImplIdx{col, val}];
   }
+  const HighsHashTree<HighsInt, bool>& getReverseImplications(
+      HighsInt col) const {
+    return reverseImplications[col];
+  }
   const HighsHashTree<HighsInt, VarBound>& getVlbs(HighsInt col) const {
     return vlbs[col];
   }
