@@ -10188,6 +10188,13 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
       objectiveAffected = true;
   };
 
+  auto fixCol = [&](HighsInt col, bool toUpper) {
+    numVarsFixed++;
+    trackColChange(col);
+    return toUpper ? fixColToUpper(postsolve_stack, col)
+                   : fixColToLower(postsolve_stack, col);
+  };
+
   auto addClique = [&](HighsCliqueTable::CliqueVar v1,
                        HighsCliqueTable::CliqueVar v2) {
     std::vector<HighsCliqueTable::CliqueVar> clique = {v1, v2};
@@ -10206,12 +10213,7 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
       if (val < model->col_lower_[col] - primal_feastol ||
           val > model->col_upper_[col] + primal_feastol)
         return Result::kPrimalInfeasible;
-      numVarsFixed++;
-      trackColChange(col);
-      if (fixing.val == 1)
-        HPRESOLVE_CHECKED_CALL(fixColToUpper(postsolve_stack, col));
-      else
-        HPRESOLVE_CHECKED_CALL(fixColToLower(postsolve_stack, col));
+      HPRESOLVE_CHECKED_CALL(fixCol(col, fixing.val == 1));
     }
     return Result::kOk;
   };
@@ -10446,12 +10448,7 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
         continue;
       }
       if (infeasible) {
-        numVarsFixed++;
-        trackColChange(key.binCol);
-        if (key.binVal == 1)
-          HPRESOLVE_CHECKED_CALL(fixColToLower(postsolve_stack, key.binCol));
-        else
-          HPRESOLVE_CHECKED_CALL(fixColToUpper(postsolve_stack, key.binCol));
+        HPRESOLVE_CHECKED_CALL(fixCol(key.binCol, key.binVal == 0));
         continue;
       }
       conflictKeys.push_back(key);
@@ -10650,7 +10647,7 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
         HighsCDouble sum = 0;
         for (const auto& nz : nonBinNonZeros) {
           HighsInt col = nz.key();
-          // intersect the bounds implied by v1 and v2 with the column's bounds
+          // start from the column's bounds; implied bounds may be looser
           HighsImplications::Implication intersection(model->col_lower_[col],
                                                       model->col_upper_[col]);
           for (const auto& v : {v1, v2}) {
@@ -10700,7 +10697,7 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
     return Result::kOk;
   };
 
-  auto collectBreakpoints = [&](HighsInt ninBinCol) {
+  auto collectBreakpoints = [&](HighsInt nonBinCol) {
     // the implied activity w(d) for non-binary x_r at value d is piecewise
     // linear: between breakpoints, it changes linearly with slope a_r (the
     // row coefficient). at breakpoints, discrete jumps occur because binary
@@ -10718,24 +10715,21 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
     for (const auto& binVar : binNonZeros) {
       HighsInt binCol = binVar.key();
       double binVal = binVar.value().val;
-      double absBinVal = std::abs(binVal);
+      // binaries outside the row cost nothing when forced away from a value
+      if (binVal == 0.0) continue;
 
       // look up implications from the binary's min-activity value:
       // a_i > 0: min at x_i = 0, a_i < 0: min at x_i = 1
-      for (HighsInt val = 0; val <= 1; val++) {
-        if ((binVal < 0 || val == 1) && (binVal > 0 || val == 0)) continue;
+      HighsInt val = binVal < 0 ? 1 : 0;
+      const auto* impl =
+          impliedBounds.find(ImpliedBoundKey{binCol, val, nonBinCol});
+      if (impl == nullptr) continue;
 
-        const auto* impl =
-            impliedBounds.find(ImpliedBoundKey{binCol, val, ninBinCol});
-        if (impl == nullptr) continue;
-
-        if (model->col_lower_[ninBinCol] > -kHighsInf &&
-            impl->lb > model->col_lower_[ninBinCol] + primal_feastol)
-          breakpoints.push_back({impl->lb, absBinVal, true});
-        if (model->col_upper_[ninBinCol] < kHighsInf &&
-            impl->ub < model->col_upper_[ninBinCol] - primal_feastol)
-          breakpoints.push_back({impl->ub, absBinVal, false});
-      }
+      double absBinVal = std::abs(binVal);
+      if (impl->lb > model->col_lower_[nonBinCol] + primal_feastol)
+        breakpoints.push_back({impl->lb, absBinVal, true});
+      if (impl->ub < model->col_upper_[nonBinCol] - primal_feastol)
+        breakpoints.push_back({impl->ub, absBinVal, false});
     }
     // sort by increasing threshold so computeBound can walk from either end
     pdqsort(breakpoints.begin(), breakpoints.end(),
@@ -10862,9 +10856,7 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
           if (nonBinColIsInteger)
             newLowerBnd = std::ceil(newLowerBnd - primal_feastol);
           if (newLowerBnd == model->col_upper_[nonBinCol]) {
-            numVarsFixed++;
-            trackColChange(nonBinCol);
-            HPRESOLVE_CHECKED_CALL(fixColToUpper(postsolve_stack, nonBinCol));
+            HPRESOLVE_CHECKED_CALL(fixCol(nonBinCol, true));
           } else if (nonBinColIsInteger) {
             numBoundsTightened++;
             trackColChange(nonBinCol);
@@ -10882,9 +10874,7 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
           if (nonBinColIsInteger)
             newUpperBnd = std::floor(newUpperBnd + primal_feastol);
           if (newUpperBnd == model->col_lower_[nonBinCol]) {
-            numVarsFixed++;
-            trackColChange(nonBinCol);
-            HPRESOLVE_CHECKED_CALL(fixColToLower(postsolve_stack, nonBinCol));
+            HPRESOLVE_CHECKED_CALL(fixCol(nonBinCol, false));
           } else if (nonBinColIsInteger) {
             numBoundsTightened++;
             trackColChange(nonBinCol);
@@ -10918,15 +10908,8 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
       bool upperInfeasible = weightUpper > threshold + primal_feastol;
       // neither value of the binary satisfies the row
       if (lowerInfeasible && upperInfeasible) return Result::kPrimalInfeasible;
-      if (lowerInfeasible) {
-        numVarsFixed++;
-        trackColChange(col);
-        HPRESOLVE_CHECKED_CALL(fixColToUpper(postsolve_stack, col));
-      } else if (upperInfeasible) {
-        numVarsFixed++;
-        trackColChange(col);
-        HPRESOLVE_CHECKED_CALL(fixColToLower(postsolve_stack, col));
-      }
+      if (lowerInfeasible || upperInfeasible)
+        HPRESOLVE_CHECKED_CALL(fixCol(col, lowerInfeasible));
     }
 
     // two-column clique extraction
