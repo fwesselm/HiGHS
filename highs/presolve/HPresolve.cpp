@@ -10485,7 +10485,9 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
           if (colDeleted[kj.binCol]) continue;
           HighsCliqueTable::CliqueVar v1(ki.binCol, ki.binVal);
           HighsCliqueTable::CliqueVar v2(kj.binCol, kj.binVal);
-          if (presolveCliqueTable.haveCommonClique(v1, v2)) continue;
+          // complementary literals of the same column cannot both be active
+          if (v1.col == v2.col || presolveCliqueTable.haveCommonClique(v1, v2))
+            continue;
           if (numCliquesAdded >= numNonzeros()) return Result::kOk;
           HPRESOLVE_CHECKED_CALL(addClique(v1, v2));
           // fixed by the clique table
@@ -10625,7 +10627,8 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
 
         // skip pair of variables if the column index is identical or they are
         // already in a clique together
-        if (presolveCliqueTable.haveCommonClique(v1, v2)) continue;
+        if (v1.col == v2.col || presolveCliqueTable.haveCommonClique(v1, v2))
+          continue;
 
         // combined weight cannot exceed threshold; since candidates are
         // sorted by decreasing weight, no later pair with v1 can either
@@ -10867,7 +10870,8 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
       if (!colDeleted[nonBinCol] && tightenLower) {
         double newLowerBnd;
         if (computeBound(nonBinVal, weightLower, lb, ub, HighsInt{1},
-                         newLowerBnd)) {
+                         newLowerBnd) &&
+            newLowerBnd > lb + primal_feastol) {
           if (nonBinColIsInteger)
             newLowerBnd = std::ceil(newLowerBnd - primal_feastol);
           if (newLowerBnd == model->col_upper_[nonBinCol]) {
@@ -10886,7 +10890,8 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
       if (!colDeleted[nonBinCol] && tightenUpper) {
         double newUpperBnd;
         if (computeBound(nonBinVal, weightUpper, ub, lb, HighsInt{-1},
-                         newUpperBnd)) {
+                         newUpperBnd) &&
+            newUpperBnd < ub - primal_feastol) {
           if (nonBinColIsInteger)
             newUpperBnd = std::floor(newUpperBnd + primal_feastol);
           if (newUpperBnd == model->col_lower_[nonBinCol]) {
