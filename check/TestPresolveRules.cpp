@@ -1278,16 +1278,17 @@ TEST_CASE("test-clique-implied-equality", "[highs_test_presolve_rules]") {
 }
 
 TEST_CASE("test-impl-aware-clique-extraction", "[highs_test_presolve_rules]") {
-  // Two-column clique discovered via implied bounds on non-binaries.
+  // two-column clique discovered via implied bounds on non-binaries.
   //
   // row 0: 3*x0 + 3*x1 + y1 + y2 <= 12
   // row 1: y1 >= 5*x0    (stored as -5*x0 + y1 >= 0)
   // row 2: y2 >= 5*x1    (stored as -5*x1 + y2 >= 0)
   // x0, x1 binary, y1, y2 continuous in [0, 10]
   //
-  // Standard clique extraction on row 0 fails: binary coefficients 3+3=6 < 12.
-  // Probing x0=1 gives y1 >= 5 but 3 + 3*x1 + 5 + y2 <= 12 doesn't fix x1.
-  // implAwareConstrPropagation uses both implications simultaneously:
+  // standard clique extraction on row 0 fails: binary coefficients 3+3=6 < 12.
+  // on row 0 alone, x0=1 gives y1 >= 5, but 3 + 3*x1 + 5 + y2 <= 12 does not
+  // fix x1 (probing would, via y2 <= 4 and row 2). implAwareConstrPropagation
+  // uses both implications on row 0 simultaneously:
   // combined weight = 3 + 3 + max(5,0) + max(0,5) = 16 > 12.
   HighsLp lp;
   lp.num_col_ = 4;
@@ -1328,8 +1329,10 @@ TEST_CASE("test-impl-aware-clique-extraction", "[highs_test_presolve_rules]") {
       std::unique_ptr<HighsMipSolverData>(new HighsMipSolverData(mipsolver));
   mipsolver.mipdata_->init();
   mipsolver.mipdata_->setupDomainPropagation();
+  // cliques are only added once cliques have been extracted (by probing)
+  mipsolver.mipdata_->cliquesExtracted = true;
 
-  // Manually populate VLBs and implications (normally done by probing)
+  // manually populate VLBs and implications (normally done by probing)
   HighsImplications& implications = mipsolver.mipdata_->implications;
   // x0=1 implies y1 >= 5 (VLB: y1 >= 5*x0)
   implications.addVLB(2, 0, 5.0, 0.0, 1);
@@ -1407,6 +1410,8 @@ TEST_CASE("test-impl-aware-conflict-clique", "[highs_test_presolve_rules]") {
       std::unique_ptr<HighsMipSolverData>(new HighsMipSolverData(mipsolver));
   mipsolver.mipdata_->init();
   mipsolver.mipdata_->setupDomainPropagation();
+  // cliques are only added once cliques have been extracted (by probing)
+  mipsolver.mipdata_->cliquesExtracted = true;
 
   // VLBs: y >= 3*x0, y >= 3*x1
   HighsImplications& implications = mipsolver.mipdata_->implications;
@@ -1436,17 +1441,18 @@ TEST_CASE("test-impl-aware-conflict-clique", "[highs_test_presolve_rules]") {
 
 TEST_CASE("test-impl-aware-nonbinary-tightening",
           "[highs_test_presolve_rules]") {
-  // Non-binary integer bound tightening via piecewise linear walk.
+  // non-binary integer bound tightening via piecewise linear walk.
   //
   // row 0: 3*x0 + y <= 8
   // x0 binary, y integer in [0, 10]
   // implication: x0=0 => y >= 9
   //
-  // Standard propagation: min_activity=0, threshold=8, so y <= 8.
-  // VI-aware: when y > 5, the implication x0=0 => y >= 9 means x0=0
-  // is infeasible, forcing x0=1.  Then 3+y <= 8 gives y <= 5.
-  // The piecewise walk at the upper endpoint detects this. the implication
-  // also lifts x0.weightLower to 9 > 8, so x0 is fixed to 1 and removed.
+  // standard propagation: min_activity=0, threshold=8, so y <= 8.
+  // VI-aware: for 5 < y < 9, the implication makes x0=0 infeasible, and
+  // x0=1 violates the row (3 + y > 8). for y >= 9 the row is violated as
+  // well. hence y <= 5, which the piecewise walk from the upper endpoint
+  // finds. the implication also lifts x0.weightLower to 9 > 8, so x0 is fixed
+  // to 1 and removed.
   HighsLp lp;
   lp.num_col_ = 2;
   lp.num_row_ = 1;
@@ -1486,7 +1492,7 @@ TEST_CASE("test-impl-aware-nonbinary-tightening",
   mipsolver.mipdata_->init();
   mipsolver.mipdata_->setupDomainPropagation();
 
-  // Manually add implication: x0=0 => y >= 9 (no VLB needed)
+  // manually add implication: x0=0 => y >= 9 (no VLB needed)
   HighsImplications& implications = mipsolver.mipdata_->implications;
   implications.addImplication(0, 0, 1,
                               HighsImplications::Implication{9.0, kHighsInf});
@@ -1525,10 +1531,10 @@ TEST_CASE("test-impl-aware-paper-example-3-5", "[highs_test_presolve_rules]") {
   // x1 and x4 have zero coefficient in the row.
   //
   // VIs (24a)-(24h); binary-binary VIs are cliques:
-  //   (24a) x1=0 => x2>=1        clique {x̄1, x̄2}
-  //   (24b) x1=0 => x3>=1        clique {x̄1, x̄3}
-  //   (24c-d) x1=0 => 0.4<=x5<=0.5
-  //   (24e) x1=1 => x4>=1        clique {x1, x̄4}
+  //   (24a) x1=0 => x2>=1        clique {x1=0, x2=0}
+  //   (24b) x1=0 => x3>=1        clique {x1=0, x3=0}
+  //   (24c)-(24d) x1=0 => 0.4<=x5<=0.5
+  //   (24e) x1=1 => x4>=1        clique {x1=1, x4=0}
   //   (24f) x5>0.5 => x2=0       x2=1 => x5<=0.5
   //   (24g) x5<1 => x2=1         x2=0 => x5>=1
   //   (24h) x5>2 => x3=1         x3=0 => x5<=2
@@ -1537,10 +1543,10 @@ TEST_CASE("test-impl-aware-paper-example-3-5", "[highs_test_presolve_rules]") {
   // propagation adds |1| + |0.9| = 1.9, so x1.weightLower = 2.1 > 2 and x1 is
   // fixed to 1. the paper's bound x5 <= 2.2 (Examples 4-5) is not derived:
   // bounds of continuous columns are not tightened, only fixed. the piecewise
-  // walk is tested in test-impl-aware-piecewise-walk. the paper also fixes
-  // x4 = 1 via (24e). here x4 stays free because fixings only propagate
-  // through the clique table once cliquesExtracted is set (by probing), which
-  // the rule test does not run.
+  // walk is tested in test-impl-aware-piecewise-walk. fixing x1 = 1 also
+  // fixes x4 = 1 via the clique from (24e), as in the paper. the clique table
+  // only changes x4's bounds; the fixed column would be removed by later
+  // presolve, which the rule test does not run.
   HighsLp lp;
   lp.num_col_ = 5;
   lp.num_row_ = 1;
@@ -1582,6 +1588,9 @@ TEST_CASE("test-impl-aware-paper-example-3-5", "[highs_test_presolve_rules]") {
       std::unique_ptr<HighsMipSolverData>(new HighsMipSolverData(mipsolver));
   mipsolver.mipdata_->init();
   mipsolver.mipdata_->setupDomainPropagation();
+  // fixings are only propagated through the clique table once cliques have
+  // been extracted (by probing)
+  mipsolver.mipdata_->cliquesExtracted = true;
 
   // cliques from (24a), (24b), (24e)
   HighsCliqueTable& cliquetable = mipsolver.mipdata_->cliquetable;
@@ -1615,6 +1624,10 @@ TEST_CASE("test-impl-aware-paper-example-3-5", "[highs_test_presolve_rules]") {
   // x1 is fixed and removed; presolved cols are x2(0), x3(1), x4(2), x5(3)
   REQUIRE(mipsolver.model_->num_col_ == 4);
 
+  // x4 is fixed to 1
+  REQUIRE(mipsolver.model_->col_lower_[2] == 1.0);
+  REQUIRE(mipsolver.model_->col_upper_[2] == 1.0);
+
   // x1 is restored to 1 by postsolve
   HighsSolution sol;
   sol.value_valid = true;
@@ -1635,7 +1648,7 @@ TEST_CASE("test-impl-aware-paper-example-3-5-geq",
   // x1 and x4 have zero coefficient in the row.
   //
   // cliques and implications as in test-impl-aware-paper-example-3-5.
-  // expected result is the same: x1 = 1.
+  // expected result is the same: x1 = 1 and x4 = 1.
   HighsLp lp;
   lp.num_col_ = 5;
   lp.num_row_ = 1;
@@ -1677,6 +1690,9 @@ TEST_CASE("test-impl-aware-paper-example-3-5-geq",
       std::unique_ptr<HighsMipSolverData>(new HighsMipSolverData(mipsolver));
   mipsolver.mipdata_->init();
   mipsolver.mipdata_->setupDomainPropagation();
+  // fixings are only propagated through the clique table once cliques have
+  // been extracted (by probing)
+  mipsolver.mipdata_->cliquesExtracted = true;
 
   // cliques from (24a), (24b), (24e)
   HighsCliqueTable& cliquetable = mipsolver.mipdata_->cliquetable;
@@ -1710,7 +1726,11 @@ TEST_CASE("test-impl-aware-paper-example-3-5-geq",
   // x1 is fixed and removed; presolved cols are x2(0), x3(1), x4(2), x5(3)
   REQUIRE(mipsolver.model_->num_col_ == 4);
 
-  // postsolve restores x1 = 1
+  // x4 is fixed to 1
+  REQUIRE(mipsolver.model_->col_lower_[2] == 1.0);
+  REQUIRE(mipsolver.model_->col_upper_[2] == 1.0);
+
+  // x1 is restored to 1 by postsolve
   HighsSolution sol;
   sol.value_valid = true;
   sol.col_value = {0.0, 0.0, 1.0, 1.0};
@@ -1731,8 +1751,9 @@ TEST_CASE("test-impl-aware-fixed-col", "[highs_test_presolve_rules]") {
   // the fixed column contributes 2 to the minimum activity, so the threshold
   // is 8 and the result equals test-impl-aware-nonbinary-tightening: x0 is
   // fixed to 1 (x0.weightLower = 9 > 8) and y <= 5. ignoring z's
-  // contribution would give threshold 10, x0 would not be fixed and y <= 7.
-  // z itself must stay fixed at 1.
+  // contribution would give threshold 10: x0 would not be fixed and y would
+  // not be tightened (y = 10 with x0 = 0 has weight 10 <= 10). z itself must
+  // stay fixed at 1.
   HighsLp lp;
   lp.num_col_ = 3;
   lp.num_row_ = 1;
@@ -1817,7 +1838,7 @@ TEST_CASE("test-impl-aware-objective-cutoff", "[highs_test_presolve_rules]") {
   // 3*x0 + y + 2*z <= 14 - 4 = 10. z contributes 2 to the minimum, so the
   // threshold is 8 and, as in test-impl-aware-nonbinary-tightening, x0 is
   // fixed to 1 and y <= 5. ignoring the offset (threshold 12) or z
-  // (threshold 10) leaves x0 unfixed and gives a weaker bound on y.
+  // (threshold 10) leaves x0 unfixed and y not tightened.
   HighsLp lp;
   lp.num_col_ = 3;
   lp.num_row_ = 1;
@@ -2037,35 +2058,38 @@ TEST_CASE("test-impl-aware-infeasible-literal", "[highs_test_presolve_rules]") {
 }
 
 TEST_CASE("test-impl-aware-paper-example-6", "[highs_test_presolve_rules]") {
-  // Chen et al. 2026, Example 6: non-binary variable NOT in the row
-  // has its lower bound tightened via implications from binaries in the row.
+  // Chen et al. 2026, Example 6: non-binary variable not in the row has its
+  // lower bound tightened via VIs to binaries in the row.
   //
-  // row 0: x1 + x2 <= 1.5
-  // x1(col0), x2(col1) binary; x3(col2) integer [0, 5], NOT in row
-  // Implications: x1=0 => x3>=3, x2=0 => x3>=3
+  // row 0: x1 + x2 + x3 + x4 + 0.1*x5 <= 2   (54a)
+  // x1-x5(col0-4) binary; x6(col5) integer [0, 4], not in row
+  // x6 is continuous in the paper, but continuous bounds are only fixed, not
+  // tightened. the bound lies on a breakpoint, so the result is the same.
+  // VIs (55a)-(55e) as implications: x1=0 => x6>=3, x2=0 => x6>=3,
+  // x3=0 => x6>=2, x4=0 => x6>=2, x5=0 => x6<=1
   //
-  // Discovery loop finds x3 via getImplications from x1 and x2.
-  // x3 gets nonBinVal=0 (zero coefficient). Breakpoints at {3,3}.
-  // weightLower = 2 > threshold = 1.5 → tighten lower bound.
-  // Walk from lb=0: at bp=3, first breakpoint deactivates, weight=1 <= 1.5.
-  // Result: x3 >= 3.
+  // weight of the row as a function of x6 = d: 4 on [0, 1], 4.1 on (1, 2),
+  // 2.1 on [2, 3), 0.1 at 3. the smallest d with weight <= 2 is 3, so
+  // x6 >= 3 (57). without (55e) the weight at d = 2 is 2, giving x6 >= 2 as
+  // in Achterberg et al. (2013) (56).
   HighsLp lp;
-  lp.num_col_ = 3;
+  lp.num_col_ = 6;
   lp.num_row_ = 1;
   lp.sense_ = ObjSense::kMinimize;
-  lp.col_cost_ = {0, 0, 0};
-  lp.col_lower_ = {0, 0, 0};
-  lp.col_upper_ = {1, 1, 5};
+  lp.col_cost_ = {0, 0, 0, 0, 0, 0};
+  lp.col_lower_ = {0, 0, 0, 0, 0, 0};
+  lp.col_upper_ = {1, 1, 1, 1, 1, 4};
   lp.integrality_ = {HighsVarType::kInteger, HighsVarType::kInteger,
-                     HighsVarType::kInteger};
+                     HighsVarType::kInteger, HighsVarType::kInteger,
+                     HighsVarType::kInteger, HighsVarType::kInteger};
   lp.row_lower_ = {-kHighsInf};
-  lp.row_upper_ = {1.5};
+  lp.row_upper_ = {2};
   lp.a_matrix_.format_ = MatrixFormat::kColwise;
-  lp.a_matrix_.num_col_ = 3;
+  lp.a_matrix_.num_col_ = 6;
   lp.a_matrix_.num_row_ = 1;
-  lp.a_matrix_.start_ = {0, 1, 2, 2};
-  lp.a_matrix_.index_ = {0, 0};
-  lp.a_matrix_.value_ = {1, 1};
+  lp.a_matrix_.start_ = {0, 1, 2, 3, 4, 5, 5};
+  lp.a_matrix_.index_ = {0, 0, 0, 0, 0};
+  lp.a_matrix_.value_ = {1, 1, 1, 1, 0.1};
 
   highs::parallel::initialize_scheduler(1);
 
@@ -2089,12 +2113,19 @@ TEST_CASE("test-impl-aware-paper-example-6", "[highs_test_presolve_rules]") {
   mipsolver.mipdata_->init();
   mipsolver.mipdata_->setupDomainPropagation();
 
-  // x1=0 => x3>=3, x2=0 => x3>=3
+  // x1=0 => x6>=3, x2=0 => x6>=3, x3=0 => x6>=2, x4=0 => x6>=2,
+  // x5=0 => x6<=1
   HighsImplications& implications = mipsolver.mipdata_->implications;
-  implications.addImplication(0, 0, 2,
+  implications.addImplication(0, 0, 5,
                               HighsImplications::Implication{3.0, kHighsInf});
-  implications.addImplication(1, 0, 2,
+  implications.addImplication(1, 0, 5,
                               HighsImplications::Implication{3.0, kHighsInf});
+  implications.addImplication(2, 0, 5,
+                              HighsImplications::Implication{2.0, kHighsInf});
+  implications.addImplication(3, 0, 5,
+                              HighsImplications::Implication{2.0, kHighsInf});
+  implications.addImplication(4, 0, 5,
+                              HighsImplications::Implication{-kHighsInf, 1.0});
 
   presolve::HighsPostsolveStack& postsolve_stack =
       mipsolver.mipdata_->postSolveStack;
@@ -2105,9 +2136,9 @@ TEST_CASE("test-impl-aware-paper-example-6", "[highs_test_presolve_rules]") {
   HighsModelStatus status = presolve.run(postsolve_stack);
   REQUIRE(status == HighsModelStatus::kNotset);
 
-  // x3 lower bound should be tightened from 0 to 3
-  REQUIRE(mipsolver.model_->col_lower_[2] >= 3.0 - 1e-6);
-  REQUIRE(mipsolver.model_->col_lower_[2] <= 3.0 + 1e-6);
+  // x6 lower bound should be tightened from 0 to 3
+  REQUIRE(mipsolver.model_->col_lower_[5] >= 3.0 - 1e-6);
+  REQUIRE(mipsolver.model_->col_lower_[5] <= 3.0 + 1e-6);
 
   HighsTaskExecutor::shutdown(true);
 }
@@ -2116,15 +2147,18 @@ TEST_CASE("test-impl-aware-paper-example-7", "[highs_test_presolve_rules]") {
   // Chen et al. 2026, Example 7: non-binary lower bound tightening
   // with multiple breakpoints at the same value.
   //
-  // row 0: x1 + x2 + x3 + x4 + 0.1*x5 + 0.2*x6 <= 2.2
+  // row 0: x1 + x2 + x3 + x4 + 0.1*x5 + 0.2*x6 <= 2.2   (58)
   // x1-x5(col0-4) binary, x6(col5) integer [0, 4]
-  // Implications: x1=0 => x6>=3, x2=0 => x6>=3,
-  //               x3=0 => x6>=2, x4=0 => x6>=2
+  // x6 is continuous in the paper, but continuous bounds are only fixed, not
+  // tightened. the bound lies on a breakpoint, so the result is the same.
+  // VIs (55a)-(55d) as implications: x1=0 => x6>=3, x2=0 => x6>=3,
+  //                                  x3=0 => x6>=2, x4=0 => x6>=2
   //
   // x6.weightLower = 4 (sum of excesses from 4 lower-type breakpoints)
-  // threshold = 2.2, weightLower > threshold → tighten lower bound.
-  // Walk from lb=0: breakpoints at {2,2,3,3} deactivate weight.
-  // Paper result: x6 >= 3.
+  // threshold = 2.2, weightLower > threshold -> tighten lower bound.
+  // walk from lb=0: breakpoints at {2,2,3,3} deactivate weight, w(d) =
+  // 2 + 0.2*d > 2.2 on [2, 3) and w(3) = 0.6. paper result (59): x6 >= 3.
+  // relaxing x6 from the row as in Achterberg et al. (2013) gives x6 >= 2.
   HighsLp lp;
   lp.num_col_ = 6;
   lp.num_row_ = 1;
@@ -2195,17 +2229,18 @@ TEST_CASE("test-impl-aware-paper-example-7", "[highs_test_presolve_rules]") {
 
 TEST_CASE("test-impl-aware-clique-extraction-complemented",
           "[highs_test_presolve_rules]") {
-  // Complement y1 → ȳ₁ = 10-y1 in the clique extraction test.
-  // Exercises negative non-binary coefficient and VUB (instead of VLB).
+  // test-impl-aware-clique-extraction with y1 complemented: y1' = 10 - y1.
+  // exercises a negative non-binary coefficient and a VUB (instead of a VLB).
   //
-  // row 0: 3*x0 + 3*x1 - ȳ₁ + y2 ≤ 2
-  // row 1: -5*x0 - ȳ₁ ≥ -10   (from y1 >= 5*x0, substituting y1 = 10-ȳ₁)
-  // row 2: -5*x1 + y2 ≥ 0      (unchanged)
-  // x0, x1 binary, ȳ₁, y2 continuous in [0, 10]
+  // row 0: 3*x0 + 3*x1 - y1' + y2 <= 2
+  // row 1: -5*x0 - y1' >= -10   (from y1 >= 5*x0, substituting y1 = 10 - y1')
+  // row 2: -5*x1 + y2 >= 0      (unchanged)
+  // x0, x1 binary, y1', y2 continuous in [0, 10]
   //
-  // VUB on ȳ₁: ȳ₁ <= -5*x0 + 10, so x0=1 => ȳ₁ <= 5 (i.e. y1 >= 5)
+  // VUB on y1': y1' <= -5*x0 + 10, so x0=1 => y1' <= 5 (i.e. y1 >= 5)
   // VLB on y2: y2 >= 5*x1 (unchanged)
-  // Combined implied weight still exceeds threshold → {x0=1, x1=1} clique.
+  // threshold = 2 - (-10) = 12 and the combined implied weight is 16 as in
+  // the uncomplemented test, so {x0=1, x1=1} is a clique.
   HighsLp lp;
   lp.num_col_ = 4;
   lp.num_row_ = 3;
@@ -2245,10 +2280,12 @@ TEST_CASE("test-impl-aware-clique-extraction-complemented",
       std::unique_ptr<HighsMipSolverData>(new HighsMipSolverData(mipsolver));
   mipsolver.mipdata_->init();
   mipsolver.mipdata_->setupDomainPropagation();
+  // cliques are only added once cliques have been extracted (by probing)
+  mipsolver.mipdata_->cliquesExtracted = true;
 
-  // Manually populate VUB, VLB and implications (normally done by probing)
+  // manually populate VUB, VLB and implications (normally done by probing)
   HighsImplications& implications = mipsolver.mipdata_->implications;
-  // x0=1 implies ȳ₁ <= 5 (VUB: ȳ₁ <= -5*x0 + 10, from y1 >= 5*x0)
+  // x0=1 implies y1' <= 5 (VUB: y1' <= -5*x0 + 10, from y1 >= 5*x0)
   implications.addVUB(2, 0, -5.0, 10.0, 1);
   implications.addImplication(0, 1, 2,
                               HighsImplications::Implication{-kHighsInf, 5.0});
@@ -2275,8 +2312,8 @@ TEST_CASE("test-impl-aware-clique-extraction-complemented",
 
 TEST_CASE("test-impl-aware-conflict-clique-complemented",
           "[highs_test_presolve_rules]") {
-  // complemented variant of test-impl-aware-conflict-clique: x1 is replaced
-  // by its complement 1 - x1.
+  // test-impl-aware-conflict-clique with x1 complemented: x1 here is 1 - x1
+  // of the original test.
   //
   // row 0: 4*x0 - 4*x1 + y <= 8
   // x0, x1 binary; y, z continuous in [0, 10]; z is not in any row
@@ -2325,6 +2362,8 @@ TEST_CASE("test-impl-aware-conflict-clique-complemented",
       std::unique_ptr<HighsMipSolverData>(new HighsMipSolverData(mipsolver));
   mipsolver.mipdata_->init();
   mipsolver.mipdata_->setupDomainPropagation();
+  // cliques are only added once cliques have been extracted (by probing)
+  mipsolver.mipdata_->cliquesExtracted = true;
 
   // VLBs: y >= 3*x0, y >= -3*x1 + 3
   HighsImplications& implications = mipsolver.mipdata_->implications;
@@ -2354,18 +2393,19 @@ TEST_CASE("test-impl-aware-conflict-clique-complemented",
 
 TEST_CASE("test-impl-aware-nonbinary-tightening-complemented",
           "[highs_test_presolve_rules]") {
-  // Complement y → ȳ = 10-y in the nonbinary tightening test.
-  // Exercises negative non-binary coefficient and lower-bound tightening.
+  // test-impl-aware-nonbinary-tightening with y complemented: y' = 10 - y.
+  // exercises a negative non-binary coefficient and lower bound tightening.
   //
-  // row 0: 3*x0 - ȳ ≤ -2
-  // x0 binary, ȳ integer in [0, 10]
-  // Implication: x0=0 => ȳ <= 1  (from x0=0 => y >= 9)
+  // row 0: 3*x0 - y' <= -2
+  // x0 binary, y' integer in [0, 10]
+  // implication: x0=0 => y' <= 1  (from x0=0 => y >= 9)
   //
-  // Standard propagation: threshold=8, so ȳ >= -8 (no tightening).
-  // VI-aware: when ȳ < 5, x0=0 => ȳ <= 1 forces x0=1 when ȳ > 1.
-  // Then 3 - ȳ ≤ -2 gives ȳ >= 5.
-  // The piecewise walk at the lower endpoint detects this. the implication
-  // also lifts x0.weightLower to 9 > 8, so x0 is fixed to 1 and removed.
+  // standard propagation: min_activity=-10, threshold=8, so y' >= 2.
+  // VI-aware: for 1 < y' < 5, the implication makes x0=0 infeasible, and
+  // x0=1 violates the row (3 - y' > -2). for y' <= 1 the row is violated as
+  // well. hence y' >= 5 (original: y <= 5), which the piecewise walk from the
+  // lower endpoint finds. the implication also lifts x0.weightLower to
+  // 9 > 8, so x0 is fixed to 1 and removed.
   HighsLp lp;
   lp.num_col_ = 2;
   lp.num_row_ = 1;
@@ -2405,7 +2445,7 @@ TEST_CASE("test-impl-aware-nonbinary-tightening-complemented",
   mipsolver.mipdata_->init();
   mipsolver.mipdata_->setupDomainPropagation();
 
-  // x0=0 => ȳ <= 1 (from x0=0 => y >= 9, complemented)
+  // x0=0 => y' <= 1 (from x0=0 => y >= 9, complemented)
   HighsImplications& implications = mipsolver.mipdata_->implications;
   implications.addImplication(0, 0, 1,
                               HighsImplications::Implication{-kHighsInf, 1.0});
@@ -2419,8 +2459,8 @@ TEST_CASE("test-impl-aware-nonbinary-tightening-complemented",
   HighsModelStatus status = presolve.run(postsolve_stack);
   REQUIRE(status == HighsModelStatus::kNotset);
 
-  // x0 is fixed and removed, so ȳ is at presolved index 0. ȳ lower bound
-  // tightened from 0 to 5 (original: y upper bound 10→5)
+  // x0 is fixed and removed, so y' is at presolved index 0. y' lower bound
+  // tightened from 0 to 5 (original: y upper bound 10 -> 5)
   REQUIRE(mipsolver.model_->num_col_ == 1);
   REQUIRE(mipsolver.model_->col_lower_[0] >= 5.0 - 1e-6);
   REQUIRE(mipsolver.model_->col_lower_[0] <= 5.0 + 1e-6);
@@ -2437,17 +2477,18 @@ TEST_CASE("test-impl-aware-nonbinary-tightening-complemented",
 
 TEST_CASE("test-impl-aware-paper-example-3-5-complemented",
           "[highs_test_presolve_rules]") {
-  // Chen et al. 2026, Example 3 with x5 complemented: x̄5 = 3 - x5. exercises
+  // Chen et al. 2026, Example 3 with x5 complemented: x5' = 3 - x5. exercises
   // a negative non-binary coefficient in the lift.
   //
-  // row 0: x2 + 0.9*x3 - 0.5*x̄5 <= 0.5
-  // x1(col0), x2(col1), x3(col2), x4(col3) binary; x̄5(col4) continuous [0, 3]
+  // row 0: x2 + 0.9*x3 - 0.5*x5' <= 0.5
+  // x1(col0), x2(col1), x3(col2), x4(col3) binary; x5'(col4) continuous [0, 3]
   // x1 and x4 have zero coefficient in the row.
   //
-  // cliques as in test-impl-aware-paper-example-3-5, implications on x̄5
-  // complemented: x1=0 => 2.5<=x̄5<=2.6, x2=1 => x̄5>=2.5, x2=0 => x̄5<=2,
-  // x3=0 => x̄5>=1. x1=0 lifts x̄5 by -0.5*(2.6-3) = 0.2, as in the
-  // uncomplemented example. expected result is the same: x1 = 1.
+  // cliques as in test-impl-aware-paper-example-3-5, implications on x5'
+  // complemented: x1=0 => 2.5<=x5'<=2.6, x2=1 => x5'>=2.5, x2=0 => x5'<=2,
+  // x3=0 => x5'>=1. x5'<=2.6 lifts x1.weightLower by -0.5*(2.6-3) = 0.2, as
+  // in the uncomplemented example. expected result is the same: x1 = 1 and x4
+  // = 1.
   HighsLp lp;
   lp.num_col_ = 5;
   lp.num_row_ = 1;
@@ -2460,7 +2501,7 @@ TEST_CASE("test-impl-aware-paper-example-3-5-complemented",
                      HighsVarType::kContinuous};
   lp.row_lower_ = {-kHighsInf};
   lp.row_upper_ = {0.5};
-  // x1, x4 not in row; x2(col1)=1, x3(col2)=0.9, x̄5(col4)=-0.5
+  // x1, x4 not in row; x2(col1)=1, x3(col2)=0.9, x5'(col4)=-0.5
   lp.a_matrix_.format_ = MatrixFormat::kColwise;
   lp.a_matrix_.num_col_ = 5;
   lp.a_matrix_.num_row_ = 1;
@@ -2489,6 +2530,9 @@ TEST_CASE("test-impl-aware-paper-example-3-5-complemented",
       std::unique_ptr<HighsMipSolverData>(new HighsMipSolverData(mipsolver));
   mipsolver.mipdata_->init();
   mipsolver.mipdata_->setupDomainPropagation();
+  // fixings are only propagated through the clique table once cliques have
+  // been extracted (by probing)
+  mipsolver.mipdata_->cliquesExtracted = true;
 
   // cliques from (24a), (24b), (24e)
   HighsCliqueTable& cliquetable = mipsolver.mipdata_->cliquetable;
@@ -2499,7 +2543,7 @@ TEST_CASE("test-impl-aware-paper-example-3-5-complemented",
   HighsCliqueTable::CliqueVar clq3[] = {{0, 1}, {3, 0}};
   cliquetable.doAddClique(clq3, 2);
 
-  // implications on x̄5 from (24c)-(24d), (24f)-(24h), complemented
+  // implications on x5' from (24c)-(24d), (24f)-(24h), complemented
   HighsImplications& implications = mipsolver.mipdata_->implications;
   implications.addImplication(0, 0, 4,
                               HighsImplications::Implication{2.5, 2.6});
@@ -2519,10 +2563,14 @@ TEST_CASE("test-impl-aware-paper-example-3-5-complemented",
   HighsModelStatus status = presolve.run(postsolve_stack);
   REQUIRE(status == HighsModelStatus::kNotset);
 
-  // x1 is fixed and removed; presolved cols are x2(0), x3(1), x4(2), x̄5(3)
+  // x1 is fixed and removed; presolved cols are x2(0), x3(1), x4(2), x5'(3)
   REQUIRE(mipsolver.model_->num_col_ == 4);
 
-  // postsolve restores x1 = 1
+  // x4 is fixed to 1
+  REQUIRE(mipsolver.model_->col_lower_[2] == 1.0);
+  REQUIRE(mipsolver.model_->col_upper_[2] == 1.0);
+
+  // x1 is restored to 1 by postsolve
   HighsSolution sol;
   sol.value_valid = true;
   sol.col_value = {0.0, 0.0, 1.0, 2.0};
@@ -2610,18 +2658,18 @@ TEST_CASE("test-impl-aware-piecewise-walk", "[highs_test_presolve_rules]") {
 
 TEST_CASE("test-impl-aware-piecewise-walk-complemented",
           "[highs_test_presolve_rules]") {
-  // test-impl-aware-piecewise-walk with x5 complemented: x̄5 = 3 - x5.
+  // test-impl-aware-piecewise-walk with x5 complemented: x5' = 3 - x5.
   // exercises the lower walk with a negative coefficient.
   //
-  // row 0: x2 + 0.9*x3 - 0.5*x̄5 <= 0.5
-  // x2(col0), x3(col1) binary; x̄5(col2) integer [0, 3]
-  // implications: x2=0 => x̄5<=2  (upper-type breakpoint at 2, excess 1)
-  //               x3=0 => x̄5>=1  (lower-type breakpoint at 1, excess 0.9)
+  // row 0: x2 + 0.9*x3 - 0.5*x5' <= 0.5
+  // x2(col0), x3(col1) binary; x5'(col2) integer [0, 3]
+  // implications: x2=0 => x5'<=2  (upper-type breakpoint at 2, excess 1)
+  //               x3=0 => x5'>=1  (lower-type breakpoint at 1, excess 0.9)
   //
-  // implied activity above the minimum: w(x̄5) = 0.5*(3-x̄5) + [x̄5 < 1]*0.9 +
-  // [x̄5 > 2]*1, threshold 2. w(0) = 2.4 > 2, so the lower walk starts at 0
-  // and crosses the threshold mid-segment: 2.4 - 0.5*x̄5 <= 2 gives
-  // x̄5 >= 0.8, rounded up to x̄5 >= 1 (original: x5 <= 2). w(3) = 1 <= 2, so
+  // implied activity above the minimum: w(x5') = 0.5*(3-x5') + [x5' < 1]*0.9 +
+  // [x5' > 2]*1, threshold 2. w(0) = 2.4 > 2, so the lower walk starts at 0
+  // and crosses the threshold mid-segment: 2.4 - 0.5*x5' <= 2 gives
+  // x5' >= 0.8, rounded up to x5' >= 1 (original: x5 <= 2). w(3) = 1 <= 2, so
   // the upper bound is not tightened.
   HighsLp lp;
   lp.num_col_ = 3;
@@ -2692,7 +2740,7 @@ TEST_CASE("test-impl-aware-piecewise-walk-tie", "[highs_test_presolve_rules]") {
   // before the one that activates (sort tie-break: lower-type first).
   //
   // row 0: x0 + x1 + x2 + x3 <= 1.5
-  // x0..x3(col0..col3) binary; y(col4) integer [0, 6], NOT in row
+  // x0..x3(col0..col3) binary; y(col4) integer [0, 6], not in row
   // implications: x0=0 => y>=3, x1=0 => y>=3  (lower-type breakpoints at 3)
   //               x2=0 => y<=3, x3=0 => y<=3  (upper-type breakpoints at 3)
   //
@@ -2777,35 +2825,36 @@ TEST_CASE("test-impl-aware-piecewise-walk-tie", "[highs_test_presolve_rules]") {
 
 TEST_CASE("test-impl-aware-paper-example-6-complemented",
           "[highs_test_presolve_rules]") {
-  // Complement x3 → x̄₃ = 5-x3 in Chen et al. 2026, Example 6.
-  // Exercises upper-bound tightening on a zero-coefficient discovered variable.
+  // Chen et al. 2026, Example 6 with x6 complemented: x6' = 4 - x6. exercises
+  // upper bound tightening of a non-binary variable not in the row.
   //
-  // row 0: x1 + x2 <= 1.5  (unchanged, x̄₃ not in row)
-  // x1(col0), x2(col1) binary; x̄₃(col2) integer [0, 5], NOT in row
-  // Implications: x1=0 => x̄₃<=2, x2=0 => x̄₃<=2  (from x_i=0 => x3>=3)
+  // row 0: x1 + x2 + x3 + x4 + 0.1*x5 <= 2   (unchanged, x6' not in row)
+  // x1-x5(col0-4) binary; x6'(col5) integer [0, 4], not in row
+  // x6 is continuous in the paper, but continuous bounds are only fixed, not
+  // tightened. the bound lies on a breakpoint, so the result is the same.
+  // VIs complemented: x1=0 => x6'<=1, x2=0 => x6'<=1, x3=0 => x6'<=2,
+  // x4=0 => x6'<=2, x5=0 => x6'>=3
   //
-  // Discovery loop finds x̄₃ via getImplications from x1 and x2.
-  // x̄₃ gets nonBinVal=0 (zero coefficient). Upper-type breakpoints at {2,2}.
-  // weightUpper = 2 > threshold = 1.5 → tighten upper bound.
-  // Walk from ub=5: at bp=2, breakpoint deactivates, weight=1 <= 1.5.
-  // Result: x̄₃ <= 2  (original: x3 >= 3).
+  // walk from ub=4 mirrors test-impl-aware-paper-example-6.
+  // result: x6' <= 1 (original: x6 >= 3).
   HighsLp lp;
-  lp.num_col_ = 3;
+  lp.num_col_ = 6;
   lp.num_row_ = 1;
   lp.sense_ = ObjSense::kMinimize;
-  lp.col_cost_ = {0, 0, 0};
-  lp.col_lower_ = {0, 0, 0};
-  lp.col_upper_ = {1, 1, 5};
+  lp.col_cost_ = {0, 0, 0, 0, 0, 0};
+  lp.col_lower_ = {0, 0, 0, 0, 0, 0};
+  lp.col_upper_ = {1, 1, 1, 1, 1, 4};
   lp.integrality_ = {HighsVarType::kInteger, HighsVarType::kInteger,
-                     HighsVarType::kInteger};
+                     HighsVarType::kInteger, HighsVarType::kInteger,
+                     HighsVarType::kInteger, HighsVarType::kInteger};
   lp.row_lower_ = {-kHighsInf};
-  lp.row_upper_ = {1.5};
+  lp.row_upper_ = {2};
   lp.a_matrix_.format_ = MatrixFormat::kColwise;
-  lp.a_matrix_.num_col_ = 3;
+  lp.a_matrix_.num_col_ = 6;
   lp.a_matrix_.num_row_ = 1;
-  lp.a_matrix_.start_ = {0, 1, 2, 2};
-  lp.a_matrix_.index_ = {0, 0};
-  lp.a_matrix_.value_ = {1, 1};
+  lp.a_matrix_.start_ = {0, 1, 2, 3, 4, 5, 5};
+  lp.a_matrix_.index_ = {0, 0, 0, 0, 0};
+  lp.a_matrix_.value_ = {1, 1, 1, 1, 0.1};
 
   highs::parallel::initialize_scheduler(1);
 
@@ -2829,13 +2878,19 @@ TEST_CASE("test-impl-aware-paper-example-6-complemented",
   mipsolver.mipdata_->init();
   mipsolver.mipdata_->setupDomainPropagation();
 
-  // x1=0 => x̄₃ <= 2, x2=0 => x̄₃ <= 2
-  // x1=0 => x̄₃<=2, x2=0 => x̄₃<=2 (from x_i=0 => x3>=3, complemented)
+  // x1=0 => x6'<=1, x2=0 => x6'<=1, x3=0 => x6'<=2, x4=0 => x6'<=2,
+  // x5=0 => x6'>=3
   HighsImplications& implications = mipsolver.mipdata_->implications;
-  implications.addImplication(0, 0, 2,
+  implications.addImplication(0, 0, 5,
+                              HighsImplications::Implication{-kHighsInf, 1.0});
+  implications.addImplication(1, 0, 5,
+                              HighsImplications::Implication{-kHighsInf, 1.0});
+  implications.addImplication(2, 0, 5,
                               HighsImplications::Implication{-kHighsInf, 2.0});
-  implications.addImplication(1, 0, 2,
+  implications.addImplication(3, 0, 5,
                               HighsImplications::Implication{-kHighsInf, 2.0});
+  implications.addImplication(4, 0, 5,
+                              HighsImplications::Implication{3.0, kHighsInf});
 
   presolve::HighsPostsolveStack& postsolve_stack =
       mipsolver.mipdata_->postSolveStack;
@@ -2846,28 +2901,30 @@ TEST_CASE("test-impl-aware-paper-example-6-complemented",
   HighsModelStatus status = presolve.run(postsolve_stack);
   REQUIRE(status == HighsModelStatus::kNotset);
 
-  // x̄₃ upper bound tightened from 5 to 2 (original: x3 lower bound 0→3)
-  REQUIRE(mipsolver.model_->col_upper_[2] <= 2.0 + 1e-6);
-  REQUIRE(mipsolver.model_->col_upper_[2] >= 2.0 - 1e-6);
+  // x6' upper bound tightened from 4 to 1 (original: x6 lower bound 0 -> 3)
+  REQUIRE(mipsolver.model_->col_upper_[5] <= 1.0 + 1e-6);
+  REQUIRE(mipsolver.model_->col_upper_[5] >= 1.0 - 1e-6);
 
   HighsTaskExecutor::shutdown(true);
 }
 
 TEST_CASE("test-impl-aware-paper-example-7-complemented",
           "[highs_test_presolve_rules]") {
-  // Complement x6 → x̄₆ = 4-x6 in Chen et al. 2026, Example 7.
-  // Exercises negative non-binary coefficient with multiple upper-type
-  // breakpoints at the same value.
+  // Chen et al. 2026, Example 7 with x6 complemented: x6' = 4 - x6. exercises
+  // a negative non-binary coefficient with multiple upper-type breakpoints at
+  // the same value.
   //
-  // row 0: x1 + x2 + x3 + x4 + 0.1*x5 - 0.2*x̄₆ <= 1.4
-  // x1-x5(col0-4) binary, x̄₆(col5) integer [0, 4]
-  // Implications: x1=0 => x̄₆<=1, x2=0 => x̄₆<=1,
-  //               x3=0 => x̄₆<=2, x4=0 => x̄₆<=2
+  // row 0: x1 + x2 + x3 + x4 + 0.1*x5 - 0.2*x6' <= 1.4
+  // x1-x5(col0-4) binary, x6'(col5) integer [0, 4]
+  // x6 is continuous in the paper, but continuous bounds are only fixed, not
+  // tightened. the bound lies on a breakpoint, so the result is the same.
+  // VIs complemented: x1=0 => x6'<=1, x2=0 => x6'<=1,
+  //                   x3=0 => x6'<=2, x4=0 => x6'<=2
   //
-  // x̄₆.weightUpper = 4 (sum of excesses from 4 upper-type breakpoints)
-  // threshold = 2.2, weightUpper > threshold → tighten upper bound.
-  // Walk from ub=4: breakpoints at {1,1,2,2} deactivate weight.
-  // Result: x̄₆ <= 1  (original: x6 >= 3).
+  // x6'.weightUpper = 4 (sum of excesses from 4 upper-type breakpoints)
+  // threshold = 1.4 - (-0.8) = 2.2, weightUpper > threshold -> tighten upper
+  // bound. walk from ub=4 mirrors test-impl-aware-paper-example-7.
+  // result: x6' <= 1 (original: x6 >= 3).
   HighsLp lp;
   lp.num_col_ = 6;
   lp.num_row_ = 1;
@@ -2909,7 +2966,7 @@ TEST_CASE("test-impl-aware-paper-example-7-complemented",
   mipsolver.mipdata_->init();
   mipsolver.mipdata_->setupDomainPropagation();
 
-  // x1=0 => x̄₆<=1, x2=0 => x̄₆<=1, x3=0 => x̄₆<=2, x4=0 => x̄₆<=2
+  // x1=0 => x6'<=1, x2=0 => x6'<=1, x3=0 => x6'<=2, x4=0 => x6'<=2
   HighsImplications& implications = mipsolver.mipdata_->implications;
   implications.addImplication(0, 0, 5,
                               HighsImplications::Implication{-kHighsInf, 1.0});
@@ -2929,7 +2986,7 @@ TEST_CASE("test-impl-aware-paper-example-7-complemented",
   HighsModelStatus status = presolve.run(postsolve_stack);
   REQUIRE(status == HighsModelStatus::kNotset);
 
-  // x̄₆ upper bound tightened from 4 to 1 (original: x6 lower bound 0→3)
+  // x6' upper bound tightened from 4 to 1 (original: x6 lower bound 0 -> 3)
   REQUIRE(mipsolver.model_->col_upper_[5] <= 1.0 + 1e-6);
   REQUIRE(mipsolver.model_->col_upper_[5] >= 1.0 - 1e-6);
 

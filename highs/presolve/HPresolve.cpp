@@ -9882,21 +9882,19 @@ HPresolve::Result HPresolve::updateCliqueTableFixedCol(const HighsInt col,
                                                        const double val) {
   if (mipsolver == nullptr || !mipsolver->mipdata_->cliquesExtracted ||
       model->integrality_[col] == HighsVarType::kContinuous ||
-      (val != 0.0 && val != 1.0)) {
+      (val != 0.0 && val != 1.0))
     return Result::kOk;
-  }
+
   std::vector<HighsCliqueTable::CliqueVar> impliedFixings;
-  if (!presolveCliqueTable.fixCol(col, static_cast<bool>(val),
-                                  impliedFixings)) {
+  if (!presolveCliqueTable.fixCol(col, static_cast<bool>(val), impliedFixings))
     return Result::kPrimalInfeasible;
-  }
 
   for (const HighsCliqueTable::CliqueVar& fixing : impliedFixings) {
     if (colDeleted[fixing.col]) continue;
     if (fixing.val < model->col_lower_[fixing.col] - primal_feastol ||
-        fixing.val > model->col_upper_[fixing.col] + primal_feastol) {
+        fixing.val > model->col_upper_[fixing.col] + primal_feastol)
       return Result::kPrimalInfeasible;
-    }
+
     HPRESOLVE_CHECKED_CALL(changeColBounds(fixing.col, fixing.val, fixing.val));
   }
   return Result::kOk;
@@ -9905,9 +9903,9 @@ HPresolve::Result HPresolve::updateCliqueTableFixedCol(const HighsInt col,
 HPresolve::Result HPresolve::updateCliqueTableSubstituteCol(
     const HighsInt substCol, const HighsInt stayCol, const double offset,
     const double scale) {
-  if (mipsolver == nullptr || !mipsolver->mipdata_->cliquesExtracted) {
+  if (mipsolver == nullptr || !mipsolver->mipdata_->cliquesExtracted)
     return Result::kOk;
-  }
+
   bool isBinary =
       model->integrality_[substCol] != HighsVarType::kContinuous &&
       model->integrality_[stayCol] != HighsVarType::kContinuous &&
@@ -9928,12 +9926,42 @@ HPresolve::Result HPresolve::updateCliqueTableSubstituteCol(
     double val = static_cast<double>(v.val);
     if (colDeleted[col]) continue;
     if (val < model->col_lower_[col] - primal_feastol ||
-        val > model->col_upper_[col] + primal_feastol) {
+        val > model->col_upper_[col] + primal_feastol)
       return Result::kPrimalInfeasible;
-    }
+
     HPRESOLVE_CHECKED_CALL(changeColBounds(col, val, val));
   }
   return Result::kOk;
+}
+
+HPresolve::StatusResult HPresolve::updateCliqueTableAddClique(
+    HighsCliqueTable::CliqueVar* cliquevars, const HighsInt numcliquevars,
+    std::vector<HighsCliqueTable::CliqueVar>& impliedFixings) {
+  // returns true if the clique was added. the caller applies the implied
+  // fixings (the caller may need to process a column before it is fixed)
+  impliedFixings.clear();
+  if (mipsolver == nullptr || !mipsolver->mipdata_->cliquesExtracted)
+    return StatusResult(false);
+
+  if (!presolveCliqueTable.addClique(*mipsolver, cliquevars, numcliquevars,
+                                     impliedFixings))
+    return StatusResult(Result::kPrimalInfeasible);
+
+  // skip columns already deleted
+  impliedFixings.erase(
+      std::remove_if(
+          impliedFixings.begin(), impliedFixings.end(),
+          [&](HighsCliqueTable::CliqueVar v) { return colDeleted[v.col]; }),
+      impliedFixings.end());
+
+  for (const HighsCliqueTable::CliqueVar& fixing : impliedFixings) {
+    HighsInt col = static_cast<HighsInt>(fixing.col);
+    double val = static_cast<double>(fixing.val);
+    if (val < model->col_lower_[col] - primal_feastol ||
+        val > model->col_upper_[col] + primal_feastol)
+      return StatusResult(Result::kPrimalInfeasible);
+  }
+  return StatusResult(true);
 }
 
 void HPresolve::aggregateVarBounds() {
@@ -10205,24 +10233,18 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
 
   auto addClique = [&](HighsCliqueTable::CliqueVar v1,
                        HighsCliqueTable::CliqueVar v2) {
-    std::vector<HighsCliqueTable::CliqueVar> clique = {v1, v2};
-    if (!presolveCliqueTable.addClique(*mipsolver, clique.data(), 2,
-                                       impliedFixings))
-      return Result::kPrimalInfeasible;
+    std::array<HighsCliqueTable::CliqueVar, 2> clique = {v1, v2};
+    StatusResult added = updateCliqueTableAddClique(
+        clique.data(), static_cast<HighsInt>(clique.size()), impliedFixings);
+    HPRESOLVE_CHECKED_CALL(static_cast<Result>(added));
+    if (!added) return Result::kOk;
     numCliquesAdded++;
     // remember affected columns
     trackColChange(v1.col);
     trackColChange(v2.col);
     // apply fixings derived by the clique table
-    for (const HighsCliqueTable::CliqueVar& fixing : impliedFixings) {
-      HighsInt col = static_cast<HighsInt>(fixing.col);
-      double val = static_cast<double>(fixing.val);
-      if (colDeleted[col]) continue;
-      if (val < model->col_lower_[col] - primal_feastol ||
-          val > model->col_upper_[col] + primal_feastol)
-        return Result::kPrimalInfeasible;
-      HPRESOLVE_CHECKED_CALL(fixCol(col, fixing.val == 1));
-    }
+    for (const HighsCliqueTable::CliqueVar& fixing : impliedFixings)
+      HPRESOLVE_CHECKED_CALL(fixCol(fixing.col, fixing.val == 1));
     return Result::kOk;
   };
 

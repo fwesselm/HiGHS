@@ -546,6 +546,10 @@ class HPresolve {
   Result updateCliqueTableSubstituteCol(HighsInt substCol, HighsInt stayCol,
                                         double offset, double scale);
 
+  StatusResult updateCliqueTableAddClique(
+      HighsCliqueTable::CliqueVar* cliquevars, HighsInt numcliquevars,
+      std::vector<HighsCliqueTable::CliqueVar>& impliedFixings);
+
   void aggregateVarBounds();
 
   Result implAwareConstrPropagation(HighsPostsolveStack& postsolve_stack);
