@@ -10125,12 +10125,15 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
     HighsCDouble weightLower;
     HighsCDouble weightUpper;
 
-    VariableData() : val(0.0), weightLower(0.0), weightUpper(0.0) {}
-    VariableData(double myVal)
+    VariableData(double myVal = 0.0)
         : val(myVal), weightLower(0.0), weightUpper(0.0) {}
 
-    void updateLower(const HighsCDouble& update) { weightLower += update; }
-    void updateUpper(const HighsCDouble& update) { weightUpper += update; }
+    void update(bool upper, const HighsCDouble& delta) {
+      if (upper)
+        weightUpper += delta;
+      else
+        weightLower += delta;
+    }
   };
 
   struct Breakpoint {
@@ -10149,6 +10152,12 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
     }
   };
 
+  struct ConflictEntry {
+    ImpliedBoundKey key;
+    double lb;
+    double ub;
+  };
+
   // data structures
   HighsHashTable<HighsInt, VariableData> binNonZeros;
   HighsHashTable<HighsInt, VariableData> nonBinNonZeros;
@@ -10158,12 +10167,12 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
   // bounds on non-binaries implied by binaries
   HighsHashTable<ImpliedBoundKey, HighsImplications::Implication> impliedBounds;
   std::vector<HighsInt> liftedBins;
-  std::vector<ImpliedBoundKey> conflictKeys;
+  std::vector<ConflictEntry> conflictEntries;
   std::vector<HighsCliqueTable::CliqueVar> impliedFixings;
   std::vector<HighsInt> modifiedRows;
   std::vector<HighsBool> modifiedRowFlags;
   std::vector<HighsInt> objInds;
-  std::vector<double> objVals;
+  bool checkObjective = false;
   bool objectiveAffected = false;
 
   // counters
@@ -10183,8 +10192,7 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
         modifiedRowFlags[nz.index()] = true;
       }
     }
-    if (static_cast<HighsInt>(objInds.size()) <= maxObjSize &&
-        model->col_cost_[col] != 0.0)
+    if (checkObjective && model->col_cost_[col] != 0.0)
       objectiveAffected = true;
   };
 
@@ -10235,26 +10243,22 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
     // already accounted for in the threshold
     if (model->col_lower_[col] == model->col_upper_[col]) return true;
     if (isBinary(col)) {
-      binNonZeros[col] = VariableData{val};
-      if (val < 0)
-        binNonZeros[col].updateLower(-static_cast<HighsCDouble>(val));
-      else
-        binNonZeros[col].updateUpper(static_cast<HighsCDouble>(val));
+      VariableData data(val);
+      data.update(val > 0, std::abs(val));
+      binNonZeros[col] = data;
     } else {
       if ((val > 0 && model->col_lower_[col] <= -kHighsInf) ||
           (val < 0 && model->col_upper_[col] >= kHighsInf))
         return false;
-      nonBinNonZeros[col] = VariableData{val};
+      VariableData data(val);
       if (model->col_lower_[col] > -kHighsInf &&
           model->col_upper_[col] < kHighsInf) {
         HighsCDouble range =
             std::abs(val) * (static_cast<HighsCDouble>(model->col_upper_[col]) -
                              model->col_lower_[col]);
-        if (val < 0)
-          nonBinNonZeros[col].updateLower(range);
-        else
-          nonBinNonZeros[col].updateUpper(range);
+        data.update(val > 0, range);
       }
+      nonBinNonZeros[col] = data;
     }
     return true;
   };
@@ -10274,22 +10278,16 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
     nonBinNonZeros.clear();
     objectiveLower = 0;
 
-    for (HighsInt i = 0; i < static_cast<HighsInt>(objInds.size()); i++) {
-      HighsInt col = objInds[i];
+    for (HighsInt col : objInds) {
+      // costs of active columns do not change in this method
       if (colDeleted[col]) continue;
-      double cost = objVals[i];
-      double lb = model->col_lower_[col];
-      double ub = model->col_upper_[col];
-      // accumulate standard minimum
-      if (cost > 0) {
-        if (lb <= -kHighsInf) return false;
-        objectiveLower += cost * static_cast<HighsCDouble>(lb);
-      } else {
-        if (ub >= kHighsInf) return false;
-        objectiveLower += cost * static_cast<HighsCDouble>(ub);
-      }
-      // add non-zero
+      double cost = model->col_cost_[col];
+      // add non-zero; rejects infinite bounds on the min-activity side
       if (!addNonZero(col, cost)) return false;
+      // accumulate standard minimum
+      double bound = cost > 0 ? model->col_lower_[col] : model->col_upper_[col];
+      assert(std::abs(bound) < kHighsInf);
+      objectiveLower += cost * static_cast<HighsCDouble>(bound);
     }
     return true;
   };
@@ -10421,26 +10419,18 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
     for (HighsInt binCol : liftedBins) addBinaryImplications(binCol, true);
   };
 
-  auto getImpliedRange = [&](HighsInt nonBinCol,
-                             const HighsImplications::Implication& impl) {
-    // bounds implied by a literal on a non-binary, intersected with the
-    // non-binary's bounds. implied bounds of integer columns are rounded in
-    // addImpliedBound
-    double lb = std::max(model->col_lower_[nonBinCol], impl.lb);
-    double ub = std::min(model->col_upper_[nonBinCol], impl.ub);
-    return std::make_pair(lb, ub);
-  };
-
   auto findConflictCliques = [&]() {
     // literals implying contradicting bounds on a non-binary form a clique,
     // independently of the row's threshold. a literal whose implied bounds
     // contradict the non-binary's bounds is infeasible
-    conflictKeys.clear();
+    conflictEntries.clear();
     for (const auto& entry : impliedBounds) {
       const ImpliedBoundKey& key = entry.key();
       if (colDeleted[key.binCol] || colDeleted[key.nonBinCol]) continue;
-      auto range = getImpliedRange(key.nonBinCol, entry.value());
-      bool infeasible = range.first > range.second + primal_feastol;
+      // implied range intersected with the non-binary's bounds
+      double lb = std::max(model->col_lower_[key.nonBinCol], entry.value().lb);
+      double ub = std::min(model->col_upper_[key.nonBinCol], entry.value().ub);
+      bool infeasible = lb > ub + primal_feastol;
       if (model->col_lower_[key.binCol] == model->col_upper_[key.binCol]) {
         // binary fixed to an infeasible literal
         if (infeasible && model->col_lower_[key.binCol] == key.binVal)
@@ -10451,37 +10441,34 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
         HPRESOLVE_CHECKED_CALL(fixCol(key.binCol, key.binVal == 0));
         continue;
       }
-      conflictKeys.push_back(key);
+      // fixing binaries does not change the non-binaries' bounds, so the
+      // ranges stay valid during this pass
+      conflictEntries.push_back({key, lb, ub});
     }
 
-    auto getImpliedLower = [&](const ImpliedBoundKey& key) {
-      return getImpliedRange(key.nonBinCol, *impliedBounds.find(key)).first;
-    };
-    auto getImpliedUpper = [&](const ImpliedBoundKey& key) {
-      return getImpliedRange(key.nonBinCol, *impliedBounds.find(key)).second;
-    };
-
     // sort by non-binary and increasing implied upper bound
-    pdqsort(conflictKeys.begin(), conflictKeys.end(),
-            [&](const ImpliedBoundKey& a, const ImpliedBoundKey& b) {
-              if (a.nonBinCol != b.nonBinCol) return a.nonBinCol < b.nonBinCol;
-              return getImpliedUpper(a) < getImpliedUpper(b);
+    pdqsort(conflictEntries.begin(), conflictEntries.end(),
+            [](const ConflictEntry& a, const ConflictEntry& b) {
+              if (a.key.nonBinCol != b.key.nonBinCol)
+                return a.key.nonBinCol < b.key.nonBinCol;
+              return a.ub < b.ub;
             });
 
-    for (size_t start = 0; start < conflictKeys.size();) {
+    for (size_t start = 0; start < conflictEntries.size();) {
       size_t end = start;
-      while (end < conflictKeys.size() &&
-             conflictKeys[end].nonBinCol == conflictKeys[start].nonBinCol)
+      while (end < conflictEntries.size() &&
+             conflictEntries[end].key.nonBinCol ==
+                 conflictEntries[start].key.nonBinCol)
         ++end;
       for (size_t i = start; i < end; ++i) {
-        const ImpliedBoundKey& ki = conflictKeys[i];
+        const ImpliedBoundKey& ki = conflictEntries[i].key;
         if (colDeleted[ki.binCol]) continue;
-        double lb = getImpliedLower(ki);
+        double lb = conflictEntries[i].lb;
         // literals implying an upper bound below lb conflict with ki; they
         // precede ki since its implied range is not empty
         for (size_t j = start; j < i; ++j) {
-          const ImpliedBoundKey& kj = conflictKeys[j];
-          if (getImpliedUpper(kj) >= lb - primal_feastol) break;
+          const ImpliedBoundKey& kj = conflictEntries[j].key;
+          if (conflictEntries[j].ub >= lb - primal_feastol) break;
           if (colDeleted[kj.binCol]) continue;
           HighsCliqueTable::CliqueVar v1(ki.binCol, ki.binVal);
           HighsCliqueTable::CliqueVar v2(kj.binCol, kj.binVal);
@@ -10506,10 +10493,7 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
       const ImpliedBoundKey& key = entry.key();
       HighsCDouble lift = computeLift(key.nonBinCol, entry.value());
       if (lift <= 0) continue;
-      if (key.binVal == 1)
-        binNonZeros[key.binCol].updateUpper(lift);
-      else
-        binNonZeros[key.binCol].updateLower(lift);
+      binNonZeros[key.binCol].update(key.binVal == 1, lift);
     }
 
     // consider cliques: sort binaries for early termination.
@@ -10577,11 +10561,7 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
               }
 #endif
             }
-            HighsCDouble update(absval);
-            if (neighbor.val == 1)
-              binNonZeros[neighbor.col].updateUpper(update);
-            else
-              binNonZeros[neighbor.col].updateLower(update);
+            binNonZeros[neighbor.col].update(neighbor.val == 1, absval);
             maxWeight = max(maxWeight, getBinaryWeight(neighbor));
           });
     }
@@ -10757,12 +10737,8 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
       // lower-type breakpoints are active (x_r < lambda holds), at x_r = ub
       // all upper-type breakpoints are active (x_r > mu holds)
       collectBreakpoints(nonBinCol);
-      for (const auto& bp : breakpoints) {
-        if (bp.isLowerType)
-          nz.value().updateLower(bp.excess);
-        else
-          nz.value().updateUpper(bp.excess);
-      }
+      for (const auto& bp : breakpoints)
+        nz.value().update(!bp.isLowerType, bp.excess);
 
       // w(lb) > threshold means lb is infeasible; walk right to find new lb
       // w(ub) > threshold means ub is infeasible; walk left to find new ub
@@ -10782,12 +10758,19 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
       //                        lower-type activates
       // the new bound is found by interpolation within a segment, or
       // snapped to the breakpoint where the jump crosses the threshold.
-      const auto computeBound = [&](double val, const HighsCDouble& inputWeight,
-                                    double colBound, double otherColBound,
-                                    HighsInt direction, double& newColBound) {
+      auto computeBound = [&](double val, const HighsCDouble& inputWeight,
+                              double colBound, double otherColBound,
+                              HighsInt direction, double& newColBound) {
         HighsCDouble weight = inputWeight;
         double d = colBound;
         newColBound = colBound;
+
+        // point where w crosses the threshold on the segment starting at
+        // segStart with weight segWeight
+        auto interpolate = [&](const HighsCDouble& segWeight, double segStart) {
+          assert(val != 0.0);
+          return static_cast<double>(segStart + (threshold - segWeight) / val);
+        };
 
         HighsInt start = 0;
         HighsInt end = static_cast<HighsInt>(breakpoints.size()) - 1;
@@ -10807,8 +10790,7 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
           // threshold crossed mid-segment: interpolate exact crossing point
           if (weight > threshold + primal_feastol &&
               weightAtBreakpoint <= threshold + primal_feastol) {
-            assert(val != 0.0);
-            newColBound = static_cast<double>(d + (threshold - weight) / val);
+            newColBound = interpolate(weight, d);
             return true;
           }
 
@@ -10839,8 +10821,7 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
           HighsCDouble weightAtBound =
               weight + val * (otherColBound - static_cast<HighsCDouble>(d));
           if (weightAtBound <= threshold + primal_feastol) {
-            assert(val != 0.0);
-            newColBound = static_cast<double>(d + (threshold - weight) / val);
+            newColBound = interpolate(weight, d);
             return true;
           }
         }
@@ -10901,11 +10882,11 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
       HighsInt col = binVar.key();
       // fixed by findConflictCliques
       if (colDeleted[col]) continue;
-      const HighsCDouble& weightLower = binVar.value().weightLower;
-      const HighsCDouble& weightUpper = binVar.value().weightUpper;
 
-      bool lowerInfeasible = weightLower > threshold + primal_feastol;
-      bool upperInfeasible = weightUpper > threshold + primal_feastol;
+      bool lowerInfeasible =
+          binVar.value().weightLower > threshold + primal_feastol;
+      bool upperInfeasible =
+          binVar.value().weightUpper > threshold + primal_feastol;
       // neither value of the binary satisfies the row
       if (lowerInfeasible && upperInfeasible) return Result::kPrimalInfeasible;
       if (lowerInfeasible || upperInfeasible)
@@ -10922,21 +10903,22 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
   };
 
   // prepare vectors
-  objInds.reserve(model->num_col_);
-  objVals.reserve(model->num_col_);
   modifiedRows.reserve(model->num_row_);
   modifiedRowFlags.resize(model->num_row_);
 
-  // packed storage for objective
-  for (HighsInt col = 0; col < model->num_col_; col++) {
-    if (colDeleted[col] || model->col_cost_[col] == 0.0) continue;
-    objInds.push_back(col);
-    objVals.push_back(model->col_cost_[col]);
+  // packed storage for objective; only needed if there is an objective limit
+  if (mipsolver->mipdata_->upper_limit < kHighsInf) {
+    objInds.reserve(model->num_col_);
+    for (HighsInt col = 0; col < model->num_col_; col++) {
+      if (colDeleted[col] || model->col_cost_[col] == 0.0) continue;
+      objInds.push_back(col);
+    }
+    // the objective is only checked if it is not too large
+    checkObjective = static_cast<HighsInt>(objInds.size()) <= maxObjSize;
   }
 
   // initialise
-  bool myObjectiveAffected =
-      static_cast<HighsInt>(objInds.size()) <= maxObjSize;
+  bool myObjectiveAffected = checkObjective;
   std::vector<HighsInt> myModifiedRows;
   myModifiedRows.reserve(model->num_row_);
   for (HighsInt row = 0; row < model->num_row_; row++)
@@ -10948,8 +10930,7 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
     // check objective function; during presolve the objective upper limit
     // refers to the original model, so the current offset is subtracted
     HighsCDouble objectiveLower;
-    if (myObjectiveAffected && mipsolver->mipdata_->upper_limit < kHighsInf &&
-        loadObjective(objectiveLower)) {
+    if (myObjectiveAffected && loadObjective(objectiveLower)) {
       double threshold = static_cast<double>(
           static_cast<HighsCDouble>(mipsolver->mipdata_->upper_limit) -
           model->offset_ - objectiveLower);
