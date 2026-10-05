@@ -10299,6 +10299,12 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
 
   auto addImpliedBound = [&](HighsInt binCol, HighsInt binVal,
                              HighsInt nonBinCol, double lb, double ub) {
+    // round bounds of integer non-binaries; variable bounds may imply
+    // fractional values
+    if (model->integrality_[nonBinCol] != HighsVarType::kContinuous) {
+      lb = std::ceil(lb - primal_feastol);
+      ub = std::floor(ub + primal_feastol);
+    }
     // keep the tightest bounds
     HighsImplications::Implication& bound =
         impliedBounds[ImpliedBoundKey{binCol, binVal, nonBinCol}];
@@ -10416,13 +10422,10 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
   auto getImpliedRange = [&](HighsInt nonBinCol,
                              const HighsImplications::Implication& impl) {
     // bounds implied by a literal on a non-binary, intersected with the
-    // non-binary's bounds and rounded for integer columns
+    // non-binary's bounds. implied bounds of integer columns are rounded in
+    // addImpliedBound
     double lb = std::max(model->col_lower_[nonBinCol], impl.lb);
     double ub = std::min(model->col_upper_[nonBinCol], impl.ub);
-    if (model->integrality_[nonBinCol] != HighsVarType::kContinuous) {
-      lb = std::ceil(lb - primal_feastol);
-      ub = std::floor(ub + primal_feastol);
-    }
     return std::make_pair(lb, ub);
   };
 
@@ -10647,34 +10650,18 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
         HighsCDouble sum = 0;
         for (const auto& nz : nonBinNonZeros) {
           HighsInt col = nz.key();
-          double val = nz.value().val;
-          // addNonZero rejects columns with an infinite bound on the
-          // min-activity side
-          assert(val <= 0 || model->col_lower_[col] > -kHighsInf);
-          assert(val >= 0 || model->col_upper_[col] < kHighsInf);
-          double impliedLower = model->col_lower_[col];
-          double impliedUpper = model->col_upper_[col];
+          // intersect the bounds implied by v1 and v2 with the column's bounds
+          HighsImplications::Implication intersection(model->col_lower_[col],
+                                                      model->col_upper_[col]);
           for (const auto& v : {v1, v2}) {
             const auto* impl = impliedBounds.find(
                 ImpliedBoundKey{static_cast<HighsInt>(v.col),
                                 static_cast<HighsInt>(v.val), col});
             if (impl == nullptr) continue;
-            impliedLower = std::max(impliedLower, impl->lb);
-            impliedUpper = std::min(impliedUpper, impl->ub);
+            intersection.lb = std::max(intersection.lb, impl->lb);
+            intersection.ub = std::min(intersection.ub, impl->ub);
           }
-          if (model->integrality_[col] != HighsVarType::kContinuous) {
-            impliedLower = std::ceil(impliedLower - primal_feastol);
-            impliedUpper = std::floor(impliedUpper + primal_feastol);
-          }
-          // a_j > 0: use implied lower bound, a_j < 0: use implied upper.
-          // the standard bound is finite since addNonZero rejects columns
-          // with an infinite bound on the min-activity side
-          if (val > 0)
-            sum += val * (static_cast<HighsCDouble>(impliedLower) -
-                          model->col_lower_[col]);
-          else if (val < 0)
-            sum += val * (static_cast<HighsCDouble>(impliedUpper) -
-                          model->col_upper_[col]);
+          sum += computeLift(col, intersection);
         }
 
         // binary contributions: add |a_j| for each binary forced away from
