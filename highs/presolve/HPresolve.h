@@ -137,6 +137,10 @@ class HPresolve {
   HighsInt numDeletedRows;
   HighsInt numDeletedCols;
 
+  // number of rows with singleEquationChecked set, so that marking a changed
+  // column can skip clearing the flags of its rows when none is set
+  HighsInt numSingleEquationChecked;
+
   // store old problem sizes to compute percentage reductions in
   // presolve loop
   HighsInt oldNumCol;
@@ -190,6 +194,8 @@ class HPresolve {
   void markChangedRow(HighsInt row);
 
   void markChangedCol(HighsInt col);
+
+  bool resetSingleEquationChecked(HighsInt row);
 
   double getMaxAbsColVal(HighsInt col) const;
 
@@ -579,7 +585,7 @@ class HPresolve {
   /*
   // Methods defined and used in HPresolveDebug, and only executed if
   // HPresolve::debug is called. This hasn't been used for ages, and
-  // is retained in case it's useful in future
+  // this comment is retained in case it's useful in future
   static void debug(const HighsLp& lp, const HighsOptions& options);
   void computeIntermediateMatrix(std::vector<HighsInt>& flagRow,
                                  std::vector<HighsInt>& flagCol,
