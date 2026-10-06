@@ -10590,7 +10590,10 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
       cliquetable.forEachUniqueNeighbor(
           HighsCliqueTable::CliqueVar(col, val < 0 ? 1 : 0),
           [&](HighsCliqueTable::CliqueVar neighbor) {
-            if (colDeleted[neighbor.col]) return;
+            // substitutions in the clique table can leave cliques {x, ~x}
+            // until the next rebuild, so the column can be its own
+            // neighbour; skip it, otherwise its coefficient is counted twice
+            if (colDeleted[neighbor.col] || neighbor.col == col) return;
 #ifndef NDEBUG
             // binaries outside the row that are not lifted: their implied
             // bounds on row non-binaries were collected in
