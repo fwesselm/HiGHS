@@ -10886,12 +10886,15 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
       // tighten lower bound: walk from lb toward ub
       if (!colDeleted[nonBinCol] && tightenLower) {
         double newLowerBnd;
-        if (computeBound(nonBinVal, weightLower, model->col_lower_[nonBinCol],
-                         model->col_upper_[nonBinCol], HighsInt{1},
-                         newLowerBnd) &&
-            newLowerBnd > model->col_lower_[nonBinCol] + primal_feastol) {
+        // w(d) > threshold for all d in [lb, ub]: no feasible value
+        if (!computeBound(nonBinVal, weightLower, model->col_lower_[nonBinCol],
+                          model->col_upper_[nonBinCol], HighsInt{1},
+                          newLowerBnd))
+          return Result::kPrimalInfeasible;
+        if (newLowerBnd > model->col_lower_[nonBinCol] + primal_feastol) {
           if (nonBinColIsInteger)
             newLowerBnd = std::ceil(newLowerBnd - primal_feastol);
+          assert(newLowerBnd <= model->col_upper_[nonBinCol] + primal_feastol);
           if (newLowerBnd == model->col_upper_[nonBinCol]) {
             HPRESOLVE_CHECKED_CALL(fixCol(nonBinCol, true));
           } else if (nonBinColIsInteger) {
@@ -10905,12 +10908,15 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
       // tighten upper bound: walk from ub toward lb
       if (!colDeleted[nonBinCol] && tightenUpper) {
         double newUpperBnd;
-        if (computeBound(nonBinVal, weightUpper, model->col_upper_[nonBinCol],
-                         model->col_lower_[nonBinCol], HighsInt{-1},
-                         newUpperBnd) &&
-            newUpperBnd < model->col_upper_[nonBinCol] - primal_feastol) {
+        // w(d) > threshold for all d in [lb, ub]: no feasible value
+        if (!computeBound(nonBinVal, weightUpper, model->col_upper_[nonBinCol],
+                          model->col_lower_[nonBinCol], HighsInt{-1},
+                          newUpperBnd))
+          return Result::kPrimalInfeasible;
+        if (newUpperBnd < model->col_upper_[nonBinCol] - primal_feastol) {
           if (nonBinColIsInteger)
             newUpperBnd = std::floor(newUpperBnd + primal_feastol);
+          assert(newUpperBnd >= model->col_lower_[nonBinCol] - primal_feastol);
           if (newUpperBnd == model->col_lower_[nonBinCol]) {
             HPRESOLVE_CHECKED_CALL(fixCol(nonBinCol, false));
           } else if (nonBinColIsInteger) {

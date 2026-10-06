@@ -2768,6 +2768,159 @@ TEST_CASE("test-impl-aware-piecewise-walk-tie", "[highs_test_presolve_rules]") {
   HighsTaskExecutor::shutdown(true);
 }
 
+TEST_CASE("test-impl-aware-piecewise-walk-infeasible",
+          "[highs_test_presolve_rules]") {
+  // infeasibility detection when the implied activity of a non-binary exceeds
+  // the threshold on its whole domain.
+  //
+  // row 0: x0 + x1 + x2 + x3 <= 1.5
+  // x0..x3(col0..col3) binary; y(col4) integer [0, 6], not in row
+  // implications: x0=0 => y>=3, x1=0 => y>=3  (lower-type breakpoints at 3)
+  //               x2=0 => y<=2, x3=0 => y<=2  (upper-type breakpoints at 2)
+  //
+  // implied activity: w(y) = [y < 3]*2 + [y > 2]*2, threshold 1.5.
+  // w(y) >= 2 > 1.5 for all y in [0, 6], so neither walk crosses the
+  // threshold and the problem is infeasible. no binary is fixed, since y has a
+  // zero coefficient and does not lift any binary.
+  HighsLp lp;
+  lp.num_col_ = 5;
+  lp.num_row_ = 1;
+  lp.sense_ = ObjSense::kMinimize;
+  lp.col_cost_ = {0, 0, 0, 0, 0};
+  lp.col_lower_ = {0, 0, 0, 0, 0};
+  lp.col_upper_ = {1, 1, 1, 1, 6};
+  lp.integrality_ = {HighsVarType::kInteger, HighsVarType::kInteger,
+                     HighsVarType::kInteger, HighsVarType::kInteger,
+                     HighsVarType::kInteger};
+  lp.row_lower_ = {-kHighsInf};
+  lp.row_upper_ = {1.5};
+  lp.a_matrix_.format_ = MatrixFormat::kColwise;
+  lp.a_matrix_.num_col_ = 5;
+  lp.a_matrix_.num_row_ = 1;
+  lp.a_matrix_.start_ = {0, 1, 2, 3, 4, 4};
+  lp.a_matrix_.index_ = {0, 0, 0, 0};
+  lp.a_matrix_.value_ = {1, 1, 1, 1};
+
+  highs::parallel::initialize_scheduler(1);
+
+  Highs highs;
+  highs.setOptionValue("output_flag", dev_run);
+  highs.setOptionValue("presolve_rule_test",
+                       kPresolveRuleImplAwareConstrPropagation);
+  highs.passModel(lp);
+
+  HighsCallback callback(&highs);
+  const HighsOptions& options = highs.getOptions();
+  HighsSolution solution;
+  HighsProfiling profiling;
+
+  HighsMipSolver mipsolver(callback, options, lp, solution);
+  mipsolver.timer_.start();
+  profiling.initialize(mipsolver.timer_, true, true);
+  mipsolver.setProfiling(&profiling);
+  mipsolver.mipdata_ =
+      std::unique_ptr<HighsMipSolverData>(new HighsMipSolverData(mipsolver));
+  mipsolver.mipdata_->init();
+  mipsolver.mipdata_->setupDomainPropagation();
+
+  HighsImplications& implications = mipsolver.mipdata_->implications;
+  implications.addImplication(0, 0, 4,
+                              HighsImplications::Implication{3.0, kHighsInf});
+  implications.addImplication(1, 0, 4,
+                              HighsImplications::Implication{3.0, kHighsInf});
+  implications.addImplication(2, 0, 4,
+                              HighsImplications::Implication{-kHighsInf, 2.0});
+  implications.addImplication(3, 0, 4,
+                              HighsImplications::Implication{-kHighsInf, 2.0});
+
+  presolve::HighsPostsolveStack& postsolve_stack =
+      mipsolver.mipdata_->postSolveStack;
+
+  presolve::HPresolve presolve;
+  presolve.setInput(mipsolver, -1);
+  REQUIRE(presolve.okSetupPresolveDataStructures());
+  HighsModelStatus status = presolve.run(postsolve_stack);
+  REQUIRE(status == HighsModelStatus::kInfeasible);
+
+  HighsTaskExecutor::shutdown(true);
+}
+
+TEST_CASE("test-impl-aware-piecewise-walk-infeasible-upper",
+          "[highs_test_presolve_rules]") {
+  // infeasibility detection in the upper walk. the lower walk does not start,
+  // since an upper-type breakpoint below lb is neither counted in w(lb) nor
+  // activated by the lower walk. the upper walk keeps it active.
+  //
+  // row 0: x0 + x1 + x2 <= 1.5
+  // x0..x2(col0..col2) binary; y(col3) integer [1, 3], not in row
+  // implications: x0=0 => y<=0  (infeasible literal, upper-type at 0)
+  //               x1=0 => y>=2  (lower-type breakpoint at 2)
+  //               x2=0 => y<=1  (upper-type breakpoint at 1)
+  //
+  // x0=0 contradicts y >= 1, so x0 is fixed to 1. implied activity:
+  // w(y) = 1 + [y < 2]*1 + [y > 1]*1 = 2 > 1.5 for all y in [1, 3], so the
+  // problem is infeasible. w(lb) without x0 is 1 <= 1.5, so the lower walk is
+  // skipped. w(ub) = 2 > 1.5, and the upper walk does not cross the threshold.
+  HighsLp lp;
+  lp.num_col_ = 4;
+  lp.num_row_ = 1;
+  lp.sense_ = ObjSense::kMinimize;
+  lp.col_cost_ = {0, 0, 0, 0};
+  lp.col_lower_ = {0, 0, 0, 1};
+  lp.col_upper_ = {1, 1, 1, 3};
+  lp.integrality_ = {HighsVarType::kInteger, HighsVarType::kInteger,
+                     HighsVarType::kInteger, HighsVarType::kInteger};
+  lp.row_lower_ = {-kHighsInf};
+  lp.row_upper_ = {1.5};
+  lp.a_matrix_.format_ = MatrixFormat::kColwise;
+  lp.a_matrix_.num_col_ = 4;
+  lp.a_matrix_.num_row_ = 1;
+  lp.a_matrix_.start_ = {0, 1, 2, 3, 3};
+  lp.a_matrix_.index_ = {0, 0, 0};
+  lp.a_matrix_.value_ = {1, 1, 1};
+
+  highs::parallel::initialize_scheduler(1);
+
+  Highs highs;
+  highs.setOptionValue("output_flag", dev_run);
+  highs.setOptionValue("presolve_rule_test",
+                       kPresolveRuleImplAwareConstrPropagation);
+  highs.passModel(lp);
+
+  HighsCallback callback(&highs);
+  const HighsOptions& options = highs.getOptions();
+  HighsSolution solution;
+  HighsProfiling profiling;
+
+  HighsMipSolver mipsolver(callback, options, lp, solution);
+  mipsolver.timer_.start();
+  profiling.initialize(mipsolver.timer_, true, true);
+  mipsolver.setProfiling(&profiling);
+  mipsolver.mipdata_ =
+      std::unique_ptr<HighsMipSolverData>(new HighsMipSolverData(mipsolver));
+  mipsolver.mipdata_->init();
+  mipsolver.mipdata_->setupDomainPropagation();
+
+  HighsImplications& implications = mipsolver.mipdata_->implications;
+  implications.addImplication(0, 0, 3,
+                              HighsImplications::Implication{-kHighsInf, 0.0});
+  implications.addImplication(1, 0, 3,
+                              HighsImplications::Implication{2.0, kHighsInf});
+  implications.addImplication(2, 0, 3,
+                              HighsImplications::Implication{-kHighsInf, 1.0});
+
+  presolve::HighsPostsolveStack& postsolve_stack =
+      mipsolver.mipdata_->postSolveStack;
+
+  presolve::HPresolve presolve;
+  presolve.setInput(mipsolver, -1);
+  REQUIRE(presolve.okSetupPresolveDataStructures());
+  HighsModelStatus status = presolve.run(postsolve_stack);
+  REQUIRE(status == HighsModelStatus::kInfeasible);
+
+  HighsTaskExecutor::shutdown(true);
+}
+
 TEST_CASE("test-impl-aware-paper-example-6-complemented",
           "[highs_test_presolve_rules]") {
   // Chen et al. 2026, Example 6 with x6 complemented: x6' = 4 - x6. exercises
