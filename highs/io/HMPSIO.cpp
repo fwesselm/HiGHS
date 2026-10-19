@@ -494,6 +494,9 @@ bool load_mpsLine(std::istream& file, HighsVarType& integerVar, HighsInt lmax,
     file.get(line, lmax);
     if (*line == '\0' && file.eof())  // nothing read and EOF
       return false;
+    // reading an empty line sets the failbit, which needs to be cleared so
+    // that the newline can be consumed below
+    if (file.fail()) file.clear();
 
     // Line trim   -- to delete tailing white spaces
     HighsInt lcnt = strlen(line) - 1;
@@ -501,7 +504,7 @@ bool load_mpsLine(std::istream& file, HighsVarType& integerVar, HighsInt lmax,
     // then because it reached a newline char (or eof); lets consume this
     // newline (or do nothing if eof)
     if (lcnt + 1 < lmax - 1) file.get();
-    while (isspace(line[lcnt]) && lcnt >= 0) lcnt--;
+    while (lcnt >= 0 && isspace(line[lcnt])) lcnt--;
     if (lcnt <= 0 || line[0] == '*') continue;
 
     // Line expand -- to get data easier

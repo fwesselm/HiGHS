@@ -1,4 +1,5 @@
 #include <cstdio>
+#include <fstream>
 
 #include "HCheckConfig.h"
 #include "Highs.h"
@@ -746,4 +747,38 @@ TEST_CASE("write-semiinteger-variable", "[highs_filereader]") {
   REQUIRE(model2.lp_.col_upper_[0] == 5);
   REQUIRE(model2.lp_.integrality_[0] == HighsVarType::kSemiInteger);
   std::remove(filename.c_str());
+}
+
+TEST_CASE("filereader-fixed-format-empty-line", "[highs_filereader]") {
+  // an empty line used to make the fixed format reader loop forever, and to
+  // read before the beginning of the line buffer
+  const std::string test_name = Catch::getResultCapture().getCurrentTestName();
+  const std::string filename = test_name + ".mps";
+  // write in binary mode so that the empty line is not turned into "\r\n"
+  std::ofstream file(filename, std::ios::binary);
+  file << "NAME          TEST\n"
+          "ROWS\n"
+          " N  COST\n"
+          " G  R1\n"
+          "\n"
+          "COLUMNS\n"
+          "    X         COST      1.0            R1        1.0\n"
+          "RHS\n"
+          "    RHS       R1        2.0\n"
+          "ENDATA\n";
+  file.close();
+
+  Highs highs;
+  highs.setOptionValue("output_flag", dev_run);
+  REQUIRE(highs.setOptionValue("mps_parser_type_free", false) ==
+          HighsStatus::kOk);
+  REQUIRE(highs.readModel(filename) == HighsStatus::kOk);
+  REQUIRE(highs.getNumCol() == 1);
+  REQUIRE(highs.getNumRow() == 1);
+  REQUIRE(highs.run() == HighsStatus::kOk);
+  REQUIRE(highs.getModelStatus() == HighsModelStatus::kOptimal);
+  REQUIRE(highs.getInfo().objective_function_value == 2);
+
+  std::remove(filename.c_str());
+  highs.resetGlobalScheduler(true);
 }
