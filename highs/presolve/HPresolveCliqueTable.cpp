@@ -211,6 +211,9 @@ bool HPresolveCliqueTable::haveCommonClique(CliqueVar v1, CliqueVar v2) const {
   // and their literals are no longer contained in any clique
   table->resolveSubstitution(v1);
   table->resolveSubstitution(v2);
+  // literals of different columns can resolve to the same column.
+  // complementary literals cannot both be active
+  if (v1.col == v2.col) return v1.val != v2.val;
   return table->haveCommonClique(v1, v2);
 }
 

@@ -369,9 +369,9 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
           if (colDeleted[kj.binCol]) continue;
           HighsCliqueTable::CliqueVar v1(ki.binCol, ki.binVal);
           HighsCliqueTable::CliqueVar v2(kj.binCol, kj.binVal);
-          // complementary literals of the same column cannot both be active
-          if (v1.col == v2.col || presolveCliqueTable.haveCommonClique(v1, v2))
-            continue;
+          // already in a clique together (this includes complementary
+          // literals of the same column)
+          if (presolveCliqueTable.haveCommonClique(v1, v2)) continue;
           if (numCliquesAdded >= numNonzeros()) return Result::kOk;
           HPRESOLVE_CHECKED_CALL(addClique(v1, v2));
           // fixed by the clique table
@@ -502,10 +502,9 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
         const auto& v2 = candidates[j];
         if (colDeleted[v2.col]) continue;
 
-        // skip pair of variables if the column index is identical or they are
-        // already in a clique together
-        if (v1.col == v2.col || presolveCliqueTable.haveCommonClique(v1, v2))
-          continue;
+        // skip pair of variables if they are already in a clique together
+        // (this includes complementary literals of the same column)
+        if (presolveCliqueTable.haveCommonClique(v1, v2)) continue;
 
         // combined weight cannot exceed threshold; since candidates are
         // sorted by decreasing weight, no later pair with v1 can either
@@ -552,9 +551,7 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
 
           // binary is forced away from min-contribution if v1 or v2
           // is the complement, or shares a clique with it
-          if (v1 == minContribCliqueVar.complement() ||
-              v2 == minContribCliqueVar.complement() ||
-              presolveCliqueTable.haveCommonClique(v1, minContribCliqueVar) ||
+          if (presolveCliqueTable.haveCommonClique(v1, minContribCliqueVar) ||
               presolveCliqueTable.haveCommonClique(v2, minContribCliqueVar))
             sum += absbval;
         }
