@@ -88,7 +88,7 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
   const HighsInt maxObjSize = 30000;
   // maximum number of cliques added
   const HighsInt maxNumCliquesAdded =
-      std::min(HighsInt{10000}, numNonzeros() / 10);
+      std::max(HighsInt{1000}, std::min(HighsInt{10000}, numNonzeros() / 10));
 
   auto trackColChange = [&](HighsInt col) {
     for (const auto& nz : getColumnVector(col)) {
@@ -470,6 +470,9 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
   auto findCliques = [&](double threshold) {
     // two-column clique extraction
     if (threshold <= primal_feastol) return Result::kOk;
+
+    // no more cliques can be added
+    if (numCliquesAdded >= maxNumCliquesAdded) return Result::kOk;
 
     // stop if no cliques were found after a number of tries
     HighsInt consecutiveNoClique = 0;
