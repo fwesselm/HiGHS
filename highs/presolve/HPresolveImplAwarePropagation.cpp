@@ -86,6 +86,9 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
   // maximum number of non-zeros in rows or objective
   const HighsInt maxRowSize = 400;
   const HighsInt maxObjSize = 30000;
+  // maximum number of cliques added
+  const HighsInt maxNumCliquesAdded =
+      std::min(HighsInt{10000}, numNonzeros() / 10);
 
   auto trackColChange = [&](HighsInt col) {
     for (const auto& nz : getColumnVector(col)) {
@@ -372,7 +375,7 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
           // already in a clique together (this includes complementary
           // literals of the same column)
           if (presolveCliqueTable.haveCommonClique(v1, v2)) continue;
-          if (numCliquesAdded >= numNonzeros()) return Result::kOk;
+          if (numCliquesAdded >= maxNumCliquesAdded) return Result::kOk;
           HPRESOLVE_CHECKED_CALL(addClique(v1, v2));
           // fixed by the clique table
           if (colDeleted[ki.binCol]) break;
@@ -492,8 +495,8 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
               return getBinaryWeight(a) > getBinaryWeight(b);
             });
 
-    for (size_t i = 0; i < candidates.size() && numCliquesAdded < numNonzeros();
-         ++i) {
+    for (size_t i = 0;
+         i < candidates.size() && numCliquesAdded < maxNumCliquesAdded; ++i) {
       const auto& v1 = candidates[i];
       // fixed by the clique table
       if (colDeleted[v1.col]) continue;
