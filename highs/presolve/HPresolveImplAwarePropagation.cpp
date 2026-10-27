@@ -90,6 +90,8 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
   // maximum number of non-zeros in rows or objective
   const HighsInt maxRowSize = 300;
   const HighsInt maxObjSize = 20000;
+  // maximum number of implications visited per row to discover non-binaries
+  const HighsInt maxDiscoveryVisits = 10 * maxRowSize;
   // maximum number of cliques added
   const HighsInt maxNumCliquesAdded =
       std::max(HighsInt{1000}, std::min(HighsInt{10000}, numNonzeros() / 10));
@@ -237,31 +239,35 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
         });
   };
 
-  auto addBinaryImplications = [&](HighsInt binCol) {
-    // bounds on non-binaries implied by a binary. non-binary variables
-    // outside the row are discovered; their bounds can be tightened
-    // via the piecewise walk even though their row coefficient is zero.
-    // non-binaries linked to a row binary only by a variable bound are not
-    // discovered (no reverse index; no reductions on MIPLIB3 when tested)
+  auto discoverNonBinaries = [&](HighsInt binCol,
+                                 HighsInt& numDiscoveryVisits) {
+    // non-binaries outside the row implied by a binary are discovered; their
+    // bounds can be tightened via the piecewise walk even though their row
+    // coefficient is zero. non-binaries linked to a row binary only by a
+    // variable bound are not discovered (no reverse index; no reductions on
+    // MIPLIB3 when tested). stops when the row is full or too many
+    // implications were visited
     for (HighsInt val = 0; val <= 1; ++val) {
-      implications.getImplications(binCol, val)
-          .for_each([&](HighsInt targetCol,
-                        const HighsImplications::Implication& impl) {
-            if (colDeleted[targetCol] || isBinary(targetCol)) return;
-            if (nonBinNonZeros.find(targetCol) == nullptr) {
-              if (model->col_lower_[targetCol] <= -kHighsInf ||
-                  model->col_upper_[targetCol] >= kHighsInf)
-                return;
-              // do not discover more columns than allowed in a row
-              if (static_cast<HighsInt>(binNonZeros.size() +
-                                        nonBinNonZeros.size()) >= maxRowSize)
-                return;
-              nonBinNonZeros[targetCol] = VariableData(0.0);
-              addVarBounds(targetCol);
-            }
-            assert(nonBinNonZeros.find(targetCol) != nullptr);
-            addImpliedBound(binCol, val, targetCol, impl.lb, impl.ub);
-          });
+      bool stop =
+          implications.getImplications(binCol, val)
+              .for_each([&](HighsInt targetCol,
+                            const HighsImplications::Implication& impl) {
+                if (numDiscoveryVisits++ >= maxDiscoveryVisits ||
+                    static_cast<HighsInt>(binNonZeros.size() +
+                                          nonBinNonZeros.size()) >= maxRowSize)
+                  return true;
+                if (colDeleted[targetCol] || isBinary(targetCol)) return false;
+                if (nonBinNonZeros.find(targetCol) == nullptr) {
+                  if (model->col_lower_[targetCol] <= -kHighsInf ||
+                      model->col_upper_[targetCol] >= kHighsInf)
+                    return false;
+                  nonBinNonZeros[targetCol] = VariableData(0.0);
+                  addVarBounds(targetCol);
+                }
+                addImpliedBound(binCol, val, targetCol, impl.lb, impl.ub);
+                return false;
+              });
+      if (stop) return;
     }
   };
 
@@ -294,13 +300,11 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
     for (const auto& nz : nonBinNonZeros) {
       HighsInt nonBinCol = nz.key();
       addVarBounds(nonBinCol);
-      // implications of binaries outside the row on row non-binaries. the
-      // reverse implications are never cleaned up, so look up each one
+      // implications of all binaries on row non-binaries. the reverse
+      // implications are never cleaned up, so look up each one
       implications.getReverseImplications(nonBinCol).for_each(
           [&](HighsInt binCol, bool) {
-            if (colDeleted[binCol] || !isBinary(binCol) ||
-                binNonZeros.find(binCol) != nullptr)
-              return;
+            if (colDeleted[binCol] || !isBinary(binCol)) return;
             for (HighsInt val = 0; val <= 1; ++val) {
               const auto* impl =
                   implications.getImplications(binCol, val).find(nonBinCol);
@@ -309,7 +313,10 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
             }
           });
     }
-    for (const auto& binVar : binNonZeros) addBinaryImplications(binVar.key());
+    // discover non-binaries outside the row
+    HighsInt numDiscoveryVisits = 0;
+    for (const auto& binVar : binNonZeros)
+      discoverNonBinaries(binVar.key(), numDiscoveryVisits);
 
     // binaries outside the row whose implied bounds lift them. all implied
     // bounds on row non-binaries have been collected, so this is complete
@@ -324,7 +331,8 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
     pdqsort(liftedBins.begin(), liftedBins.end());
     liftedBins.erase(std::unique(liftedBins.begin(), liftedBins.end()),
                      liftedBins.end());
-    for (HighsInt binCol : liftedBins) addBinaryImplications(binCol);
+    for (HighsInt binCol : liftedBins)
+      discoverNonBinaries(binCol, numDiscoveryVisits);
   };
 
   auto findConflictCliques = [&]() {
