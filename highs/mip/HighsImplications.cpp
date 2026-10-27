@@ -676,6 +676,7 @@ void HighsImplications::rebuild(HighsInt ncols,
 
   implications.resize(2 * ncols);
   hasProbed.resize(2 * ncols);
+  impliedRangePos.assign(2 * ncols, -1);
   reverseImplications.resize(ncols);
   colsubstituted.resize(ncols);
   substitutions.clear();
@@ -1069,4 +1070,107 @@ void HighsImplications::applyImplications(HighsDomain& domain,
   };
 
   implications[ImplIdx{col, val}].for_each(checkImplication);
+}
+
+void HighsImplications::findConflictingImplications(
+    HighsInt col, double colLower, double colUpper,
+    std::vector<std::pair<HighsCliqueTable::CliqueVar,
+                          HighsCliqueTable::CliqueVar>>& conflicts,
+    std::vector<HighsCliqueTable::CliqueVar>& infeasibleLiterals,
+    HighsInt maxNumConflicts) {
+  impliedRanges.clear();
+
+  // add an implied range, merging the ranges of the same literal
+  auto addRange = [&](HighsCliqueTable::CliqueVar literal, double lb,
+                      double ub) {
+    HighsInt& pos = impliedRangePos[literal.index()];
+    if (pos == -1) {
+      pos = static_cast<HighsInt>(impliedRanges.size());
+      impliedRanges.push_back({literal, lb, ub});
+    } else {
+      impliedRanges[pos].lb = std::max(impliedRanges[pos].lb, lb);
+      impliedRanges[pos].ub = std::min(impliedRanges[pos].ub, ub);
+    }
+  };
+
+  // implications of binaries on col
+  reverseImplications[col].for_each([&](HighsInt binCol, bool) {
+    for (HighsInt val = 0; val <= 1; ++val) {
+      const Implication* implic = implications[ImplIdx{binCol, val}].find(col);
+      if (implic != nullptr)
+        addRange(HighsCliqueTable::CliqueVar(binCol, val), implic->lb,
+                 implic->ub);
+    }
+  });
+
+  // variable lower bounds: col >= coef * binCol + constant
+  vlbs[col].for_each([&](HighsInt binCol, const VarBound& vlb) {
+    if (std::abs(vlb.coef) >= kHighsInf || std::abs(vlb.constant) >= kHighsInf)
+      return;
+    addRange(HighsCliqueTable::CliqueVar(binCol, 0), vlb.constant, kHighsInf);
+    addRange(
+        HighsCliqueTable::CliqueVar(binCol, 1),
+        static_cast<double>(static_cast<HighsCDouble>(vlb.constant) + vlb.coef),
+        kHighsInf);
+  });
+
+  // variable upper bounds: col <= coef * binCol + constant
+  vubs[col].for_each([&](HighsInt binCol, const VarBound& vub) {
+    if (std::abs(vub.coef) >= kHighsInf || std::abs(vub.constant) >= kHighsInf)
+      return;
+    addRange(HighsCliqueTable::CliqueVar(binCol, 0), -kHighsInf, vub.constant);
+    addRange(HighsCliqueTable::CliqueVar(binCol, 1), -kHighsInf,
+             static_cast<double>(static_cast<HighsCDouble>(vub.constant) +
+                                 vub.coef));
+  });
+
+  for (const ImpliedRange& range : impliedRanges)
+    impliedRangePos[range.literal.index()] = -1;
+
+  // intersect with the bounds of col; a literal with an empty range is
+  // infeasible
+  size_t numRanges = 0;
+  double maxLb = -kHighsInf;
+  double minUb = kHighsInf;
+  for (ImpliedRange range : impliedRanges) {
+    range.lb = std::max(range.lb, colLower);
+    range.ub = std::min(range.ub, colUpper);
+    if (range.lb > range.ub + mipsolver.mipdata_->feastol) {
+      infeasibleLiterals.push_back(range.literal);
+    } else {
+      maxLb = std::max(maxLb, range.lb);
+      minUb = std::min(minUb, range.ub);
+      impliedRanges[numRanges++] = range;
+    }
+  }
+  impliedRanges.resize(numRanges);
+
+  // all ranges overlap: no conflicts
+  if (maxLb <= minUb + mipsolver.mipdata_->feastol) return;
+
+  // sort by increasing implied upper bound
+  pdqsort(impliedRanges.begin(), impliedRanges.end(),
+          [](const ImpliedRange& a, const ImpliedRange& b) {
+            return std::make_pair(a.ub, a.literal.index()) <
+                   std::make_pair(b.ub, b.literal.index());
+          });
+
+  // literals implying an upper bound below the implied lower bound of literal
+  // i conflict with i; they form a prefix since the ranges are sorted by upper
+  // bound, and they precede i since its range is not empty
+  HighsInt numConflicts = 0;
+  for (size_t i = 0; i < impliedRanges.size(); ++i) {
+    for (size_t j = 0; j < impliedRanges.size(); ++j) {
+      if (impliedRanges[j].ub >=
+          impliedRanges[i].lb - mipsolver.mipdata_->feastol)
+        break;
+      // complementary literals of the same column do not form a clique
+      if (impliedRanges[j].literal.col == impliedRanges[i].literal.col)
+        continue;
+      if (numConflicts >= maxNumConflicts) return;
+      conflicts.emplace_back(impliedRanges[i].literal,
+                             impliedRanges[j].literal);
+      numConflicts++;
+    }
+  }
 }

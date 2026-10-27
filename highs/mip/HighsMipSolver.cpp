@@ -1566,6 +1566,66 @@ bool HighsMipSolver::solutionFeasible(const HighsLp* lp,
   return feasible;
 }
 
+double HighsMipSolver::adjustedUb(const HighsCDouble& boundVal, double colLower,
+                                  double colUpper, bool isIntegral,
+                                  bool& accept) const {
+  double bound;
+
+  if (isIntegral) {
+    bound = static_cast<double>(floor(boundVal + mipdata_->feastol));
+    accept = bound < colUpper &&
+             colUpper - bound > 1000.0 * mipdata_->feastol * std::fabs(bound);
+  } else {
+    if (abs(boundVal - colLower) <= mipdata_->epsilon)
+      bound = colLower;
+    else
+      bound = static_cast<double>(boundVal);
+    if (colUpper == kHighsInf)
+      accept = true;
+    else if (bound + 1000.0 * mipdata_->feastol < colUpper) {
+      double relativeImprove = colUpper - bound;
+      if (colLower != -kHighsInf)
+        relativeImprove /= colUpper - colLower;
+      else
+        relativeImprove /= std::max(std::fabs(colUpper), std::fabs(bound));
+      accept = relativeImprove >= 0.3;
+    } else
+      accept = false;
+  }
+
+  return bound;
+}
+
+double HighsMipSolver::adjustedLb(const HighsCDouble& boundVal, double colLower,
+                                  double colUpper, bool isIntegral,
+                                  bool& accept) const {
+  double bound;
+
+  if (isIntegral) {
+    bound = static_cast<double>(ceil(boundVal - mipdata_->feastol));
+    accept = bound > colLower &&
+             bound - colLower > 1000.0 * mipdata_->feastol * std::fabs(bound);
+  } else {
+    if (abs(colUpper - boundVal) <= mipdata_->epsilon)
+      bound = colUpper;
+    else
+      bound = static_cast<double>(boundVal);
+    if (colLower == -kHighsInf)
+      accept = true;
+    else if (bound - 1000.0 * mipdata_->feastol > colLower) {
+      double relativeImprove = bound - colLower;
+      if (colUpper != kHighsInf)
+        relativeImprove /= colUpper - colLower;
+      else
+        relativeImprove /= std::max(std::fabs(colLower), std::fabs(bound));
+      accept = relativeImprove >= 0.3;
+    } else
+      accept = false;
+  }
+
+  return bound;
+}
+
 std::vector<HighsModelStatus> HighsMipSolver::initialiseTerminatorRecord(
     HighsInt num_instance) const {
   std::vector<HighsModelStatus> record(num_instance, HighsModelStatus::kNotset);

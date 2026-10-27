@@ -1610,64 +1610,16 @@ void HighsDomain::computeMaxActivity(HighsInt start, HighsInt end,
   activitymax.renormalize();
 }
 
-double HighsDomain::adjustedUb(HighsInt col, HighsCDouble boundVal,
+double HighsDomain::adjustedUb(HighsInt col, const HighsCDouble& boundVal,
                                bool& accept) const {
-  double bound;
-
-  if (mipsolver->isColIntegral(col)) {
-    bound = static_cast<double>(floor(boundVal + feastol()));
-    accept = bound < col_upper_[col] &&
-             col_upper_[col] - bound > 1000.0 * feastol() * std::fabs(bound);
-  } else {
-    if (abs(boundVal - col_lower_[col]) <= epsilon())
-      bound = col_lower_[col];
-    else
-      bound = static_cast<double>(boundVal);
-    if (col_upper_[col] == kHighsInf)
-      accept = true;
-    else if (bound + 1000.0 * feastol() < col_upper_[col]) {
-      double relativeImprove = col_upper_[col] - bound;
-      if (col_lower_[col] != -kHighsInf)
-        relativeImprove /= col_upper_[col] - col_lower_[col];
-      else
-        relativeImprove /=
-            std::max(std::fabs(col_upper_[col]), std::fabs(bound));
-      accept = relativeImprove >= 0.3;
-    } else
-      accept = false;
-  }
-
-  return bound;
+  return mipsolver->adjustedUb(boundVal, col_lower_[col], col_upper_[col],
+                               mipsolver->isColIntegral(col), accept);
 }
 
-double HighsDomain::adjustedLb(HighsInt col, HighsCDouble boundVal,
+double HighsDomain::adjustedLb(HighsInt col, const HighsCDouble& boundVal,
                                bool& accept) const {
-  double bound;
-
-  if (mipsolver->isColIntegral(col)) {
-    bound = static_cast<double>(ceil(boundVal - feastol()));
-    accept = bound > col_lower_[col] &&
-             bound - col_lower_[col] > 1000.0 * feastol() * std::fabs(bound);
-  } else {
-    if (abs(col_upper_[col] - boundVal) <= epsilon())
-      bound = col_upper_[col];
-    else
-      bound = static_cast<double>(boundVal);
-    if (col_lower_[col] == -kHighsInf)
-      accept = true;
-    else if (bound - 1000.0 * feastol() > col_lower_[col]) {
-      double relativeImprove = bound - col_lower_[col];
-      if (col_upper_[col] != kHighsInf)
-        relativeImprove /= col_upper_[col] - col_lower_[col];
-      else
-        relativeImprove /=
-            std::max(std::fabs(col_lower_[col]), std::fabs(bound));
-      accept = relativeImprove >= 0.3;
-    } else
-      accept = false;
-  }
-
-  return bound;
+  return mipsolver->adjustedLb(boundVal, col_lower_[col], col_upper_[col],
+                               mipsolver->isColIntegral(col), accept);
 }
 
 HighsInt HighsDomain::propagateRowUpper(const HighsInt* Rindex,

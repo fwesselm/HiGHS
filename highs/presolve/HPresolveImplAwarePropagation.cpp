@@ -72,6 +72,10 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
   std::vector<HighsInt> liftedBins;
   std::vector<ConflictEntry> conflictEntries;
   std::vector<HighsCliqueTable::CliqueVar> impliedFixings;
+  std::vector<
+      std::pair<HighsCliqueTable::CliqueVar, HighsCliqueTable::CliqueVar>>
+      conflictingLiterals;
+  std::vector<HighsCliqueTable::CliqueVar> infeasibleLiterals;
   std::vector<HighsInt> modifiedRows;
   std::vector<HighsBool> modifiedRowFlags;
   std::vector<HighsInt> objInds;
@@ -84,8 +88,8 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
   HighsInt numBoundsTightened = 0;
 
   // maximum number of non-zeros in rows or objective
-  const HighsInt maxRowSize = 400;
-  const HighsInt maxObjSize = 30000;
+  const HighsInt maxRowSize = 300;
+  const HighsInt maxObjSize = 20000;
   // maximum number of cliques added
   const HighsInt maxNumCliquesAdded =
       std::max(HighsInt{1000}, std::min(HighsInt{10000}, numNonzeros() / 10));
@@ -744,12 +748,20 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
                           newLowerBnd))
           return Result::kPrimalInfeasible;
         if (newLowerBnd > model->col_lower_[nonBinCol] + primal_feastol) {
+          bool accept = true;
           if (nonBinColIsInteger)
             newLowerBnd = std::ceil(newLowerBnd - primal_feastol);
+          else
+            // continuous columns: same acceptance criteria as domain
+            // propagation
+            newLowerBnd = mipsolver->adjustedLb(
+                static_cast<HighsCDouble>(newLowerBnd),
+                model->col_lower_[nonBinCol], model->col_upper_[nonBinCol],
+                false, accept);
           assert(newLowerBnd <= model->col_upper_[nonBinCol] + primal_feastol);
           if (newLowerBnd == model->col_upper_[nonBinCol]) {
             HPRESOLVE_CHECKED_CALL(fixCol(nonBinCol, true));
-          } else if (nonBinColIsInteger) {
+          } else if (accept) {
             numBoundsTightened++;
             trackColChange(nonBinCol);
             HPRESOLVE_CHECKED_CALL(changeColLower(nonBinCol, newLowerBnd));
@@ -766,12 +778,20 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
                           newUpperBnd))
           return Result::kPrimalInfeasible;
         if (newUpperBnd < model->col_upper_[nonBinCol] - primal_feastol) {
+          bool accept = true;
           if (nonBinColIsInteger)
             newUpperBnd = std::floor(newUpperBnd + primal_feastol);
+          else
+            // continuous columns: same acceptance criteria as domain
+            // propagation
+            newUpperBnd = mipsolver->adjustedUb(
+                static_cast<HighsCDouble>(newUpperBnd),
+                model->col_lower_[nonBinCol], model->col_upper_[nonBinCol],
+                false, accept);
           assert(newUpperBnd >= model->col_lower_[nonBinCol] - primal_feastol);
           if (newUpperBnd == model->col_lower_[nonBinCol]) {
             HPRESOLVE_CHECKED_CALL(fixCol(nonBinCol, false));
-          } else if (nonBinColIsInteger) {
+          } else if (accept) {
             numBoundsTightened++;
             trackColChange(nonBinCol);
             HPRESOLVE_CHECKED_CALL(changeColUpper(nonBinCol, newUpperBnd));
@@ -832,6 +852,35 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
     // the objective is only checked if it is not too large
     checkObjective = static_cast<HighsInt>(objInds.size()) <= maxObjSize;
   }
+
+  // literals implying contradicting bounds on a non-binary do not depend on a
+  // row, so they are found once per call
+  for (HighsInt col = 0; col < model->num_col_; col++) {
+    if (colDeleted[col] || isBinary(col)) continue;
+    conflictingLiterals.clear();
+    infeasibleLiterals.clear();
+    implications.findConflictingImplications(
+        col, model->col_lower_[col], model->col_upper_[col],
+        conflictingLiterals, infeasibleLiterals,
+        maxNumCliquesAdded - numCliquesAdded);
+    for (const HighsCliqueTable::CliqueVar& literal : infeasibleLiterals) {
+      if (colDeleted[literal.col] || !isBinary(literal.col)) continue;
+      HPRESOLVE_CHECKED_CALL(fixCol(literal.col, literal.val == 0));
+    }
+    for (const auto& conflict : conflictingLiterals) {
+      const HighsCliqueTable::CliqueVar& v1 = conflict.first;
+      const HighsCliqueTable::CliqueVar& v2 = conflict.second;
+      if (colDeleted[v1.col] || colDeleted[v2.col] || !isBinary(v1.col) ||
+          !isBinary(v2.col))
+        continue;
+      if (presolveCliqueTable.haveCommonClique(v1, v2)) continue;
+      if (numCliquesAdded >= maxNumCliquesAdded) break;
+      HPRESOLVE_CHECKED_CALL(addClique(v1, v2));
+    }
+  }
+  // all rows and the objective are checked in the first round anyway
+  clearChangedRowFlags();
+  modifiedRows.clear();
 
   // initialise
   bool myObjectiveAffected = checkObjective;

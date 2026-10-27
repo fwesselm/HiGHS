@@ -160,6 +160,12 @@ class HighsMipSolver {
                         const std::vector<double>* pass_row_value,
                         MipViolation& violation, HighsCDouble& obj) const;
 
+  double adjustedUb(const HighsCDouble& boundVal, double colLower,
+                    double colUpper, bool isIntegral, bool& accept) const;
+
+  double adjustedLb(const HighsCDouble& boundVal, double colLower,
+                    double colUpper, bool isIntegral, bool& accept) const;
+
   std::vector<HighsModelStatus> initialiseTerminatorRecord(
       HighsInt num_instance) const;
   void initialiseTerminator(HighsInt num_instance_ = 0,

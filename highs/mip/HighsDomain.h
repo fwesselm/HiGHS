@@ -567,9 +567,11 @@ class HighsDomain {
                           const double* ARvalue, HighsInt& ninfmax,
                           HighsCDouble& activitymax) const;
 
-  double adjustedUb(HighsInt col, HighsCDouble boundVal, bool& accept) const;
+  double adjustedUb(HighsInt col, const HighsCDouble& boundVal,
+                    bool& accept) const;
 
-  double adjustedLb(HighsInt col, HighsCDouble boundVal, bool& accept) const;
+  double adjustedLb(HighsInt col, const HighsCDouble& boundVal,
+                    bool& accept) const;
 
   HighsInt propagateRowUpper(const HighsInt* Rindex, const double* Rvalue,
                              HighsInt Rlen, double Rupper,

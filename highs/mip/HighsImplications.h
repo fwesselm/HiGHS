@@ -13,11 +13,11 @@
 #include <utility>
 #include <vector>
 
+#include "mip/HighsCliqueTable.h"
 #include "mip/HighsDomain.h"
 #include "mip/HighsDomainChange.h"
 #include "util/HighsHashTree.h"
 
-class HighsCliqueTable;
 class HighsLpRelaxation;
 
 class HighsImplications {
@@ -103,6 +103,16 @@ class HighsImplications {
 
   std::vector<HighsHashTree<HighsInt, HighsInt>> rowToVarBounds;
 
+  // implied range of a literal on a column, used by
+  // findConflictingImplications
+  struct ImpliedRange {
+    HighsCliqueTable::CliqueVar literal;
+    double lb;
+    double ub;
+  };
+  std::vector<ImpliedRange> impliedRanges;
+  std::vector<HighsInt> impliedRangePos;
+
  public:
   const HighsMipSolver& mipsolver;
   std::vector<HighsSubstitution> substitutions;
@@ -143,6 +153,7 @@ class HighsImplications {
   void resize(HighsInt ncols, HighsInt nrows) {
     implications.resize(2 * static_cast<size_t>(ncols));
     hasProbed.resize(2 * static_cast<size_t>(ncols));
+    impliedRangePos.resize(2 * static_cast<size_t>(ncols), -1);
     reverseImplications.resize(ncols);
     colsubstituted.resize(ncols);
     vubs.resize(ncols);
@@ -238,6 +249,18 @@ class HighsImplications {
   const HighsHashTree<HighsInt, VarBound>& getVubs(HighsInt col) const {
     return vubs[col];
   }
+
+  // literals implying contradicting bounds on col (from implications and
+  // variable bounds) form a 2-clique; a literal whose implied bounds
+  // contradict [colLower, colUpper] is infeasible. results are appended, at
+  // most maxNumConflicts conflicts. the caller has to check that the
+  // literals' columns are still binary
+  void findConflictingImplications(
+      HighsInt col, double colLower, double colUpper,
+      std::vector<std::pair<HighsCliqueTable::CliqueVar,
+                            HighsCliqueTable::CliqueVar>>& conflicts,
+      std::vector<HighsCliqueTable::CliqueVar>& infeasibleLiterals,
+      HighsInt maxNumConflicts);
 
   void rowModified(HighsInt row);
 
