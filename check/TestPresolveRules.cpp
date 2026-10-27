@@ -2081,9 +2081,19 @@ TEST_CASE("test-impl-aware-paper-example-6", "[highs_test_presolve_rules]") {
   HighsModelStatus status = presolve.run(postsolve_stack);
   REQUIRE(status == HighsModelStatus::kNotset);
 
-  // x6 lower bound should be tightened from 0 to 3
-  REQUIRE(mipsolver.model_->col_lower_[5] >= 3.0 - 1e-6);
-  REQUIRE(mipsolver.model_->col_lower_[5] <= 3.0 + 1e-6);
+  // x6 lower bound should be tightened from 0 to 3. then x5=0 => x6<=1 is an
+  // infeasible literal, so x5 is fixed to 1 and removed, and x6 is at
+  // presolved index 4
+  REQUIRE(mipsolver.model_->num_col_ == 5);
+  REQUIRE(mipsolver.model_->col_lower_[4] >= 3.0 - 1e-6);
+  REQUIRE(mipsolver.model_->col_lower_[4] <= 3.0 + 1e-6);
+
+  // x5 is restored to 1 by postsolve
+  HighsSolution sol;
+  sol.value_valid = true;
+  sol.col_value = {0.0, 0.0, 0.0, 0.0, 3.0};
+  postsolve_stack.undoPrimal(options, sol);
+  REQUIRE(sol.col_value[4] >= 1.0 - 1e-6);
 
   HighsTaskExecutor::shutdown(true);
 }

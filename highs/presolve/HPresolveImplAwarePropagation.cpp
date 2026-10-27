@@ -55,12 +55,6 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
     }
   };
 
-  struct ConflictEntry {
-    ImpliedBoundKey key;
-    double lb;
-    double ub;
-  };
-
   // data structures
   HighsHashTable<HighsInt, VariableData> binNonZeros;
   HighsHashTable<HighsInt, VariableData> nonBinNonZeros;
@@ -70,7 +64,6 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
   // bounds on non-binaries implied by binaries
   HighsHashTable<ImpliedBoundKey, HighsImplications::Implication> impliedBounds;
   std::vector<HighsInt> liftedBins;
-  std::vector<ConflictEntry> conflictEntries;
   std::vector<HighsCliqueTable::CliqueVar> impliedFixings;
   std::vector<
       std::pair<HighsCliqueTable::CliqueVar, HighsCliqueTable::CliqueVar>>
@@ -78,6 +71,8 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
   std::vector<HighsCliqueTable::CliqueVar> infeasibleLiterals;
   std::vector<HighsInt> modifiedRows;
   std::vector<HighsBool> modifiedRowFlags;
+  std::vector<HighsInt> changedNonBinaries;
+  std::vector<HighsBool> changedNonBinaryFlags;
   std::vector<HighsInt> objInds;
   bool checkObjective = false;
   bool objectiveAffected = false;
@@ -96,6 +91,13 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
   const HighsInt maxNumCliquesAdded =
       std::max(HighsInt{1000}, std::min(HighsInt{10000}, numNonzeros() / 10));
 
+  auto isBinary = [&](HighsInt col) {
+    // implicit integers are binary as well, consistent with the clique table
+    // and the implications
+    return model->integrality_[col] != HighsVarType::kContinuous &&
+           model->col_lower_[col] == 0.0 && model->col_upper_[col] == 1.0;
+  };
+
   auto trackColChange = [&](HighsInt col) {
     for (const auto& nz : getColumnVector(col)) {
       if (!modifiedRowFlags[nz.index()] && rowsize[nz.index()] > 1 &&
@@ -106,6 +108,12 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
     }
     if (checkObjective && model->col_cost_[col] != 0.0)
       objectiveAffected = true;
+    // non-binaries with changed bounds are checked for conflicting
+    // implications in the next round
+    if (!isBinary(col) && !changedNonBinaryFlags[col]) {
+      changedNonBinaries.push_back(col);
+      changedNonBinaryFlags[col] = true;
+    }
   };
 
   auto fixCol = [&](HighsInt col, bool toUpper) {
@@ -133,15 +141,9 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
     return Result::kOk;
   };
 
-  auto isBinary = [&](HighsInt col) {
-    // implicit integers are binary as well, consistent with the clique table
-    // and the implications
-    return model->integrality_[col] != HighsVarType::kContinuous &&
-           model->col_lower_[col] == 0.0 && model->col_upper_[col] == 1.0;
-  };
-
-  auto clearChangedRowFlags = [&]() {
+  auto clearChangedFlags = [&]() {
     for (HighsInt row : modifiedRows) modifiedRowFlags[row] = false;
+    for (HighsInt col : changedNonBinaries) changedNonBinaryFlags[col] = false;
     objectiveAffected = false;
   };
 
@@ -335,73 +337,6 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
       discoverNonBinaries(binCol, numDiscoveryVisits);
   };
 
-  auto findConflictCliques = [&]() {
-    // literals implying contradicting bounds on a non-binary form a clique,
-    // independently of the row's threshold. a literal whose implied bounds
-    // contradict the non-binary's bounds is infeasible
-    conflictEntries.clear();
-    for (const auto& entry : impliedBounds) {
-      const ImpliedBoundKey& key = entry.key();
-      if (colDeleted[key.binCol] || colDeleted[key.nonBinCol]) continue;
-      // implied range intersected with the non-binary's bounds
-      double lb = std::max(model->col_lower_[key.nonBinCol], entry.value().lb);
-      double ub = std::min(model->col_upper_[key.nonBinCol], entry.value().ub);
-      bool infeasible = lb > ub + primal_feastol;
-      if (model->col_lower_[key.binCol] == model->col_upper_[key.binCol]) {
-        // binary fixed to an infeasible literal
-        if (infeasible && model->col_lower_[key.binCol] == key.binVal)
-          return Result::kPrimalInfeasible;
-        continue;
-      }
-      if (infeasible) {
-        HPRESOLVE_CHECKED_CALL(fixCol(key.binCol, key.binVal == 0));
-        continue;
-      }
-      // fixing binaries does not change the non-binaries' bounds, so the
-      // ranges stay valid during this pass
-      conflictEntries.push_back({key, lb, ub});
-    }
-
-    // sort by non-binary and increasing implied upper bound
-    pdqsort(conflictEntries.begin(), conflictEntries.end(),
-            [](const ConflictEntry& a, const ConflictEntry& b) {
-              if (a.key.nonBinCol != b.key.nonBinCol)
-                return a.key.nonBinCol < b.key.nonBinCol;
-              return a.ub < b.ub;
-            });
-
-    for (size_t start = 0; start < conflictEntries.size();) {
-      size_t end = start;
-      while (end < conflictEntries.size() &&
-             conflictEntries[end].key.nonBinCol ==
-                 conflictEntries[start].key.nonBinCol)
-        ++end;
-      for (size_t i = start; i < end; ++i) {
-        const ImpliedBoundKey& ki = conflictEntries[i].key;
-        if (colDeleted[ki.binCol]) continue;
-        double lb = conflictEntries[i].lb;
-        // literals implying an upper bound below lb conflict with ki; they
-        // precede ki since its implied range is not empty
-        for (size_t j = start; j < i; ++j) {
-          const ImpliedBoundKey& kj = conflictEntries[j].key;
-          if (conflictEntries[j].ub >= lb - primal_feastol) break;
-          if (colDeleted[kj.binCol]) continue;
-          HighsCliqueTable::CliqueVar v1(ki.binCol, ki.binVal);
-          HighsCliqueTable::CliqueVar v2(kj.binCol, kj.binVal);
-          // already in a clique together (this includes complementary
-          // literals of the same column)
-          if (presolveCliqueTable.haveCommonClique(v1, v2)) continue;
-          if (numCliquesAdded >= maxNumCliquesAdded) return Result::kOk;
-          HPRESOLVE_CHECKED_CALL(addClique(v1, v2));
-          // fixed by the clique table
-          if (colDeleted[ki.binCol]) break;
-        }
-      }
-      start = end;
-    }
-    return Result::kOk;
-  };
-
   auto updateBinaryWeights = [&](double threshold) {
     // lift binaries: their implied bounds increase the minimum contribution
     // of non-binaries to the row
@@ -541,7 +476,8 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
         // may tighten a non-binary's feasible range, increasing its minimum
         // contribution to the row. intersect the bounds implied by v1 and v2
         // and add the excess over the standard bound. contradicting implied
-        // bounds are handled by findConflictCliques.
+        // bounds are handled by findConflictingImplications at the start of
+        // each round.
         HighsCDouble sum = 0;
         for (const auto& nz : nonBinNonZeros) {
           HighsInt col = nz.key();
@@ -700,7 +636,7 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
           double bp = breakpoints[i].value;
           // skip breakpoints more than primal_feastol outside [d,
           // otherColBound] (consistent with the infeasible-literal check in
-          // findConflictCliques). breakpoints at otherColBound are not
+          // findConflictingImplications). breakpoints at otherColBound are not
           // skipped: the jump there can make otherColBound feasible
           if (direction * bp < direction * d - primal_feastol ||
               direction * bp > direction * otherColBound + primal_feastol)
@@ -818,16 +754,12 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
     // collect implied bounds on non-binaries
     collectImpliedBounds();
 
-    // conflict cliques and infeasible literals
-    HPRESOLVE_CHECKED_CALL(findConflictCliques());
-
     // lift / update binary weights
     updateBinaryWeights(threshold);
 
     // binary fixing
     for (const auto& binVar : binNonZeros) {
       HighsInt col = binVar.key();
-      // fixed by findConflictCliques
       if (colDeleted[col]) continue;
 
       bool lowerInfeasible =
@@ -852,6 +784,8 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
   // prepare vectors
   modifiedRows.reserve(model->num_row_);
   modifiedRowFlags.resize(model->num_row_);
+  changedNonBinaries.reserve(model->num_col_);
+  changedNonBinaryFlags.resize(model->num_col_);
 
   // packed storage for objective
   if (mipsolver->mipdata_->upper_limit < kHighsInf ||
@@ -865,36 +799,6 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
     checkObjective = static_cast<HighsInt>(objInds.size()) <= maxObjSize;
   }
 
-  // literals implying contradicting bounds on a non-binary do not depend on a
-  // row, so they are found once per call
-  for (HighsInt col = 0; col < model->num_col_; col++) {
-    if (colDeleted[col] || isBinary(col)) continue;
-    conflictingLiterals.clear();
-    infeasibleLiterals.clear();
-    implications.findConflictingImplications(
-        col, model->col_lower_[col], model->col_upper_[col],
-        model->integrality_[col] != HighsVarType::kContinuous,
-        conflictingLiterals, infeasibleLiterals,
-        maxNumCliquesAdded - numCliquesAdded);
-    for (const HighsCliqueTable::CliqueVar& literal : infeasibleLiterals) {
-      if (colDeleted[literal.col] || !isBinary(literal.col)) continue;
-      HPRESOLVE_CHECKED_CALL(fixCol(literal.col, literal.val == 0));
-    }
-    for (const auto& conflict : conflictingLiterals) {
-      const HighsCliqueTable::CliqueVar& v1 = conflict.first;
-      const HighsCliqueTable::CliqueVar& v2 = conflict.second;
-      if (colDeleted[v1.col] || colDeleted[v2.col] || !isBinary(v1.col) ||
-          !isBinary(v2.col))
-        continue;
-      if (presolveCliqueTable.haveCommonClique(v1, v2)) continue;
-      if (numCliquesAdded >= maxNumCliquesAdded) break;
-      HPRESOLVE_CHECKED_CALL(addClique(v1, v2));
-    }
-  }
-  // all rows and the objective are checked in the first round anyway
-  clearChangedRowFlags();
-  modifiedRows.clear();
-
   // initialise
   bool myObjectiveAffected = checkObjective;
   std::vector<HighsInt> myModifiedRows;
@@ -902,9 +806,42 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
   for (HighsInt row = 0; row < model->num_row_; row++)
     if (!rowDeleted[row] && rowsize[row] > 1 && rowsize[row] <= maxRowSize)
       myModifiedRows.push_back(row);
+  std::vector<HighsInt> myChangedNonBinaries;
+  myChangedNonBinaries.reserve(model->num_col_);
+  for (HighsInt col = 0; col < model->num_col_; col++)
+    if (!colDeleted[col] && !isBinary(col)) myChangedNonBinaries.push_back(col);
 
   // check rows
-  while (myObjectiveAffected || !myModifiedRows.empty()) {
+  while (myObjectiveAffected || !myModifiedRows.empty() ||
+         !myChangedNonBinaries.empty()) {
+    // literals implying contradicting bounds on a non-binary do not depend on
+    // a row: check all non-binaries in the first round, afterwards those with
+    // changed bounds
+    for (HighsInt col : myChangedNonBinaries) {
+      if (colDeleted[col] || isBinary(col)) continue;
+      conflictingLiterals.clear();
+      infeasibleLiterals.clear();
+      implications.findConflictingImplications(
+          col, model->col_lower_[col], model->col_upper_[col],
+          model->integrality_[col] != HighsVarType::kContinuous,
+          conflictingLiterals, infeasibleLiterals,
+          maxNumCliquesAdded - numCliquesAdded);
+      for (const HighsCliqueTable::CliqueVar& literal : infeasibleLiterals) {
+        if (colDeleted[literal.col] || !isBinary(literal.col)) continue;
+        HPRESOLVE_CHECKED_CALL(fixCol(literal.col, literal.val == 0));
+      }
+      for (const auto& conflict : conflictingLiterals) {
+        const HighsCliqueTable::CliqueVar& v1 = conflict.first;
+        const HighsCliqueTable::CliqueVar& v2 = conflict.second;
+        if (colDeleted[v1.col] || colDeleted[v2.col] || !isBinary(v1.col) ||
+            !isBinary(v2.col))
+          continue;
+        if (presolveCliqueTable.haveCommonClique(v1, v2)) continue;
+        if (numCliquesAdded >= maxNumCliquesAdded) break;
+        HPRESOLVE_CHECKED_CALL(addClique(v1, v2));
+      }
+    }
+
     // check objective function
     if (myObjectiveAffected) {
       HighsCDouble minActivity;
@@ -931,11 +868,13 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
             impliedRowBounds.getSumUpperOrig(row, -model->row_lower_[row])));
     }
 
-    // re-check changed rows
+    // re-check changed rows and non-binaries
     myObjectiveAffected = objectiveAffected;
-    clearChangedRowFlags();
+    clearChangedFlags();
     std::swap(modifiedRows, myModifiedRows);
     modifiedRows.clear();
+    std::swap(changedNonBinaries, myChangedNonBinaries);
+    changedNonBinaries.clear();
   }
 
   if (numVarsFixed > 0 || numCliquesAdded > 0 || numBoundsTightened > 0)
