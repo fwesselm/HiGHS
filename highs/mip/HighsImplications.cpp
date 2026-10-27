@@ -1073,7 +1073,7 @@ void HighsImplications::applyImplications(HighsDomain& domain,
 }
 
 void HighsImplications::findConflictingImplications(
-    HighsInt col, double colLower, double colUpper,
+    HighsInt col, double colLower, double colUpper, bool isIntegral,
     std::vector<std::pair<HighsCliqueTable::CliqueVar,
                           HighsCliqueTable::CliqueVar>>& conflicts,
     std::vector<HighsCliqueTable::CliqueVar>& infeasibleLiterals,
@@ -1083,6 +1083,11 @@ void HighsImplications::findConflictingImplications(
   // add an implied range, merging the ranges of the same literal
   auto addRange = [&](HighsCliqueTable::CliqueVar literal, double lb,
                       double ub) {
+    // variable bounds may imply fractional values on an integral col
+    if (isIntegral) {
+      lb = std::ceil(lb - mipsolver.mipdata_->feastol);
+      ub = std::floor(ub + mipsolver.mipdata_->feastol);
+    }
     HighsInt& pos = impliedRangePos[literal.index()];
     if (pos == -1) {
       pos = static_cast<HighsInt>(impliedRanges.size());

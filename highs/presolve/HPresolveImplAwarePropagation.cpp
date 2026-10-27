@@ -252,6 +252,10 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
               if (model->col_lower_[targetCol] <= -kHighsInf ||
                   model->col_upper_[targetCol] >= kHighsInf)
                 return;
+              // do not discover more columns than allowed in a row
+              if (static_cast<HighsInt>(binNonZeros.size() +
+                                        nonBinNonZeros.size()) >= maxRowSize)
+                return;
               nonBinNonZeros[targetCol] = VariableData(0.0);
               addVarBounds(targetCol);
             }
@@ -861,6 +865,7 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
     infeasibleLiterals.clear();
     implications.findConflictingImplications(
         col, model->col_lower_[col], model->col_upper_[col],
+        model->integrality_[col] != HighsVarType::kContinuous,
         conflictingLiterals, infeasibleLiterals,
         maxNumCliquesAdded - numCliquesAdded);
     for (const HighsCliqueTable::CliqueVar& literal : infeasibleLiterals) {

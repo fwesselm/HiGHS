@@ -252,11 +252,12 @@ class HighsImplications {
 
   // literals implying contradicting bounds on col (from implications and
   // variable bounds) form a 2-clique; a literal whose implied bounds
-  // contradict [colLower, colUpper] is infeasible. results are appended, at
-  // most maxNumConflicts conflicts. the caller has to check that the
-  // literals' columns are still binary
+  // contradict [colLower, colUpper] is infeasible. implied bounds on an
+  // integral col are rounded. results are appended, at most maxNumConflicts
+  // conflicts. the caller has to check that the literals' columns are still
+  // binary
   void findConflictingImplications(
-      HighsInt col, double colLower, double colUpper,
+      HighsInt col, double colLower, double colUpper, bool isIntegral,
       std::vector<std::pair<HighsCliqueTable::CliqueVar,
                             HighsCliqueTable::CliqueVar>>& conflicts,
       std::vector<HighsCliqueTable::CliqueVar>& infeasibleLiterals,
