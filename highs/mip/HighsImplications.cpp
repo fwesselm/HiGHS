@@ -1077,8 +1077,10 @@ void HighsImplications::findConflictingImplications(
     std::vector<std::pair<HighsCliqueTable::CliqueVar,
                           HighsCliqueTable::CliqueVar>>& conflicts,
     std::vector<HighsCliqueTable::CliqueVar>& infeasibleLiterals,
-    HighsInt maxNumConflicts) {
+    double& impliedLower, double& impliedUpper, HighsInt maxNumConflicts) {
   impliedRanges.clear();
+  impliedLower = colLower;
+  impliedUpper = colUpper;
 
   // add an implied range, merging the ranges of the same literal
   auto addRange = [&](HighsCliqueTable::CliqueVar literal, double lb,
@@ -1129,18 +1131,45 @@ void HighsImplications::findConflictingImplications(
                                  vub.coef));
   });
 
+  // intersect with the bounds of col; a literal with an empty range is
+  // infeasible
+  auto isEmpty = [&](double lb, double ub) {
+    return lb > ub + mipsolver.mipdata_->feastol;
+  };
+  for (ImpliedRange& range : impliedRanges) {
+    range.lb = std::max(range.lb, colLower);
+    range.ub = std::min(range.ub, colUpper);
+  }
+
+  // one of the two literals of a binary holds, so col lies in the union of
+  // their ranges. a literal without a range does not restrict col; an
+  // infeasible literal contributes an empty range
+  for (const ImpliedRange& range : impliedRanges) {
+    if (range.literal.val != 0) continue;
+    HighsInt pos = impliedRangePos[range.literal.complement().index()];
+    if (pos == -1) continue;
+    const ImpliedRange& complementRange = impliedRanges[pos];
+    double unionLb = kHighsInf;
+    double unionUb = -kHighsInf;
+    for (const ImpliedRange* literalRange : {&range, &complementRange}) {
+      if (isEmpty(literalRange->lb, literalRange->ub)) continue;
+      unionLb = std::min(unionLb, literalRange->lb);
+      unionUb = std::max(unionUb, literalRange->ub);
+    }
+    // both literals infeasible: reported as infeasible literals below
+    if (unionLb > unionUb) continue;
+    impliedLower = std::max(impliedLower, unionLb);
+    impliedUpper = std::min(impliedUpper, unionUb);
+  }
+
   for (const ImpliedRange& range : impliedRanges)
     impliedRangePos[range.literal.index()] = -1;
 
-  // intersect with the bounds of col; a literal with an empty range is
-  // infeasible
   size_t numRanges = 0;
   double maxLb = -kHighsInf;
   double minUb = kHighsInf;
-  for (ImpliedRange range : impliedRanges) {
-    range.lb = std::max(range.lb, colLower);
-    range.ub = std::min(range.ub, colUpper);
-    if (range.lb > range.ub + mipsolver.mipdata_->feastol) {
+  for (const ImpliedRange& range : impliedRanges) {
+    if (isEmpty(range.lb, range.ub)) {
       infeasibleLiterals.push_back(range.literal);
     } else {
       maxLb = std::max(maxLb, range.lb);
@@ -1151,7 +1180,7 @@ void HighsImplications::findConflictingImplications(
   impliedRanges.resize(numRanges);
 
   // all ranges overlap: no conflicts
-  if (maxLb <= minUb + mipsolver.mipdata_->feastol) return;
+  if (!isEmpty(maxLb, minUb)) return;
 
   // sort by increasing implied upper bound
   pdqsort(impliedRanges.begin(), impliedRanges.end(),
@@ -1166,9 +1195,8 @@ void HighsImplications::findConflictingImplications(
   HighsInt numConflicts = 0;
   for (size_t i = 0; i < impliedRanges.size(); ++i) {
     for (size_t j = 0; j < impliedRanges.size(); ++j) {
-      if (impliedRanges[j].ub >=
-          impliedRanges[i].lb - mipsolver.mipdata_->feastol)
-        break;
+      // the ranges of i and j overlap
+      if (!isEmpty(impliedRanges[i].lb, impliedRanges[j].ub)) break;
       // complementary literals of the same column do not form a clique
       if (impliedRanges[j].literal.col == impliedRanges[i].literal.col)
         continue;

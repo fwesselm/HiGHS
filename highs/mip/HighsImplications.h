@@ -255,13 +255,14 @@ class HighsImplications {
   // contradict [colLower, colUpper] is infeasible. implied bounds on an
   // integral col are rounded. results are appended, at most maxNumConflicts
   // conflicts. the caller has to check that the literals' columns are still
-  // binary
+  // binary. impliedLower and impliedUpper return the bounds on col implied by
+  // the union of the ranges of both literals of a binary
   void findConflictingImplications(
       HighsInt col, double colLower, double colUpper, bool isIntegral,
       std::vector<std::pair<HighsCliqueTable::CliqueVar,
                             HighsCliqueTable::CliqueVar>>& conflicts,
       std::vector<HighsCliqueTable::CliqueVar>& infeasibleLiterals,
-      HighsInt maxNumConflicts);
+      double& impliedLower, double& impliedUpper, HighsInt maxNumConflicts);
 
   void rowModified(HighsInt row);
 

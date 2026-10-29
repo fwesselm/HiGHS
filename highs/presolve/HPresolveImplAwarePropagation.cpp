@@ -124,6 +124,52 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
     return checkLimits(postsolve_stack);
   };
 
+  auto changeNonBinaryLower = [&](HighsInt col, double newLowerBnd) {
+    if (colDeleted[col] ||
+        newLowerBnd <= model->col_lower_[col] + primal_feastol)
+      return Result::kOk;
+    bool accept = true;
+    if (model->integrality_[col] != HighsVarType::kContinuous)
+      newLowerBnd = std::ceil(newLowerBnd - primal_feastol);
+    else
+      // continuous columns: same acceptance criteria as domain propagation
+      newLowerBnd = mipsolver->adjustedLb(
+          static_cast<HighsCDouble>(newLowerBnd), model->col_lower_[col],
+          model->col_upper_[col], false, accept);
+    assert(newLowerBnd <= model->col_upper_[col] + primal_feastol);
+    if (newLowerBnd == model->col_upper_[col]) {
+      HPRESOLVE_CHECKED_CALL(fixCol(col, true));
+    } else if (accept) {
+      numBoundsTightened++;
+      trackColChange(col);
+      HPRESOLVE_CHECKED_CALL(changeColLower(col, newLowerBnd));
+    }
+    return Result::kOk;
+  };
+
+  auto changeNonBinaryUpper = [&](HighsInt col, double newUpperBnd) {
+    if (colDeleted[col] ||
+        newUpperBnd >= model->col_upper_[col] - primal_feastol)
+      return Result::kOk;
+    bool accept = true;
+    if (model->integrality_[col] != HighsVarType::kContinuous)
+      newUpperBnd = std::floor(newUpperBnd + primal_feastol);
+    else
+      // continuous columns: same acceptance criteria as domain propagation
+      newUpperBnd = mipsolver->adjustedUb(
+          static_cast<HighsCDouble>(newUpperBnd), model->col_lower_[col],
+          model->col_upper_[col], false, accept);
+    assert(newUpperBnd >= model->col_lower_[col] - primal_feastol);
+    if (newUpperBnd == model->col_lower_[col]) {
+      HPRESOLVE_CHECKED_CALL(fixCol(col, false));
+    } else if (accept) {
+      numBoundsTightened++;
+      trackColChange(col);
+      HPRESOLVE_CHECKED_CALL(changeColUpper(col, newUpperBnd));
+    }
+    return Result::kOk;
+  };
+
   auto addClique = [&](HighsCliqueTable::CliqueVar v1,
                        HighsCliqueTable::CliqueVar v2) {
     std::array<HighsCliqueTable::CliqueVar, 2> clique = {v1, v2};
@@ -579,8 +625,6 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
     for (auto& nz : nonBinNonZeros) {
       HighsInt nonBinCol = nz.key();
       double nonBinVal = nz.value().val;
-      bool nonBinColIsInteger =
-          model->integrality_[nonBinCol] != HighsVarType::kContinuous;
 
       // weights incomplete when a bound is infinite (addNonZero does not add
       // the column's own range)
@@ -695,26 +739,7 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
                           model->col_upper_[nonBinCol], HighsInt{1},
                           newLowerBnd))
           return Result::kPrimalInfeasible;
-        if (newLowerBnd > model->col_lower_[nonBinCol] + primal_feastol) {
-          bool accept = true;
-          if (nonBinColIsInteger)
-            newLowerBnd = std::ceil(newLowerBnd - primal_feastol);
-          else
-            // continuous columns: same acceptance criteria as domain
-            // propagation
-            newLowerBnd = mipsolver->adjustedLb(
-                static_cast<HighsCDouble>(newLowerBnd),
-                model->col_lower_[nonBinCol], model->col_upper_[nonBinCol],
-                false, accept);
-          assert(newLowerBnd <= model->col_upper_[nonBinCol] + primal_feastol);
-          if (newLowerBnd == model->col_upper_[nonBinCol]) {
-            HPRESOLVE_CHECKED_CALL(fixCol(nonBinCol, true));
-          } else if (accept) {
-            numBoundsTightened++;
-            trackColChange(nonBinCol);
-            HPRESOLVE_CHECKED_CALL(changeColLower(nonBinCol, newLowerBnd));
-          }
-        }
+        HPRESOLVE_CHECKED_CALL(changeNonBinaryLower(nonBinCol, newLowerBnd));
       }
 
       // tighten upper bound: walk from ub toward lb
@@ -725,26 +750,7 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
                           model->col_lower_[nonBinCol], HighsInt{-1},
                           newUpperBnd))
           return Result::kPrimalInfeasible;
-        if (newUpperBnd < model->col_upper_[nonBinCol] - primal_feastol) {
-          bool accept = true;
-          if (nonBinColIsInteger)
-            newUpperBnd = std::floor(newUpperBnd + primal_feastol);
-          else
-            // continuous columns: same acceptance criteria as domain
-            // propagation
-            newUpperBnd = mipsolver->adjustedUb(
-                static_cast<HighsCDouble>(newUpperBnd),
-                model->col_lower_[nonBinCol], model->col_upper_[nonBinCol],
-                false, accept);
-          assert(newUpperBnd >= model->col_lower_[nonBinCol] - primal_feastol);
-          if (newUpperBnd == model->col_lower_[nonBinCol]) {
-            HPRESOLVE_CHECKED_CALL(fixCol(nonBinCol, false));
-          } else if (accept) {
-            numBoundsTightened++;
-            trackColChange(nonBinCol);
-            HPRESOLVE_CHECKED_CALL(changeColUpper(nonBinCol, newUpperBnd));
-          }
-        }
+        HPRESOLVE_CHECKED_CALL(changeNonBinaryUpper(nonBinCol, newUpperBnd));
       }
     }
     return Result::kOk;
@@ -821,10 +827,12 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
       if (colDeleted[col] || isBinary(col)) continue;
       conflictingLiterals.clear();
       infeasibleLiterals.clear();
+      double impliedLower;
+      double impliedUpper;
       implications.findConflictingImplications(
           col, model->col_lower_[col], model->col_upper_[col],
           model->integrality_[col] != HighsVarType::kContinuous,
-          conflictingLiterals, infeasibleLiterals,
+          conflictingLiterals, infeasibleLiterals, impliedLower, impliedUpper,
           maxNumCliquesAdded - numCliquesAdded);
       for (const HighsCliqueTable::CliqueVar& literal : infeasibleLiterals) {
         if (colDeleted[literal.col] || !isBinary(literal.col)) continue;
@@ -840,6 +848,12 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
         if (numCliquesAdded >= maxNumCliquesAdded) break;
         HPRESOLVE_CHECKED_CALL(addClique(v1, v2));
       }
+      // bounds implied by the union of the ranges of both literals of a binary
+      if (colDeleted[col]) continue;
+      if (impliedLower > impliedUpper + primal_feastol)
+        return Result::kPrimalInfeasible;
+      HPRESOLVE_CHECKED_CALL(changeNonBinaryLower(col, impliedLower));
+      HPRESOLVE_CHECKED_CALL(changeNonBinaryUpper(col, impliedUpper));
     }
 
     // check objective function
