@@ -574,12 +574,14 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
         }
 
         // binary contributions: add |a_j| for each binary forced away from
-        // its min-contribution value when v1 or v2 is active (via clique)
-        for (const auto& bin : binNonZeros) {
-          HighsInt bcol = bin.key();
-          double bval = bin.value().val;
+        // its min-contribution value when v1 or v2 is active (via clique).
+        // only binaries in the row contribute; sortedBins (built in
+        // updateBinaryWeights) holds exactly these, while binNonZeros also
+        // contains lifted binaries and clique neighbours outside the row
+        for (const SortedBin& bin : sortedBins) {
+          HighsInt bcol = bin.col;
+          double bval = bin.val;
           double absbval = std::abs(bval);
-          if (absbval == 0.0) continue;
 
           // (col, val) setting that minimises this binary's contribution
           HighsCliqueTable::CliqueVar minContribCliqueVar(bcol,
