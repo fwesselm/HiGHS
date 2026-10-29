@@ -62,11 +62,24 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
     HighsCDouble value;
   };
 
+  // binary in the row with its sort key for the clique propagation
+  struct SortedBin {
+    HighsInt col;
+    double val;
+    double sortKey;
+  };
+
+  // literal considered for two-column clique extraction with its weight
+  struct CliqueCandidate {
+    HighsCliqueTable::CliqueVar var;
+    HighsCDouble weight;
+  };
+
   // data structures
   HighsHashTable<HighsInt, VariableData> binNonZeros;
   HighsHashTable<HighsInt, VariableData> nonBinNonZeros;
-  std::vector<HighsInt> sortedBins;
-  std::vector<HighsCliqueTable::CliqueVar> candidates;
+  std::vector<SortedBin> sortedBins;
+  std::vector<CliqueCandidate> candidates;
   std::vector<Breakpoint> breakpoints;
   // bounds on non-binaries implied by binaries
   HighsHashTable<ImpliedBoundKey, HighsImplications::Implication> impliedBounds;
@@ -258,11 +271,6 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
     return true;
   };
 
-  auto getBinaryWeight = [&](const HighsCliqueTable::CliqueVar& clqvar) {
-    return clqvar.val == 1 ? binNonZeros[clqvar.col].weightUpper
-                           : binNonZeros[clqvar.col].weightLower;
-  };
-
   auto addImpliedBound = [&](HighsInt binCol, HighsInt binVal,
                              HighsInt nonBinCol, double lb, double ub) {
     // round bounds of integer non-binaries; variable bounds may imply
@@ -422,22 +430,22 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
       // binaries outside the row (zero coefficient) only receive weight; they
       // pass nothing on to their clique neighbours
       if (val == 0.0) continue;
-      sortedBins.push_back(col);
+      sortedBins.push_back({col, val,
+                            cliquetable.numCliques(col, val < 0) -
+                                10.0 * std::abs(val) / threshold});
       remainingWeight += std::abs(val);
     }
 
-    pdqsort(sortedBins.begin(), sortedBins.end(), [&](HighsInt a, HighsInt b) {
-      double aval = binNonZeros[a].val;
-      double bval = binNonZeros[b].val;
-      double akey = cliquetable.numCliques(a, aval < 0) -
-                    10.0 * std::abs(aval) / threshold;
-      double bkey = cliquetable.numCliques(b, bval < 0) -
-                    10.0 * std::abs(bval) / threshold;
-      return akey < bkey;
-    });
+    // equal sort keys are ordered by column index
+    pdqsort(sortedBins.begin(), sortedBins.end(),
+            [](const SortedBin& a, const SortedBin& b) {
+              return std::make_pair(a.sortKey, a.col) <
+                     std::make_pair(b.sortKey, b.col);
+            });
 
-    for (HighsInt col : sortedBins) {
-      double val = binNonZeros[col].val;
+    for (const SortedBin& sortedBin : sortedBins) {
+      HighsInt col = sortedBin.col;
+      double val = sortedBin.val;
       double absval = std::abs(val);
 
       // no binary's weight can exceed threshold after processing the
@@ -471,8 +479,10 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
               }
             }
 #endif
-            binNonZeros[neighbor.col].update(neighbor.val == 1, absval);
-            maxWeight = max(maxWeight, getBinaryWeight(neighbor));
+            VariableData& data = binNonZeros[neighbor.col];
+            data.update(neighbor.val == 1, absval);
+            maxWeight = max(maxWeight, neighbor.val == 1 ? data.weightUpper
+                                                         : data.weightLower);
           });
     }
   };
@@ -493,29 +503,35 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
     for (const auto& bin : binNonZeros) {
       HighsInt col = bin.key();
       if (colDeleted[col]) continue;
-      if (bin.value().weightUpper > primal_feastol &&
-          bin.value().weightUpper <= threshold + primal_feastol)
-        candidates.push_back(HighsCliqueTable::CliqueVar{col, 1});
-      if (bin.value().weightLower > primal_feastol &&
-          bin.value().weightLower <= threshold + primal_feastol)
-        candidates.push_back(HighsCliqueTable::CliqueVar{col, 0});
+      const HighsCDouble& weightUpper = bin.value().weightUpper;
+      const HighsCDouble& weightLower = bin.value().weightLower;
+      if (weightUpper > primal_feastol &&
+          weightUpper <= threshold + primal_feastol)
+        candidates.push_back(
+            {HighsCliqueTable::CliqueVar{col, 1}, weightUpper});
+      if (weightLower > primal_feastol &&
+          weightLower <= threshold + primal_feastol)
+        candidates.push_back(
+            {HighsCliqueTable::CliqueVar{col, 0}, weightLower});
     }
 
-    // sort candidates by decreasing weight
+    // sort candidates by decreasing weight; equal weights are ordered by
+    // literal index
     pdqsort(candidates.begin(), candidates.end(),
-            [&](const HighsCliqueTable::CliqueVar& a,
-                const HighsCliqueTable::CliqueVar& b) {
-              return getBinaryWeight(a) > getBinaryWeight(b);
+            [](const CliqueCandidate& a, const CliqueCandidate& b) {
+              if (a.weight > b.weight) return true;
+              if (b.weight > a.weight) return false;
+              return a.var.index() < b.var.index();
             });
 
     for (size_t i = 0;
          i < candidates.size() && numCliquesAdded < maxNumCliquesAdded; ++i) {
-      const auto& v1 = candidates[i];
+      const auto& v1 = candidates[i].var;
       // fixed by the clique table
       if (colDeleted[v1.col]) continue;
 
       for (size_t j = i + 1; j < candidates.size(); ++j) {
-        const auto& v2 = candidates[j];
+        const auto& v2 = candidates[j].var;
         if (colDeleted[v2.col]) continue;
 
         // skip pair of variables if they are already in a clique together
@@ -524,7 +540,7 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
 
         // combined weight cannot exceed threshold; since candidates are
         // sorted by decreasing weight, no later pair with v1 can either
-        if (getBinaryWeight(v1) + getBinaryWeight(v2) <=
+        if (candidates[i].weight + candidates[j].weight <=
             threshold + primal_feastol)
           break;
 
@@ -539,6 +555,9 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
         // each round.
         HighsCDouble sum = 0;
         for (const auto& nz : nonBinNonZeros) {
+          // discovered non-binaries outside the row (zero coefficient) do not
+          // contribute to the row's activity
+          if (nz.value().val == 0.0) continue;
           HighsInt col = nz.key();
           // start from the column's bounds; implied bounds may be looser
           HighsImplications::Implication intersection(model->col_lower_[col],
