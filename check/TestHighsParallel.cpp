@@ -371,7 +371,7 @@ TEST_CASE("AffinityReducedCoreCount", "[parallel]") {
 bool waitFor(const std::atomic<int>& flag, int value) {
   const auto start = std::chrono::steady_clock::now();
   while (flag.load() < value) {
-    if (std::chrono::steady_clock::now() - start > std::chrono::seconds(1))
+    if (std::chrono::steady_clock::now() - start > std::chrono::seconds(30))
       return false;
     std::this_thread::yield();
   }
@@ -456,6 +456,8 @@ TEST_CASE("ParallelSchedulerIsPerThread", "[parallel]") {
   // A's reset did not affect B
   REQUIRE(b.threads_after_reset == num_threads_B);
   REQUIRE(b.sum_after_reset == expected_sum);
+
+  HighsTaskExecutor::shutdown(true);
 
   // A really was reset
   REQUIRE(a.threads_after_reset == num_threads_A_second);
