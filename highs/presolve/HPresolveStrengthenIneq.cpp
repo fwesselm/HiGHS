@@ -25,6 +25,7 @@ HPresolve::Result HPresolve::strengthenInequalities(
   num_strengthened = 0;
   // Check for timeout according to this frequency
   const HighsInt check_time_frequency = 100;
+  HighsInt num_rows_analysed = 0;
 
   for (HighsInt row = 0; row != model->num_row_; ++row) {
     if (rowsize[row] <= 1) continue;
@@ -34,6 +35,7 @@ HPresolve::Result HPresolve::strengthenInequalities(
     HighsInt rowsize_limit =
         std::max(HighsInt{1000}, (model->num_col_ - numDeletedCols) / 20);
     if (rowsize[row] > rowsize_limit) continue;
+    num_rows_analysed++;
 
     // printf("strengthening knapsack of %" HIGHSINT_FORMAT " vars\n",
     // rowsize[row]);
@@ -127,7 +129,8 @@ HPresolve::Result HPresolve::strengthenInequalities(
 
     // Check for timeout according to frequency, unless a particularly
     // dense row has just been analysed
-    if ((row & check_time_frequency) == 0 || 10 * rowsize[row] > rowsize_limit)
+    if (num_rows_analysed % check_time_frequency == 0 ||
+        10 * rowsize[row] > rowsize_limit)
       HPRESOLVE_CHECKED_CALL(checkTimeLimit());
 
     if (skiprow) {

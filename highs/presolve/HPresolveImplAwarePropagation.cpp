@@ -90,6 +90,9 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
   // maximum number of cliques added
   const HighsInt maxNumCliquesAdded =
       std::max(HighsInt{1000}, std::min(HighsInt{10000}, numNonzeros() / 10));
+  // check for timeout according to this frequency (number of rows checked)
+  const HighsInt checkTimeFrequency = 100;
+  HighsInt numRowsChecked = 0;
 
   auto isBinary = [&](HighsInt col) {
     // implicit integers are binary as well, consistent with the clique table
@@ -873,6 +876,9 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
 
     for (HighsInt row : myModifiedRows) {
       if (rowDeleted[row]) continue;
+      numRowsChecked++;
+      if (numRowsChecked % checkTimeFrequency == 0)
+        HPRESOLVE_CHECKED_CALL(checkTimeLimit());
       if (model->row_upper_[row] < kHighsInf && loadModelRow(row, HighsInt{1}))
         HPRESOLVE_CHECKED_CALL(checkRow(
             -impliedRowBounds.getSumLowerOrig(row, -model->row_upper_[row])));
