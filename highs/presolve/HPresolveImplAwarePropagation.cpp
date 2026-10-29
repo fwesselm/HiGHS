@@ -55,6 +55,13 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
     }
   };
 
+  // positive lifts of binaries due to implied bounds on row non-binaries
+  struct Lift {
+    HighsInt binCol;
+    HighsInt binVal;
+    HighsCDouble value;
+  };
+
   // data structures
   HighsHashTable<HighsInt, VariableData> binNonZeros;
   HighsHashTable<HighsInt, VariableData> nonBinNonZeros;
@@ -63,6 +70,7 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
   std::vector<Breakpoint> breakpoints;
   // bounds on non-binaries implied by binaries
   HighsHashTable<ImpliedBoundKey, HighsImplications::Implication> impliedBounds;
+  std::vector<Lift> lifts;
   std::vector<HighsInt> liftedBins;
   std::vector<HighsCliqueTable::CliqueVar> impliedFixings;
   std::vector<
@@ -370,14 +378,19 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
     for (const auto& binVar : binNonZeros)
       if (!discoverNonBinaries(binVar.key(), numDiscoveryVisits)) break;
 
-    // binaries outside the row whose implied bounds lift them. all implied
-    // bounds on row non-binaries have been collected, so this is complete
+    // compute the lifts and collect the binaries outside the row whose implied
+    // bounds lift them. all implied bounds on row non-binaries have been
+    // collected, so this is complete. the implied bounds added by discovering
+    // non-binaries below are on columns outside the row and do not lift
+    lifts.clear();
     liftedBins.clear();
     for (const auto& entry : impliedBounds) {
-      HighsInt binCol = entry.key().binCol;
-      if (binNonZeros.find(binCol) != nullptr) continue;
-      if (computeLift(entry.key().nonBinCol, entry.value()) <= 0) continue;
-      liftedBins.push_back(binCol);
+      const ImpliedBoundKey& key = entry.key();
+      HighsCDouble lift = computeLift(key.nonBinCol, entry.value());
+      if (lift <= 0) continue;
+      lifts.push_back({key.binCol, key.binVal, lift});
+      if (binNonZeros.find(key.binCol) == nullptr)
+        liftedBins.push_back(key.binCol);
     }
     // a binary may lift several non-binaries
     pdqsort(liftedBins.begin(), liftedBins.end());
@@ -390,12 +403,8 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
   auto updateBinaryWeights = [&](double threshold) {
     // lift binaries: their implied bounds increase the minimum contribution
     // of non-binaries to the row
-    for (const auto& entry : impliedBounds) {
-      const ImpliedBoundKey& key = entry.key();
-      HighsCDouble lift = computeLift(key.nonBinCol, entry.value());
-      if (lift <= 0) continue;
-      binNonZeros[key.binCol].update(key.binVal == 1, lift);
-    }
+    for (const Lift& lift : lifts)
+      binNonZeros[lift.binCol].update(lift.binVal == 1, lift.value);
 
     // consider cliques: sort binaries for early termination.
     // few clique connections first (cheap), large coefficients last.
