@@ -296,17 +296,17 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
     // bounds can be tightened via the piecewise walk even though their row
     // coefficient is zero. non-binaries linked to a row binary only by a
     // variable bound are not discovered (no reverse index; no reductions on
-    // MIPLIB3 when tested). stops when the row is full or too many
-    // implications were visited
+    // MIPLIB3 when tested). returns false when the row is full or too many
+    // implications were visited, i.e. when discovery should stop
     for (HighsInt val = 0; val <= 1; ++val) {
-      bool stop =
-          implications.getImplications(binCol, val)
+      if (implications.getImplications(binCol, val)
               .for_each([&](HighsInt targetCol,
                             const HighsImplications::Implication& impl) {
-                if (numDiscoveryVisits++ >= maxDiscoveryVisits ||
+                if (numDiscoveryVisits >= maxDiscoveryVisits ||
                     static_cast<HighsInt>(binNonZeros.size() +
                                           nonBinNonZeros.size()) >= maxRowSize)
                   return true;
+                numDiscoveryVisits++;
                 if (colDeleted[targetCol] || isBinary(targetCol)) return false;
                 if (nonBinNonZeros.find(targetCol) == nullptr) {
                   if (model->col_lower_[targetCol] <= -kHighsInf ||
@@ -317,9 +317,10 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
                 }
                 addImpliedBound(binCol, val, targetCol, impl.lb, impl.ub);
                 return false;
-              });
-      if (stop) return;
+              }))
+        return false;
     }
+    return true;
   };
 
   auto computeLift = [&](HighsInt nonBinCol,
@@ -367,7 +368,7 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
     // discover non-binaries outside the row
     HighsInt numDiscoveryVisits = 0;
     for (const auto& binVar : binNonZeros)
-      discoverNonBinaries(binVar.key(), numDiscoveryVisits);
+      if (!discoverNonBinaries(binVar.key(), numDiscoveryVisits)) break;
 
     // binaries outside the row whose implied bounds lift them. all implied
     // bounds on row non-binaries have been collected, so this is complete
@@ -383,7 +384,7 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
     liftedBins.erase(std::unique(liftedBins.begin(), liftedBins.end()),
                      liftedBins.end());
     for (HighsInt binCol : liftedBins)
-      discoverNonBinaries(binCol, numDiscoveryVisits);
+      if (!discoverNonBinaries(binCol, numDiscoveryVisits)) break;
   };
 
   auto updateBinaryWeights = [&](double threshold) {
