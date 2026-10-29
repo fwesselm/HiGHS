@@ -4018,6 +4018,7 @@ HPresolve::Result HPresolve::presolve(HighsPostsolveStack& postsolve_stack) {
                                  initialRowAndColPresolve(postsolve_stack));
 
     HighsInt numParallelRowColCalls = 0;
+    HighsInt numImplAwareCalls = 0;
     // ReductionType::kEqualityRowAddition(s) has no basis postsolve,
     // so can only be used when basis postsolve is not required - when
     // the problem is a MIP, IPM is run without crossover, or when
@@ -4201,9 +4202,11 @@ HPresolve::Result HPresolve::presolve(HighsPostsolveStack& postsolve_stack) {
       }
 
       if (mipsolver != nullptr &&
-          this->allow_rule_[kPresolveRuleImplAwareConstrPropagation]) {
+          this->allow_rule_[kPresolveRuleImplAwareConstrPropagation] &&
+          numImplAwareCalls < 5) {
         storeCurrentProblemSize();
         HPRESOLVE_CHECKED_CALL(implAwareConstrPropagation(postsolve_stack));
+        numImplAwareCalls++;
         if (problemSizeReduction() > 0.0)
           HPRESOLVE_CHECKED_CALL(fastPresolveLoop(postsolve_stack));
         if (problemSizeReduction() > 0.05) continue;
