@@ -42,12 +42,51 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
     }
   };
 
+  // map from column indices to variable data with direct access; insertion,
+  // lookup and clearing in the number of entries. the entries are iterated
+  // in the order of insertion
+  struct IndexMap {
+    struct Entry {
+      HighsInt index;
+      VariableData data;
+      HighsInt key() const { return index; }
+      VariableData& value() { return data; }
+      const VariableData& value() const { return data; }
+    };
+    std::vector<Entry> entries;
+    // position of an index in entries, -1 if it is not in the map
+    std::vector<HighsInt> position;
+
+    // prepares the map for the indices [0, size)
+    void resize(HighsInt size) { position.resize(size, -1); }
+
+    VariableData* find(HighsInt index) {
+      return position[index] < 0 ? nullptr : &entries[position[index]].data;
+    }
+
+    VariableData& operator[](HighsInt index) {
+      if (position[index] < 0) {
+        position[index] = static_cast<HighsInt>(entries.size());
+        entries.push_back({index, VariableData()});
+      }
+      return entries[position[index]].data;
+    }
+
+    void clear() {
+      for (const Entry& entry : entries) position[entry.index] = -1;
+      entries.clear();
+    }
+
+    size_t size() const { return entries.size(); }
+    std::vector<Entry>::iterator begin() { return entries.begin(); }
+    std::vector<Entry>::iterator end() { return entries.end(); }
+  };
+
   struct Breakpoint {
     double value;
-    double excess;
+    // row binary forced away from its min-contribution value
+    HighsInt binCol;
     bool isLowerType;
-    // block member of the binary, -1 if it is not in a clique block
-    HighsInt member;
   };
 
   struct ImpliedBoundKey {
@@ -70,22 +109,13 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
   // binary in the row with its sort key for the clique propagation
   struct SortedBin {
     HighsInt col;
-    double val;
     double sortKey;
-    HighsInt member;
   };
 
-  // clique block: row binaries whose min-contribution literals form a clique,
-  // so at most one of them takes its min-contribution value. the members are
-  // blockMembers[start, end), sorted by decreasing absolute coefficient
-  struct CliqueBlock {
-    HighsInt start;
-    HighsInt end;
-  };
-
+  // member of a clique block: row binaries whose min-contribution literals
+  // form a clique, so at most one of them takes its min-contribution value
   struct BlockMember {
     HighsInt col;
-    double val;
     HighsInt block;
     // number of reasons for the member to leave its min-contribution value
     HighsInt count;
@@ -130,8 +160,8 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
   };
 
   // data structures
-  HighsHashTable<HighsInt, VariableData> binNonZeros;
-  HighsHashTable<HighsInt, VariableData> nonBinNonZeros;
+  IndexMap binNonZeros;
+  IndexMap nonBinNonZeros;
   std::vector<SortedBin> sortedBins;
   std::vector<CliqueCandidate> candidates;
   std::vector<Breakpoint> breakpoints;
@@ -139,8 +169,10 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
   HighsHashTable<ImpliedBoundKey, HighsImplications::Implication> impliedBounds;
   std::vector<Lift> lifts;
   std::vector<HighsInt> liftedBins;
-  // clique blocks of the row binaries
-  std::vector<CliqueBlock> blocks;
+  // clique blocks of the row binaries: the members of block b are
+  // blockMembers[blockStarts[b], blockStarts[b + 1]), sorted by decreasing
+  // absolute coefficient
+  std::vector<HighsInt> blockStarts;
   std::vector<BlockMember> blockMembers;
   IndexSet touchedBlocks;
   // literals and the block members they force away from their
@@ -148,7 +180,6 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
   std::vector<std::pair<HighsCliqueTable::CliqueVar, HighsInt>> blockPairs;
   std::vector<HighsCliqueTable::CliqueVar> partitionVars;
   std::vector<HighsInt> partitionStarts;
-  std::vector<double> partitionAbsVal;
   std::vector<HighsCliqueTable::CliqueVar> impliedFixings;
   std::vector<
       std::pair<HighsCliqueTable::CliqueVar, HighsCliqueTable::CliqueVar>>
@@ -459,15 +490,17 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
       if (!discoverNonBinaries(binCol, numDiscoveryVisits)) break;
   };
 
+  auto memberVal = [&](HighsInt member) {
+    return binNonZeros.find(blockMembers[member].col)->val;
+  };
+
   auto blockIncrease = [&](HighsInt block) {
     // increase of the row's minimum activity when the members with a positive
     // count leave their min-contribution value: the largest remaining member
     // takes over from the largest one, or none remains
-    const CliqueBlock& b = blocks[block];
-    double maxAbsVal = std::abs(blockMembers[b.start].val);
-    for (HighsInt k = b.start; k < b.end; ++k)
-      if (blockMembers[k].count == 0)
-        return maxAbsVal - std::abs(blockMembers[k].val);
+    double maxAbsVal = std::abs(memberVal(blockStarts[block]));
+    for (HighsInt k = blockStarts[block]; k < blockStarts[block + 1]; ++k)
+      if (blockMembers[k].count == 0) return maxAbsVal - std::abs(memberVal(k));
     return maxAbsVal;
   };
 
@@ -476,14 +509,13 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
     // cliques. at most one literal of a block holds, so all but one member
     // leave their min-contribution value. returns the resulting increase of
     // the row's minimum activity
-    blocks.clear();
+    blockStarts.assign(1, 0);
     blockMembers.clear();
     partitionVars.clear();
     for (const auto& bin : binNonZeros) {
       HighsInt col = bin.key();
       double val = bin.value().val;
       if (colDeleted[col] || val == 0.0) continue;
-      partitionAbsVal[col] = std::abs(val);
       partitionVars.emplace_back(col, val < 0 ? 1 : 0);
     }
 
@@ -491,8 +523,8 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
     // each block are sorted by decreasing absolute coefficient
     auto byDecreasingAbsVal = [&](const HighsCliqueTable::CliqueVar& a,
                                   const HighsCliqueTable::CliqueVar& b) {
-      return std::make_pair(-partitionAbsVal[a.col], a.col) <
-             std::make_pair(-partitionAbsVal[b.col], b.col);
+      return std::make_pair(-std::abs(binNonZeros.find(a.col)->val), a.col) <
+             std::make_pair(-std::abs(binNonZeros.find(b.col)->val), b.col);
     };
     // the clique separation budgets its work with the number of neighbourhood
     // queries, so the queries of the partition are not counted
@@ -507,19 +539,18 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
       HighsInt blockEnd = partitionStarts[p + 1];
       if (blockEnd - blockStart < 2) continue;
 
-      HighsInt block = static_cast<HighsInt>(blocks.size());
-      blocks.push_back({static_cast<HighsInt>(blockMembers.size()), 0});
+      HighsInt block = static_cast<HighsInt>(blockStarts.size()) - 1;
       for (HighsInt k = blockStart; k < blockEnd; ++k) {
         HighsInt col = partitionVars[k].col;
         VariableData& data = binNonZeros[col];
         data.member = static_cast<HighsInt>(blockMembers.size());
-        blockMembers.push_back({col, data.val, block, 0});
+        blockMembers.push_back({col, block, 0});
         // all members but the largest one leave their min-contribution value
-        if (k > blockStart) increase += partitionAbsVal[col];
+        if (k > blockStart) increase += std::abs(data.val);
       }
-      blocks.back().end = static_cast<HighsInt>(blockMembers.size());
+      blockStarts.push_back(static_cast<HighsInt>(blockMembers.size()));
     }
-    touchedBlocks.resize(static_cast<HighsInt>(blocks.size()));
+    touchedBlocks.resize(static_cast<HighsInt>(blockStarts.size()) - 1);
     return increase;
   };
 
@@ -545,10 +576,8 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
       // binaries outside the row (zero coefficient) only receive weight; they
       // pass nothing on to their clique neighbours
       if (val == 0.0) continue;
-      sortedBins.push_back({col, val,
-                            cliquetable.numCliques(col, val < 0) -
-                                10.0 * std::abs(val) / threshold,
-                            binVar.value().member});
+      sortedBins.push_back({col, cliquetable.numCliques(col, val < 0) -
+                                     10.0 * std::abs(val) / threshold});
       remainingWeight += std::abs(val);
     }
 
@@ -567,9 +596,11 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
     blockPairs.clear();
     for (const SortedBin& sortedBin : sortedBins) {
       HighsInt col = sortedBin.col;
-      double val = sortedBin.val;
+      // copies, since the propagation below inserts into binNonZeros
+      const VariableData* bin = binNonZeros.find(col);
+      double val = bin->val;
+      HighsInt member = bin->member;
       double absval = std::abs(val);
-      HighsInt member = sortedBin.member;
 
       // no binary's weight can exceed threshold after processing the
       // current and remaining binaries, so skip clique propagation
@@ -610,14 +641,14 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
           });
     }
 
-    if (blocks.empty()) return;
+    if (blockMembers.empty()) return;
 
     // a block member set to the value opposite to its min-contribution value
     // leaves it as well; addNonZero has charged |a| for this
     for (HighsInt k = 0; k < static_cast<HighsInt>(blockMembers.size()); ++k)
       blockPairs.emplace_back(
           HighsCliqueTable::CliqueVar(blockMembers[k].col,
-                                      blockMembers[k].val < 0 ? 0 : 1),
+                                      memberVal(k) < 0 ? 0 : 1),
           k);
 
     // per literal and block, replace the additive contributions of the
@@ -641,7 +672,7 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
              blockMembers[blockPairs[groupEnd].second].block == block) {
         HighsInt member = blockPairs[groupEnd].second;
         blockMembers[member].count++;
-        additive += std::abs(blockMembers[member].val);
+        additive += std::abs(memberVal(member));
         groupEnd++;
       }
       binNonZeros[literal.col].update(
@@ -744,8 +775,9 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
         // only binaries in the row contribute; sortedBins (built in
         // updateBinaryWeights) holds exactly these, while binNonZeros also
         // contains lifted binaries and clique neighbours outside the row
-        for (const SortedBin& bin : sortedBins) {
-          HighsInt bcol = bin.col;
+        for (const SortedBin& sortedBin : sortedBins) {
+          HighsInt bcol = sortedBin.col;
+          const VariableData& bin = *binNonZeros.find(bcol);
           double bval = bin.val;
           double absbval = std::abs(bval);
 
@@ -768,7 +800,7 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
         }
         for (HighsInt block : touchedBlocks.entries) {
           sum += blockIncrease(block);
-          for (HighsInt k = blocks[block].start; k < blocks[block].end; ++k)
+          for (HighsInt k = blockStarts[block]; k < blockStarts[block + 1]; ++k)
             blockMembers[k].count = 0;
         }
         touchedBlocks.clear();
@@ -816,12 +848,10 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
           impliedBounds.find(ImpliedBoundKey{binCol, val, nonBinCol});
       if (impl == nullptr) continue;
 
-      double absBinVal = std::abs(binVal);
-      HighsInt member = binVar.value().member;
       if (impl->lb > model->col_lower_[nonBinCol] + primal_feastol)
-        breakpoints.push_back({impl->lb, absBinVal, true, member});
+        breakpoints.push_back({impl->lb, binCol, true});
       if (impl->ub < model->col_upper_[nonBinCol] - primal_feastol)
-        breakpoints.push_back({impl->ub, absBinVal, false, member});
+        breakpoints.push_back({impl->ub, binCol, false});
     }
     // sort by increasing value so computeBound can walk from either end.
     // at equal values, lower-type breakpoints come first: neither type is
@@ -839,9 +869,10 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
     // min-contribution value; returns the increase of the minimum activity
     HighsCDouble increase = 0.0;
     for (const Breakpoint& bp : breakpoints) {
-      if (bp.member < 0 || bp.isLowerType != lowerType) continue;
-      blockMembers[bp.member].count++;
-      touchedBlocks.add(blockMembers[bp.member].block);
+      HighsInt member = binNonZeros.find(bp.binCol)->member;
+      if (member < 0 || bp.isLowerType != lowerType) continue;
+      blockMembers[member].count++;
+      touchedBlocks.add(blockMembers[member].block);
     }
     for (HighsInt block : touchedBlocks.entries)
       increase += blockIncrease(block);
@@ -850,8 +881,10 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
   };
 
   auto resetBlockMembers = [&]() {
-    for (const Breakpoint& bp : breakpoints)
-      if (bp.member >= 0) blockMembers[bp.member].count = 0;
+    for (const Breakpoint& bp : breakpoints) {
+      HighsInt member = binNonZeros.find(bp.binCol)->member;
+      if (member >= 0) blockMembers[member].count = 0;
+    }
   };
 
   auto tightenNonBinaryBounds = [&](double threshold) {
@@ -870,10 +903,13 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
       // lower-type breakpoints are active (x_r < lambda holds), at x_r = ub
       // all upper-type breakpoints are active (x_r > mu holds)
       collectBreakpoints(nonBinCol);
-      for (const auto& bp : breakpoints)
-        if (bp.member < 0) nz.value().update(!bp.isLowerType, bp.excess);
+      for (const auto& bp : breakpoints) {
+        const VariableData& bin = *binNonZeros.find(bp.binCol);
+        if (bin.member < 0)
+          nz.value().update(!bp.isLowerType, std::abs(bin.val));
+      }
       // members of clique blocks are accounted for per block
-      if (!blocks.empty()) {
+      if (!blockMembers.empty()) {
         for (bool lowerType : {true, false}) {
           nz.value().update(!lowerType, activateBlockMembers(lowerType));
           resetBlockMembers();
@@ -944,19 +980,19 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
           // both cases:
           // 1. going right -> lower-type deactivates / upper activates,
           // 2. going left  -> upper-type deactivates / lower activates
-          HighsInt member = breakpoints[i].member;
-          if (member >= 0) {
+          const VariableData& bin = *binNonZeros.find(breakpoints[i].binCol);
+          if (bin.member >= 0) {
             // the jump of a block member depends on the other members of its
             // block that are forced away at the same time
-            HighsInt block = blockMembers[member].block;
+            HighsInt block = blockMembers[bin.member].block;
             double increaseBefore = blockIncrease(block);
             bool activate = (direction > 0) != breakpoints[i].isLowerType;
-            blockMembers[member].count += activate ? 1 : -1;
+            blockMembers[bin.member].count += activate ? 1 : -1;
             weight += blockIncrease(block) - increaseBefore;
           } else if (breakpoints[i].isLowerType)
-            weight -= direction * breakpoints[i].excess;
+            weight -= direction * std::abs(bin.val);
           else
-            weight += direction * breakpoints[i].excess;
+            weight += direction * std::abs(bin.val);
           d = bp;
 
           // threshold crossed at the discrete jump: snap bound to bp.
@@ -985,11 +1021,11 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
       // with lower-type breakpoints are forced away
       if (!colDeleted[nonBinCol] && tightenLower) {
         double newLowerBnd;
-        if (!blocks.empty()) activateBlockMembers(true);
+        if (!blockMembers.empty()) activateBlockMembers(true);
         bool feasible = computeBound(
             nonBinVal, weightLower, model->col_lower_[nonBinCol],
             model->col_upper_[nonBinCol], HighsInt{1}, newLowerBnd);
-        if (!blocks.empty()) resetBlockMembers();
+        if (!blockMembers.empty()) resetBlockMembers();
         // w(d) > threshold for all d in [lb, ub]: no feasible value
         if (!feasible) return Result::kPrimalInfeasible;
         HPRESOLVE_CHECKED_CALL(changeNonBinaryLower(nonBinCol, newLowerBnd));
@@ -999,11 +1035,11 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
       // with upper-type breakpoints are forced away
       if (!colDeleted[nonBinCol] && tightenUpper) {
         double newUpperBnd;
-        if (!blocks.empty()) activateBlockMembers(false);
+        if (!blockMembers.empty()) activateBlockMembers(false);
         bool feasible = computeBound(
             nonBinVal, weightUpper, model->col_upper_[nonBinCol],
             model->col_lower_[nonBinCol], HighsInt{-1}, newUpperBnd);
-        if (!blocks.empty()) resetBlockMembers();
+        if (!blockMembers.empty()) resetBlockMembers();
         // w(d) > threshold for all d in [lb, ub]: no feasible value
         if (!feasible) return Result::kPrimalInfeasible;
         HPRESOLVE_CHECKED_CALL(changeNonBinaryUpper(nonBinCol, newUpperBnd));
@@ -1051,7 +1087,8 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
   // prepare vectors
   modifiedRows.resize(model->num_row_);
   changedNonBinaries.resize(model->num_col_);
-  partitionAbsVal.resize(model->num_col_);
+  binNonZeros.resize(model->num_col_);
+  nonBinNonZeros.resize(model->num_col_);
 
   // packed storage for objective
   if (mipsolver->mipdata_->upper_limit < kHighsInf ||
