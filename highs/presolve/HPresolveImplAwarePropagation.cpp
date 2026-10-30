@@ -27,9 +27,12 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
     double val;
     HighsCDouble weightLower;
     HighsCDouble weightUpper;
+    // position of a row binary in blockMembers, -1 if it is not in a clique
+    // block with other row binaries
+    HighsInt member;
 
     VariableData(double myVal = 0.0)
-        : val(myVal), weightLower(0.0), weightUpper(0.0) {}
+        : val(myVal), weightLower(0.0), weightUpper(0.0), member(-1) {}
 
     void update(bool upper, const HighsCDouble& delta) {
       if (upper)
@@ -43,6 +46,8 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
     double value;
     double excess;
     bool isLowerType;
+    // block member of the binary, -1 if it is not in a clique block
+    HighsInt member;
   };
 
   struct ImpliedBoundKey {
@@ -67,12 +72,61 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
     HighsInt col;
     double val;
     double sortKey;
+    HighsInt member;
+  };
+
+  // clique block: row binaries whose min-contribution literals form a clique,
+  // so at most one of them takes its min-contribution value. the members are
+  // blockMembers[start, end), sorted by decreasing absolute coefficient
+  struct CliqueBlock {
+    HighsInt start;
+    HighsInt end;
+  };
+
+  struct BlockMember {
+    HighsInt col;
+    double val;
+    HighsInt block;
+    // number of reasons for the member to leave its min-contribution value
+    HighsInt count;
   };
 
   // literal considered for two-column clique extraction with its weight
   struct CliqueCandidate {
     HighsCliqueTable::CliqueVar var;
     HighsCDouble weight;
+  };
+
+  // set of indices with insertion and clearing in the number of entries
+  struct IndexSet {
+    std::vector<HighsInt> entries;
+    std::vector<HighsBool> flags;
+
+    // prepares the set for the indices [0, size)
+    void resize(HighsInt size) {
+      flags.resize(size);
+      entries.reserve(size);
+    }
+
+    // adds an index unless it is already in the set
+    bool add(HighsInt index) {
+      if (flags[index]) return false;
+      flags[index] = true;
+      entries.push_back(index);
+      return true;
+    }
+
+    void clear() {
+      for (HighsInt index : entries) flags[index] = false;
+      entries.clear();
+    }
+
+    // moves the entries to target and clears the set
+    void moveEntriesTo(std::vector<HighsInt>& target) {
+      for (HighsInt index : entries) flags[index] = false;
+      std::swap(entries, target);
+      entries.clear();
+    }
   };
 
   // data structures
@@ -85,15 +139,23 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
   HighsHashTable<ImpliedBoundKey, HighsImplications::Implication> impliedBounds;
   std::vector<Lift> lifts;
   std::vector<HighsInt> liftedBins;
+  // clique blocks of the row binaries
+  std::vector<CliqueBlock> blocks;
+  std::vector<BlockMember> blockMembers;
+  IndexSet touchedBlocks;
+  // literals and the block members they force away from their
+  // min-contribution value
+  std::vector<std::pair<HighsCliqueTable::CliqueVar, HighsInt>> blockPairs;
+  std::vector<HighsCliqueTable::CliqueVar> partitionVars;
+  std::vector<HighsInt> partitionStarts;
+  std::vector<double> partitionAbsVal;
   std::vector<HighsCliqueTable::CliqueVar> impliedFixings;
   std::vector<
       std::pair<HighsCliqueTable::CliqueVar, HighsCliqueTable::CliqueVar>>
       conflictingLiterals;
   std::vector<HighsCliqueTable::CliqueVar> infeasibleLiterals;
-  std::vector<HighsInt> modifiedRows;
-  std::vector<HighsBool> modifiedRowFlags;
-  std::vector<HighsInt> changedNonBinaries;
-  std::vector<HighsBool> changedNonBinaryFlags;
+  IndexSet modifiedRows;
+  IndexSet changedNonBinaries;
   std::vector<HighsInt> objInds;
   bool checkObjective = false;
   bool objectiveAffected = false;
@@ -111,6 +173,8 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
   // maximum number of cliques added
   const HighsInt maxNumCliquesAdded =
       std::max(HighsInt{1000}, std::min(HighsInt{10000}, numNonzeros() / 10));
+  // maximum number of clique queries to partition a row into clique blocks
+  const int64_t maxPartitionQueries = int64_t{maxRowSize} * maxRowSize / 2;
   // check for timeout according to this frequency (number of rows checked)
   const HighsInt checkTimeFrequency = 100;
   HighsInt numRowsChecked = 0;
@@ -123,21 +187,14 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
   };
 
   auto trackColChange = [&](HighsInt col) {
-    for (const auto& nz : getColumnVector(col)) {
-      if (!modifiedRowFlags[nz.index()] && rowsize[nz.index()] > 1 &&
-          rowsize[nz.index()] <= maxRowSize) {
-        modifiedRows.push_back(nz.index());
-        modifiedRowFlags[nz.index()] = true;
-      }
-    }
+    for (const auto& nz : getColumnVector(col))
+      if (rowsize[nz.index()] > 1 && rowsize[nz.index()] <= maxRowSize)
+        modifiedRows.add(nz.index());
     if (checkObjective && model->col_cost_[col] != 0.0)
       objectiveAffected = true;
     // non-binaries with changed bounds are checked for conflicting
     // implications in the next round
-    if (!isBinary(col) && !changedNonBinaryFlags[col]) {
-      changedNonBinaries.push_back(col);
-      changedNonBinaryFlags[col] = true;
-    }
+    if (!isBinary(col)) changedNonBinaries.add(col);
   };
 
   auto fixCol = [&](HighsInt col, bool toUpper) {
@@ -209,12 +266,6 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
     for (const HighsCliqueTable::CliqueVar& fixing : impliedFixings)
       HPRESOLVE_CHECKED_CALL(fixCol(fixing.col, fixing.val == 1));
     return Result::kOk;
-  };
-
-  auto clearChangedFlags = [&]() {
-    for (HighsInt row : modifiedRows) modifiedRowFlags[row] = false;
-    for (HighsInt col : changedNonBinaries) changedNonBinaryFlags[col] = false;
-    objectiveAffected = false;
   };
 
   auto addNonZero = [&](HighsInt col, double val) {
@@ -408,6 +459,70 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
       if (!discoverNonBinaries(binCol, numDiscoveryVisits)) break;
   };
 
+  auto blockIncrease = [&](HighsInt block) {
+    // increase of the row's minimum activity when the members with a positive
+    // count leave their min-contribution value: the largest remaining member
+    // takes over from the largest one, or none remains
+    const CliqueBlock& b = blocks[block];
+    double maxAbsVal = std::abs(blockMembers[b.start].val);
+    for (HighsInt k = b.start; k < b.end; ++k)
+      if (blockMembers[k].count == 0)
+        return maxAbsVal - std::abs(blockMembers[k].val);
+    return maxAbsVal;
+  };
+
+  auto partitionRowBinaries = [&]() {
+    // partition the min-contribution literals of the row binaries into
+    // cliques. at most one literal of a block holds, so all but one member
+    // leave their min-contribution value. returns the resulting increase of
+    // the row's minimum activity
+    blocks.clear();
+    blockMembers.clear();
+    partitionVars.clear();
+    for (const auto& bin : binNonZeros) {
+      HighsInt col = bin.key();
+      double val = bin.value().val;
+      if (colDeleted[col] || val == 0.0) continue;
+      partitionAbsVal[col] = std::abs(val);
+      partitionVars.emplace_back(col, val < 0 ? 1 : 0);
+    }
+
+    // largest coefficients first, ties by column index, so the members of
+    // each block are sorted by decreasing absolute coefficient
+    auto byDecreasingAbsVal = [&](const HighsCliqueTable::CliqueVar& a,
+                                  const HighsCliqueTable::CliqueVar& b) {
+      return std::make_pair(-partitionAbsVal[a.col], a.col) <
+             std::make_pair(-partitionAbsVal[b.col], b.col);
+    };
+    // the clique separation budgets its work with the number of neighbourhood
+    // queries, so the queries of the partition are not counted
+    int64_t oldNumQueries = cliquetable.numNeighbourhoodQueries;
+    cliquetable.cliquePartition(partitionVars, partitionStarts,
+                                byDecreasingAbsVal, maxPartitionQueries);
+    cliquetable.numNeighbourhoodQueries = oldNumQueries;
+
+    HighsCDouble increase = 0.0;
+    for (size_t p = 0; p + 1 < partitionStarts.size(); ++p) {
+      HighsInt blockStart = partitionStarts[p];
+      HighsInt blockEnd = partitionStarts[p + 1];
+      if (blockEnd - blockStart < 2) continue;
+
+      HighsInt block = static_cast<HighsInt>(blocks.size());
+      blocks.push_back({static_cast<HighsInt>(blockMembers.size()), 0});
+      for (HighsInt k = blockStart; k < blockEnd; ++k) {
+        HighsInt col = partitionVars[k].col;
+        VariableData& data = binNonZeros[col];
+        data.member = static_cast<HighsInt>(blockMembers.size());
+        blockMembers.push_back({col, data.val, block, 0});
+        // all members but the largest one leave their min-contribution value
+        if (k > blockStart) increase += partitionAbsVal[col];
+      }
+      blocks.back().end = static_cast<HighsInt>(blockMembers.size());
+    }
+    touchedBlocks.resize(static_cast<HighsInt>(blocks.size()));
+    return increase;
+  };
+
   auto updateBinaryWeights = [&](double threshold) {
     // lift binaries: their implied bounds increase the minimum contribution
     // of non-binaries to the row
@@ -432,7 +547,8 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
       if (val == 0.0) continue;
       sortedBins.push_back({col, val,
                             cliquetable.numCliques(col, val < 0) -
-                                10.0 * std::abs(val) / threshold});
+                                10.0 * std::abs(val) / threshold,
+                            binVar.value().member});
       remainingWeight += std::abs(val);
     }
 
@@ -443,10 +559,17 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
                      std::make_pair(b.sortKey, b.col);
             });
 
+    // the weights are first accumulated additively, i.e. |a| for every binary
+    // forced away from its min-contribution value. for members of clique
+    // blocks this overestimates the increase relative to the clique-aware
+    // minimum activity, so it is corrected below. the additive weights are
+    // upper bounds on the exact ones, so the early termination stays valid
+    blockPairs.clear();
     for (const SortedBin& sortedBin : sortedBins) {
       HighsInt col = sortedBin.col;
       double val = sortedBin.val;
       double absval = std::abs(val);
+      HighsInt member = sortedBin.member;
 
       // no binary's weight can exceed threshold after processing the
       // current and remaining binaries, so skip clique propagation
@@ -483,7 +606,50 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
             data.update(neighbor.val == 1, absval);
             maxWeight = max(maxWeight, neighbor.val == 1 ? data.weightUpper
                                                          : data.weightLower);
+            if (member >= 0) blockPairs.emplace_back(neighbor, member);
           });
+    }
+
+    if (blocks.empty()) return;
+
+    // a block member set to the value opposite to its min-contribution value
+    // leaves it as well; addNonZero has charged |a| for this
+    for (HighsInt k = 0; k < static_cast<HighsInt>(blockMembers.size()); ++k)
+      blockPairs.emplace_back(
+          HighsCliqueTable::CliqueVar(blockMembers[k].col,
+                                      blockMembers[k].val < 0 ? 0 : 1),
+          k);
+
+    // per literal and block, replace the additive contributions of the
+    // members forced away by the exact increase of the block. the members of
+    // a block are contiguous in blockMembers, so sorting by member groups the
+    // pairs by block
+    pdqsort(blockPairs.begin(), blockPairs.end(),
+            [](const std::pair<HighsCliqueTable::CliqueVar, HighsInt>& a,
+               const std::pair<HighsCliqueTable::CliqueVar, HighsInt>& b) {
+              return std::make_pair(a.first.index(), a.second) <
+                     std::make_pair(b.first.index(), b.second);
+            });
+    size_t groupStart = 0;
+    while (groupStart < blockPairs.size()) {
+      HighsCliqueTable::CliqueVar literal = blockPairs[groupStart].first;
+      HighsInt block = blockMembers[blockPairs[groupStart].second].block;
+      size_t groupEnd = groupStart;
+      HighsCDouble additive = 0.0;
+      while (groupEnd < blockPairs.size() &&
+             blockPairs[groupEnd].first.index() == literal.index() &&
+             blockMembers[blockPairs[groupEnd].second].block == block) {
+        HighsInt member = blockPairs[groupEnd].second;
+        blockMembers[member].count++;
+        additive += std::abs(blockMembers[member].val);
+        groupEnd++;
+      }
+      binNonZeros[literal.col].update(
+          literal.val == 1,
+          static_cast<HighsCDouble>(blockIncrease(block)) - additive);
+      for (size_t k = groupStart; k < groupEnd; ++k)
+        blockMembers[blockPairs[k].second].count--;
+      groupStart = groupEnd;
     }
   };
 
@@ -590,9 +756,22 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
           // binary is forced away from min-contribution if v1 or v2
           // is the complement, or shares a clique with it
           if (presolveCliqueTable.haveCommonClique(v1, minContribCliqueVar) ||
-              presolveCliqueTable.haveCommonClique(v2, minContribCliqueVar))
-            sum += absbval;
+              presolveCliqueTable.haveCommonClique(v2, minContribCliqueVar)) {
+            if (bin.member < 0) {
+              sum += absbval;
+            } else {
+              // members of clique blocks are accounted for per block below
+              blockMembers[bin.member].count++;
+              touchedBlocks.add(blockMembers[bin.member].block);
+            }
+          }
         }
+        for (HighsInt block : touchedBlocks.entries) {
+          sum += blockIncrease(block);
+          for (HighsInt k = blocks[block].start; k < blocks[block].end; ++k)
+            blockMembers[k].count = 0;
+        }
+        touchedBlocks.clear();
 
         // combined weight exceeds threshold: v1 and v2 form a clique
         if (sum > threshold + primal_feastol) {
@@ -638,10 +817,11 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
       if (impl == nullptr) continue;
 
       double absBinVal = std::abs(binVal);
+      HighsInt member = binVar.value().member;
       if (impl->lb > model->col_lower_[nonBinCol] + primal_feastol)
-        breakpoints.push_back({impl->lb, absBinVal, true});
+        breakpoints.push_back({impl->lb, absBinVal, true, member});
       if (impl->ub < model->col_upper_[nonBinCol] - primal_feastol)
-        breakpoints.push_back({impl->ub, absBinVal, false});
+        breakpoints.push_back({impl->ub, absBinVal, false, member});
     }
     // sort by increasing value so computeBound can walk from either end.
     // at equal values, lower-type breakpoints come first: neither type is
@@ -652,6 +832,26 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
               if (a.value != b.value) return a.value < b.value;
               return a.isLowerType && !b.isLowerType;
             });
+  };
+
+  auto activateBlockMembers = [&](bool lowerType) {
+    // members of clique blocks with breakpoints of the given type leave their
+    // min-contribution value; returns the increase of the minimum activity
+    HighsCDouble increase = 0.0;
+    for (const Breakpoint& bp : breakpoints) {
+      if (bp.member < 0 || bp.isLowerType != lowerType) continue;
+      blockMembers[bp.member].count++;
+      touchedBlocks.add(blockMembers[bp.member].block);
+    }
+    for (HighsInt block : touchedBlocks.entries)
+      increase += blockIncrease(block);
+    touchedBlocks.clear();
+    return increase;
+  };
+
+  auto resetBlockMembers = [&]() {
+    for (const Breakpoint& bp : breakpoints)
+      if (bp.member >= 0) blockMembers[bp.member].count = 0;
   };
 
   auto tightenNonBinaryBounds = [&](double threshold) {
@@ -671,7 +871,14 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
       // all upper-type breakpoints are active (x_r > mu holds)
       collectBreakpoints(nonBinCol);
       for (const auto& bp : breakpoints)
-        nz.value().update(!bp.isLowerType, bp.excess);
+        if (bp.member < 0) nz.value().update(!bp.isLowerType, bp.excess);
+      // members of clique blocks are accounted for per block
+      if (!blocks.empty()) {
+        for (bool lowerType : {true, false}) {
+          nz.value().update(!lowerType, activateBlockMembers(lowerType));
+          resetBlockMembers();
+        }
+      }
 
       // w(lb) > threshold means lb is infeasible; walk right to find new lb
       // w(ub) > threshold means ub is infeasible; walk left to find new ub
@@ -737,7 +944,16 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
           // both cases:
           // 1. going right -> lower-type deactivates / upper activates,
           // 2. going left  -> upper-type deactivates / lower activates
-          if (breakpoints[i].isLowerType)
+          HighsInt member = breakpoints[i].member;
+          if (member >= 0) {
+            // the jump of a block member depends on the other members of its
+            // block that are forced away at the same time
+            HighsInt block = blockMembers[member].block;
+            double increaseBefore = blockIncrease(block);
+            bool activate = (direction > 0) != breakpoints[i].isLowerType;
+            blockMembers[member].count += activate ? 1 : -1;
+            weight += blockIncrease(block) - increaseBefore;
+          } else if (breakpoints[i].isLowerType)
             weight -= direction * breakpoints[i].excess;
           else
             weight += direction * breakpoints[i].excess;
@@ -765,25 +981,31 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
         return false;
       };
 
-      // tighten lower bound: walk from lb toward ub
+      // tighten lower bound: walk from lb toward ub. at lb, the block members
+      // with lower-type breakpoints are forced away
       if (!colDeleted[nonBinCol] && tightenLower) {
         double newLowerBnd;
+        if (!blocks.empty()) activateBlockMembers(true);
+        bool feasible = computeBound(
+            nonBinVal, weightLower, model->col_lower_[nonBinCol],
+            model->col_upper_[nonBinCol], HighsInt{1}, newLowerBnd);
+        if (!blocks.empty()) resetBlockMembers();
         // w(d) > threshold for all d in [lb, ub]: no feasible value
-        if (!computeBound(nonBinVal, weightLower, model->col_lower_[nonBinCol],
-                          model->col_upper_[nonBinCol], HighsInt{1},
-                          newLowerBnd))
-          return Result::kPrimalInfeasible;
+        if (!feasible) return Result::kPrimalInfeasible;
         HPRESOLVE_CHECKED_CALL(changeNonBinaryLower(nonBinCol, newLowerBnd));
       }
 
-      // tighten upper bound: walk from ub toward lb
+      // tighten upper bound: walk from ub toward lb. at ub, the block members
+      // with upper-type breakpoints are forced away
       if (!colDeleted[nonBinCol] && tightenUpper) {
         double newUpperBnd;
+        if (!blocks.empty()) activateBlockMembers(false);
+        bool feasible = computeBound(
+            nonBinVal, weightUpper, model->col_upper_[nonBinCol],
+            model->col_lower_[nonBinCol], HighsInt{-1}, newUpperBnd);
+        if (!blocks.empty()) resetBlockMembers();
         // w(d) > threshold for all d in [lb, ub]: no feasible value
-        if (!computeBound(nonBinVal, weightUpper, model->col_upper_[nonBinCol],
-                          model->col_lower_[nonBinCol], HighsInt{-1},
-                          newUpperBnd))
-          return Result::kPrimalInfeasible;
+        if (!feasible) return Result::kPrimalInfeasible;
         HPRESOLVE_CHECKED_CALL(changeNonBinaryUpper(nonBinCol, newUpperBnd));
       }
     }
@@ -791,6 +1013,11 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
   };
 
   auto checkRow = [&](double threshold) {
+    // the min-contribution literals of the row binaries in a clique block
+    // exclude each other, which increases the row's minimum activity
+    threshold -= static_cast<double>(partitionRowBinaries());
+    if (threshold < -primal_feastol) return Result::kPrimalInfeasible;
+
     // collect implied bounds on non-binaries
     collectImpliedBounds();
 
@@ -822,10 +1049,9 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
   };
 
   // prepare vectors
-  modifiedRows.reserve(model->num_row_);
-  modifiedRowFlags.resize(model->num_row_);
-  changedNonBinaries.reserve(model->num_col_);
-  changedNonBinaryFlags.resize(model->num_col_);
+  modifiedRows.resize(model->num_row_);
+  changedNonBinaries.resize(model->num_col_);
+  partitionAbsVal.resize(model->num_col_);
 
   // packed storage for objective
   if (mipsolver->mipdata_->upper_limit < kHighsInf ||
@@ -921,11 +1147,9 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
 
     // re-check changed rows and non-binaries
     myObjectiveAffected = objectiveAffected;
-    clearChangedFlags();
-    std::swap(modifiedRows, myModifiedRows);
-    modifiedRows.clear();
-    std::swap(changedNonBinaries, myChangedNonBinaries);
-    changedNonBinaries.clear();
+    objectiveAffected = false;
+    modifiedRows.moveEntriesTo(myModifiedRows);
+    changedNonBinaries.moveEntriesTo(myChangedNonBinaries);
   }
 
   if (numVarsFixed > 0 || numCliquesAdded > 0 || numBoundsTightened > 0)

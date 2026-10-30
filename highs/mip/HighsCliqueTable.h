@@ -9,10 +9,12 @@
 #define HIGHS_CLIQUE_TABLE_H_
 
 #include <cstdint>
+#include <limits>
 #include <set>
 #include <vector>
 
 #include "lp_data/HConst.h"
+#include "pdqsort/pdqsort.h"
 #include "util/HighsHash.h"
 #include "util/HighsHashTree.h"
 #include "util/HighsRandom.h"
@@ -169,15 +171,57 @@ class HighsCliqueTable {
 
   void replaceLiteral(CliqueVar substitutedVar, CliqueVar replacementVar);
 
-  template <bool Sort = true, typename Comparator>
+  // extends the clique seeded at clqVars[seedPos] by literals in
+  // clqVars[seedPos + 1, extensionEnd) adjacent to all of its members; if
+  // Sort is true, the next member is the first remaining literal in the given
+  // order. returns the end of the clique
+  template <bool Sort, typename Comparator>
   HighsInt extendClique(std::vector<HighsInt>& neighbourhoodInds,
                         std::vector<CliqueVar>& clqVars, HighsInt seedPos,
                         HighsInt extensionEnd,
-                        const Comparator& candidateOrder);
+                        const Comparator& candidateOrder) {
+    for (HighsInt i = seedPos; i < extensionEnd; ++i) {
+      if (Sort)
+        pdqsort_branchless(clqVars.begin() + i, clqVars.begin() + extensionEnd,
+                           candidateOrder);
+      CliqueVar v = clqVars[i];
+      HighsInt extensionStart = i + 1;
+      extensionEnd =
+          partitionNeighbourhood(neighbourhoodInds, numNeighbourhoodQueries, v,
+                                 clqVars.data() + extensionStart,
+                                 extensionEnd - extensionStart) +
+          extensionStart;
+    }
+    return extensionEnd;
+  }
 
-  HighsInt extendClique(std::vector<HighsInt>& neighbourhoodInds,
-                        std::vector<CliqueVar>& clqVars, HighsInt seedPos,
-                        HighsInt extensionEnd);
+  // partitions clqVars greedily into cliques, extending each clique as in
+  // extendClique. after maxNumQueries neighbourhood queries, the remaining
+  // literals form cliques of their own
+  template <bool Sort, typename Comparator>
+  void partitionIntoCliques(std::vector<CliqueVar>& clqVars,
+                            std::vector<HighsInt>& partitionStart,
+                            const Comparator& candidateOrder,
+                            int64_t maxNumQueries) {
+    std::vector<HighsInt> neighbourhoodInds;
+    neighbourhoodInds.reserve(clqVars.size());
+
+    HighsInt numClqVars = static_cast<HighsInt>(clqVars.size());
+    partitionStart.clear();
+    partitionStart.reserve(clqVars.size());
+    int64_t numQueriesStart = numNeighbourhoodQueries;
+
+    HighsInt pos = 0;
+    while (pos < numClqVars) {
+      partitionStart.push_back(pos);
+      if (numNeighbourhoodQueries - numQueriesStart >= maxNumQueries)
+        pos++;
+      else
+        pos = extendClique<Sort>(neighbourhoodInds, clqVars, pos, numClqVars,
+                                 candidateOrder);
+    }
+    partitionStart.push_back(numClqVars);
+  }
 
  public:
   int64_t numNeighbourhoodQueries;
@@ -276,6 +320,21 @@ class HighsCliqueTable {
 
   HighsInt getNumFixings() const { return nfixings; }
 
+  // partitions clqVars greedily into cliques: each clique is extended by the
+  // remaining literals adjacent to all of its members in the given order, so
+  // the literals of each clique are sorted in this order. after
+  // maxNumQueries neighbourhood queries, the remaining literals form cliques
+  // of their own
+  template <typename Comparator>
+  void cliquePartition(
+      std::vector<CliqueVar>& clqVars, std::vector<HighsInt>& partitionStart,
+      const Comparator& candidateOrder,
+      int64_t maxNumQueries = std::numeric_limits<int64_t>::max()) {
+    partitionIntoCliques<true>(clqVars, partitionStart, candidateOrder,
+                               maxNumQueries);
+  }
+
+  // partitions clqVars greedily into cliques in random order
   void cliquePartition(std::vector<CliqueVar>& clqVars,
                        std::vector<HighsInt>& partitionStart);
 

@@ -3101,6 +3101,930 @@ TEST_CASE("test-impl-aware-paper-example-7-complemented",
   HighsTaskExecutor::shutdown(true);
 }
 
+TEST_CASE("test-impl-aware-clique-block-fixing",
+          "[highs_test_presolve_rules]") {
+  // binary fixing with a clique-aware minimum activity.
+  //
+  // row 0: -x1 - x2 - x3 + 2*z <= 0
+  // x1(col0), x2(col1), x3(col2), z(col3) binary
+  // clique {x1 = 1, x2 = 1, x3 = 1}, i.e. x1 + x2 + x3 <= 1
+  //
+  // the standard minimum activity is -3 (x1 = x2 = x3 = 1), so the threshold
+  // is 3 and z = 1 (weight 2) is not excluded. at most one of x1, x2, x3 can
+  // be 1, so the clique-aware minimum activity is -1 and the threshold is 1.
+  // z = 1 exceeds it, hence z is fixed to 0. z is not in a clique with the
+  // x's, so the clique propagation of the binary weights does not see this.
+  HighsLp lp;
+  lp.num_col_ = 4;
+  lp.num_row_ = 1;
+  lp.sense_ = ObjSense::kMinimize;
+  lp.col_cost_ = {0, 0, 0, 0};
+  lp.col_lower_ = {0, 0, 0, 0};
+  lp.col_upper_ = {1, 1, 1, 1};
+  lp.integrality_ = {HighsVarType::kInteger, HighsVarType::kInteger,
+                     HighsVarType::kInteger, HighsVarType::kInteger};
+  lp.row_lower_ = {-kHighsInf};
+  lp.row_upper_ = {0};
+  lp.a_matrix_.format_ = MatrixFormat::kColwise;
+  lp.a_matrix_.num_col_ = 4;
+  lp.a_matrix_.num_row_ = 1;
+  lp.a_matrix_.start_ = {0, 1, 2, 3, 4};
+  lp.a_matrix_.index_ = {0, 0, 0, 0};
+  lp.a_matrix_.value_ = {-1, -1, -1, 2};
+
+  highs::parallel::initialize_scheduler(1);
+
+  Highs highs;
+  highs.setOptionValue("output_flag", dev_run);
+  highs.setOptionValue("presolve_rule_test",
+                       kPresolveRuleImplAwareConstrPropagation);
+  highs.passModel(lp);
+
+  HighsCallback callback(&highs);
+  const HighsOptions& options = highs.getOptions();
+  HighsSolution solution;
+  HighsProfiling profiling;
+
+  HighsMipSolver mipsolver(callback, options, lp, solution);
+  mipsolver.timer_.start();
+  profiling.initialize(mipsolver.timer_, true, true);
+  mipsolver.setProfiling(&profiling);
+  mipsolver.mipdata_ =
+      std::unique_ptr<HighsMipSolverData>(new HighsMipSolverData(mipsolver));
+  mipsolver.mipdata_->init();
+  mipsolver.mipdata_->setupDomainPropagation();
+  mipsolver.mipdata_->cliquesExtracted = true;
+
+  HighsCliqueTable& cliquetable = mipsolver.mipdata_->cliquetable;
+  HighsCliqueTable::CliqueVar clq[] = {{0, 1}, {1, 1}, {2, 1}};
+  cliquetable.doAddClique(clq, 3);
+
+  presolve::HighsPostsolveStack& postsolve_stack =
+      mipsolver.mipdata_->postSolveStack;
+
+  presolve::HPresolve presolve;
+  presolve.setInput(mipsolver, -1);
+  REQUIRE(presolve.okSetupPresolveDataStructures());
+  HighsModelStatus status = presolve.run(postsolve_stack);
+  REQUIRE(status == HighsModelStatus::kNotset);
+
+  // z is fixed and removed; x1, x2, x3 remain
+  REQUIRE(mipsolver.model_->num_col_ == 3);
+
+  // z is restored to 0 by postsolve
+  HighsSolution sol;
+  sol.value_valid = true;
+  sol.col_value = {1.0, 0.0, 0.0};
+  postsolve_stack.undoPrimal(options, sol);
+  REQUIRE(sol.col_value[3] <= 1e-6);
+
+  HighsTaskExecutor::shutdown(true);
+}
+
+TEST_CASE("test-impl-aware-clique-block-nonbinary",
+          "[highs_test_presolve_rules]") {
+  // non-binary bound tightening with a clique-aware minimum activity.
+  //
+  // row 0: -x1 - x2 - x3 + y <= 0
+  // x1(col0), x2(col1), x3(col2) binary, y(col3) integer in [0, 3]
+  // clique {x1 = 1, x2 = 1, x3 = 1}
+  //
+  // the standard threshold is 3, so y <= 3 is not tightened. with the
+  // clique-aware minimum activity -1 the threshold is 1, hence y <= 1.
+  HighsLp lp;
+  lp.num_col_ = 4;
+  lp.num_row_ = 1;
+  lp.sense_ = ObjSense::kMinimize;
+  lp.col_cost_ = {0, 0, 0, 0};
+  lp.col_lower_ = {0, 0, 0, 0};
+  lp.col_upper_ = {1, 1, 1, 3};
+  lp.integrality_ = {HighsVarType::kInteger, HighsVarType::kInteger,
+                     HighsVarType::kInteger, HighsVarType::kInteger};
+  lp.row_lower_ = {-kHighsInf};
+  lp.row_upper_ = {0};
+  lp.a_matrix_.format_ = MatrixFormat::kColwise;
+  lp.a_matrix_.num_col_ = 4;
+  lp.a_matrix_.num_row_ = 1;
+  lp.a_matrix_.start_ = {0, 1, 2, 3, 4};
+  lp.a_matrix_.index_ = {0, 0, 0, 0};
+  lp.a_matrix_.value_ = {-1, -1, -1, 1};
+
+  highs::parallel::initialize_scheduler(1);
+
+  Highs highs;
+  highs.setOptionValue("output_flag", dev_run);
+  highs.setOptionValue("presolve_rule_test",
+                       kPresolveRuleImplAwareConstrPropagation);
+  highs.passModel(lp);
+
+  HighsCallback callback(&highs);
+  const HighsOptions& options = highs.getOptions();
+  HighsSolution solution;
+  HighsProfiling profiling;
+
+  HighsMipSolver mipsolver(callback, options, lp, solution);
+  mipsolver.timer_.start();
+  profiling.initialize(mipsolver.timer_, true, true);
+  mipsolver.setProfiling(&profiling);
+  mipsolver.mipdata_ =
+      std::unique_ptr<HighsMipSolverData>(new HighsMipSolverData(mipsolver));
+  mipsolver.mipdata_->init();
+  mipsolver.mipdata_->setupDomainPropagation();
+  mipsolver.mipdata_->cliquesExtracted = true;
+
+  HighsCliqueTable& cliquetable = mipsolver.mipdata_->cliquetable;
+  HighsCliqueTable::CliqueVar clq[] = {{0, 1}, {1, 1}, {2, 1}};
+  cliquetable.doAddClique(clq, 3);
+
+  presolve::HighsPostsolveStack& postsolve_stack =
+      mipsolver.mipdata_->postSolveStack;
+
+  presolve::HPresolve presolve;
+  presolve.setInput(mipsolver, -1);
+  REQUIRE(presolve.okSetupPresolveDataStructures());
+  HighsModelStatus status = presolve.run(postsolve_stack);
+  REQUIRE(status == HighsModelStatus::kNotset);
+
+  // no column is removed; y's upper bound is tightened from 3 to 1
+  REQUIRE(mipsolver.model_->num_col_ == 4);
+  REQUIRE(mipsolver.model_->col_upper_[3] <= 1.0 + 1e-6);
+  REQUIRE(mipsolver.model_->col_upper_[3] >= 1.0 - 1e-6);
+
+  HighsTaskExecutor::shutdown(true);
+}
+
+TEST_CASE("test-impl-aware-clique-block-clique",
+          "[highs_test_presolve_rules]") {
+  // two-column clique with a clique-aware minimum activity.
+  //
+  // row 0: -x1 - x2 - x3 + z1 + z2 <= 0
+  // x1(col0), x2(col1), x3(col2), z1(col3), z2(col4) binary
+  // clique {x1 = 1, x2 = 1, x3 = 1}
+  //
+  // with the clique-aware minimum activity -1 the threshold is 1. z1 = 1 or
+  // z2 = 1 alone does not exceed it (weight 1 each), but both together do,
+  // hence {z1 = 1, z2 = 1} is a clique. the standard threshold 3 finds
+  // neither.
+  HighsLp lp;
+  lp.num_col_ = 5;
+  lp.num_row_ = 1;
+  lp.sense_ = ObjSense::kMinimize;
+  lp.col_cost_ = {0, 0, 0, 0, 0};
+  lp.col_lower_ = {0, 0, 0, 0, 0};
+  lp.col_upper_ = {1, 1, 1, 1, 1};
+  lp.integrality_ = {HighsVarType::kInteger, HighsVarType::kInteger,
+                     HighsVarType::kInteger, HighsVarType::kInteger,
+                     HighsVarType::kInteger};
+  lp.row_lower_ = {-kHighsInf};
+  lp.row_upper_ = {0};
+  lp.a_matrix_.format_ = MatrixFormat::kColwise;
+  lp.a_matrix_.num_col_ = 5;
+  lp.a_matrix_.num_row_ = 1;
+  lp.a_matrix_.start_ = {0, 1, 2, 3, 4, 5};
+  lp.a_matrix_.index_ = {0, 0, 0, 0, 0};
+  lp.a_matrix_.value_ = {-1, -1, -1, 1, 1};
+
+  highs::parallel::initialize_scheduler(1);
+
+  Highs highs;
+  highs.setOptionValue("output_flag", dev_run);
+  highs.setOptionValue("presolve_rule_test",
+                       kPresolveRuleImplAwareConstrPropagation);
+  highs.passModel(lp);
+
+  HighsCallback callback(&highs);
+  const HighsOptions& options = highs.getOptions();
+  HighsSolution solution;
+  HighsProfiling profiling;
+
+  HighsMipSolver mipsolver(callback, options, lp, solution);
+  mipsolver.timer_.start();
+  profiling.initialize(mipsolver.timer_, true, true);
+  mipsolver.setProfiling(&profiling);
+  mipsolver.mipdata_ =
+      std::unique_ptr<HighsMipSolverData>(new HighsMipSolverData(mipsolver));
+  mipsolver.mipdata_->init();
+  mipsolver.mipdata_->setupDomainPropagation();
+  mipsolver.mipdata_->cliquesExtracted = true;
+
+  HighsCliqueTable& cliquetable = mipsolver.mipdata_->cliquetable;
+  HighsCliqueTable::CliqueVar clq[] = {{0, 1}, {1, 1}, {2, 1}};
+  cliquetable.doAddClique(clq, 3);
+
+  presolve::HighsPostsolveStack& postsolve_stack =
+      mipsolver.mipdata_->postSolveStack;
+
+  presolve::HPresolve presolve;
+  presolve.setInput(mipsolver, -1);
+  REQUIRE(presolve.okSetupPresolveDataStructures());
+  HighsModelStatus status = presolve.run(postsolve_stack);
+  REQUIRE(status == HighsModelStatus::kNotset);
+
+  // nothing is fixed, but z1 = 1 and z2 = 1 form a clique
+  REQUIRE(mipsolver.model_->num_col_ == 5);
+  REQUIRE(cliquetable.haveCommonClique({3, 1}, {4, 1}));
+
+  HighsTaskExecutor::shutdown(true);
+}
+
+TEST_CASE("test-impl-aware-clique-block-forced-members",
+          "[highs_test_presolve_rules]") {
+  // several members of a clique block forced away by one literal.
+  //
+  // row 0: -3*x1 - 2*x2 - x3 <= -1.5
+  // x1(col0), x2(col1), x3(col2), w(col3) binary; w is not in the row
+  // cliques {x1 = 1, x2 = 1, x3 = 1}, {w = 1, x1 = 1}, {w = 1, x2 = 1}
+  //
+  // w = 1 forces x1 = x2 = 0, so at most -x3 >= -1 remains, which violates
+  // the row: w is fixed to 0. x3 = 1 forces x1 = x2 = 0 in the same way, so
+  // x3 is fixed to 0 as well. the clique-aware weight of w is exact only if
+  // both forced members of the block are taken into account together
+  // (3 - 1 = 2 on top of the clique-aware threshold 1.5), not one by one.
+  HighsLp lp;
+  lp.num_col_ = 4;
+  lp.num_row_ = 1;
+  lp.sense_ = ObjSense::kMinimize;
+  lp.col_cost_ = {0, 0, 0, 0};
+  lp.col_lower_ = {0, 0, 0, 0};
+  lp.col_upper_ = {1, 1, 1, 1};
+  lp.integrality_ = {HighsVarType::kInteger, HighsVarType::kInteger,
+                     HighsVarType::kInteger, HighsVarType::kInteger};
+  lp.row_lower_ = {-kHighsInf};
+  lp.row_upper_ = {-1.5};
+  lp.a_matrix_.format_ = MatrixFormat::kColwise;
+  lp.a_matrix_.num_col_ = 4;
+  lp.a_matrix_.num_row_ = 1;
+  lp.a_matrix_.start_ = {0, 1, 2, 3, 3};
+  lp.a_matrix_.index_ = {0, 0, 0};
+  lp.a_matrix_.value_ = {-3, -2, -1};
+
+  highs::parallel::initialize_scheduler(1);
+
+  Highs highs;
+  highs.setOptionValue("output_flag", dev_run);
+  highs.setOptionValue("presolve_rule_test",
+                       kPresolveRuleImplAwareConstrPropagation);
+  highs.passModel(lp);
+
+  HighsCallback callback(&highs);
+  const HighsOptions& options = highs.getOptions();
+  HighsSolution solution;
+  HighsProfiling profiling;
+
+  HighsMipSolver mipsolver(callback, options, lp, solution);
+  mipsolver.timer_.start();
+  profiling.initialize(mipsolver.timer_, true, true);
+  mipsolver.setProfiling(&profiling);
+  mipsolver.mipdata_ =
+      std::unique_ptr<HighsMipSolverData>(new HighsMipSolverData(mipsolver));
+  mipsolver.mipdata_->init();
+  mipsolver.mipdata_->setupDomainPropagation();
+  mipsolver.mipdata_->cliquesExtracted = true;
+
+  HighsCliqueTable& cliquetable = mipsolver.mipdata_->cliquetable;
+  HighsCliqueTable::CliqueVar clq1[] = {{0, 1}, {1, 1}, {2, 1}};
+  cliquetable.doAddClique(clq1, 3);
+  HighsCliqueTable::CliqueVar clq2[] = {{3, 1}, {0, 1}};
+  cliquetable.doAddClique(clq2, 2);
+  HighsCliqueTable::CliqueVar clq3[] = {{3, 1}, {1, 1}};
+  cliquetable.doAddClique(clq3, 2);
+
+  presolve::HighsPostsolveStack& postsolve_stack =
+      mipsolver.mipdata_->postSolveStack;
+
+  presolve::HPresolve presolve;
+  presolve.setInput(mipsolver, -1);
+  REQUIRE(presolve.okSetupPresolveDataStructures());
+  HighsModelStatus status = presolve.run(postsolve_stack);
+  REQUIRE(status == HighsModelStatus::kNotset);
+
+  // w and x3 are fixed to 0 and removed; x1 and x2 remain
+  REQUIRE(mipsolver.model_->num_col_ == 2);
+
+  // w and x3 are restored to 0 by postsolve
+  HighsSolution sol;
+  sol.value_valid = true;
+  sol.col_value = {1.0, 0.0};
+  postsolve_stack.undoPrimal(options, sol);
+  REQUIRE(sol.col_value[2] <= 1e-6);
+  REQUIRE(sol.col_value[3] <= 1e-6);
+
+  HighsTaskExecutor::shutdown(true);
+}
+
+TEST_CASE("test-impl-aware-clique-block-walk", "[highs_test_presolve_rules]") {
+  // piecewise walk with a breakpoint from a member of a clique block.
+  //
+  // row 0: -2*x1 - 2*x2 + y <= 0
+  // x1(col0), x2(col1) binary, y(col2) integer in [0, 4]
+  // clique {x1 = 1, x2 = 1}; implication x1 = 1 => y <= 1
+  //
+  // y = 2 is feasible (x2 = 1), y = 3 is not (both x's would be needed), so
+  // the tightest bound is y <= 2. for y > 1, x1 is forced to 0, but x2 can
+  // still take its place in the block, so this costs nothing on top of the
+  // clique-aware minimum activity -2. charging |a| = 2 for x1 relative to the
+  // clique-aware threshold 2 would wrongly give y <= 1.
+  HighsLp lp;
+  lp.num_col_ = 3;
+  lp.num_row_ = 1;
+  lp.sense_ = ObjSense::kMinimize;
+  lp.col_cost_ = {0, 0, 0};
+  lp.col_lower_ = {0, 0, 0};
+  lp.col_upper_ = {1, 1, 4};
+  lp.integrality_ = {HighsVarType::kInteger, HighsVarType::kInteger,
+                     HighsVarType::kInteger};
+  lp.row_lower_ = {-kHighsInf};
+  lp.row_upper_ = {0};
+  lp.a_matrix_.format_ = MatrixFormat::kColwise;
+  lp.a_matrix_.num_col_ = 3;
+  lp.a_matrix_.num_row_ = 1;
+  lp.a_matrix_.start_ = {0, 1, 2, 3};
+  lp.a_matrix_.index_ = {0, 0, 0};
+  lp.a_matrix_.value_ = {-2, -2, 1};
+
+  highs::parallel::initialize_scheduler(1);
+
+  Highs highs;
+  highs.setOptionValue("output_flag", dev_run);
+  highs.setOptionValue("presolve_rule_test",
+                       kPresolveRuleImplAwareConstrPropagation);
+  highs.passModel(lp);
+
+  HighsCallback callback(&highs);
+  const HighsOptions& options = highs.getOptions();
+  HighsSolution solution;
+  HighsProfiling profiling;
+
+  HighsMipSolver mipsolver(callback, options, lp, solution);
+  mipsolver.timer_.start();
+  profiling.initialize(mipsolver.timer_, true, true);
+  mipsolver.setProfiling(&profiling);
+  mipsolver.mipdata_ =
+      std::unique_ptr<HighsMipSolverData>(new HighsMipSolverData(mipsolver));
+  mipsolver.mipdata_->init();
+  mipsolver.mipdata_->setupDomainPropagation();
+  mipsolver.mipdata_->cliquesExtracted = true;
+
+  HighsCliqueTable& cliquetable = mipsolver.mipdata_->cliquetable;
+  HighsCliqueTable::CliqueVar clq[] = {{0, 1}, {1, 1}};
+  cliquetable.doAddClique(clq, 2);
+
+  HighsImplications& implications = mipsolver.mipdata_->implications;
+  implications.addImplication(0, 1, 2,
+                              HighsImplications::Implication{-kHighsInf, 1.0});
+
+  presolve::HighsPostsolveStack& postsolve_stack =
+      mipsolver.mipdata_->postSolveStack;
+
+  presolve::HPresolve presolve;
+  presolve.setInput(mipsolver, -1);
+  REQUIRE(presolve.okSetupPresolveDataStructures());
+  HighsModelStatus status = presolve.run(postsolve_stack);
+  REQUIRE(status == HighsModelStatus::kNotset);
+
+  // no column is removed; y's upper bound is tightened from 4 to 2, not 1
+  REQUIRE(mipsolver.model_->num_col_ == 3);
+  REQUIRE(mipsolver.model_->col_upper_[2] <= 2.0 + 1e-6);
+  REQUIRE(mipsolver.model_->col_upper_[2] >= 2.0 - 1e-6);
+
+  HighsTaskExecutor::shutdown(true);
+}
+
+TEST_CASE("test-impl-aware-clique-block-pair", "[highs_test_presolve_rules]") {
+  // weights and pair test with a member of a clique block forced away.
+  //
+  // row 0: -2*x1 - 2*x2 + z1 + z2 <= 0
+  // x1(col0), x2(col1), z1(col2), z2(col3) binary
+  // cliques {x1 = 1, x2 = 1}, {z1 = 1, x1 = 1}
+  //
+  // z1 = z2 = 1 is feasible (x2 = 1, activity 0), so z1 must not be fixed
+  // and {z1 = 1, z2 = 1} is not a clique. z1 = 1 forces x1 to 0, but x2 can
+  // take its place in the block, which costs nothing on top of the
+  // clique-aware minimum activity -2. charging |a| = 2 for x1 relative to the
+  // clique-aware threshold 2 would wrongly fix z1 and add the clique.
+  HighsLp lp;
+  lp.num_col_ = 4;
+  lp.num_row_ = 1;
+  lp.sense_ = ObjSense::kMinimize;
+  lp.col_cost_ = {0, 0, 0, 0};
+  lp.col_lower_ = {0, 0, 0, 0};
+  lp.col_upper_ = {1, 1, 1, 1};
+  lp.integrality_ = {HighsVarType::kInteger, HighsVarType::kInteger,
+                     HighsVarType::kInteger, HighsVarType::kInteger};
+  lp.row_lower_ = {-kHighsInf};
+  lp.row_upper_ = {0};
+  lp.a_matrix_.format_ = MatrixFormat::kColwise;
+  lp.a_matrix_.num_col_ = 4;
+  lp.a_matrix_.num_row_ = 1;
+  lp.a_matrix_.start_ = {0, 1, 2, 3, 4};
+  lp.a_matrix_.index_ = {0, 0, 0, 0};
+  lp.a_matrix_.value_ = {-2, -2, 1, 1};
+
+  highs::parallel::initialize_scheduler(1);
+
+  Highs highs;
+  highs.setOptionValue("output_flag", dev_run);
+  highs.setOptionValue("presolve_rule_test",
+                       kPresolveRuleImplAwareConstrPropagation);
+  highs.passModel(lp);
+
+  HighsCallback callback(&highs);
+  const HighsOptions& options = highs.getOptions();
+  HighsSolution solution;
+  HighsProfiling profiling;
+
+  HighsMipSolver mipsolver(callback, options, lp, solution);
+  mipsolver.timer_.start();
+  profiling.initialize(mipsolver.timer_, true, true);
+  mipsolver.setProfiling(&profiling);
+  mipsolver.mipdata_ =
+      std::unique_ptr<HighsMipSolverData>(new HighsMipSolverData(mipsolver));
+  mipsolver.mipdata_->init();
+  mipsolver.mipdata_->setupDomainPropagation();
+  mipsolver.mipdata_->cliquesExtracted = true;
+
+  HighsCliqueTable& cliquetable = mipsolver.mipdata_->cliquetable;
+  HighsCliqueTable::CliqueVar clq1[] = {{0, 1}, {1, 1}};
+  cliquetable.doAddClique(clq1, 2);
+  HighsCliqueTable::CliqueVar clq2[] = {{2, 1}, {0, 1}};
+  cliquetable.doAddClique(clq2, 2);
+
+  presolve::HighsPostsolveStack& postsolve_stack =
+      mipsolver.mipdata_->postSolveStack;
+
+  presolve::HPresolve presolve;
+  presolve.setInput(mipsolver, -1);
+  REQUIRE(presolve.okSetupPresolveDataStructures());
+  HighsModelStatus status = presolve.run(postsolve_stack);
+  REQUIRE(status == HighsModelStatus::kNotset);
+
+  // nothing is fixed and z1 = 1, z2 = 1 is not a clique
+  REQUIRE(mipsolver.model_->num_col_ == 4);
+  REQUIRE(!cliquetable.haveCommonClique({2, 1}, {3, 1}));
+
+  HighsTaskExecutor::shutdown(true);
+}
+
+TEST_CASE("test-impl-aware-clique-block-mixed-signs",
+          "[highs_test_presolve_rules]") {
+  // clique block with positive and negative coefficients.
+  //
+  // row 0: x1 - x2 - x3 + 2*z <= 1
+  // x1(col0), x2(col1), x3(col2), z(col3) binary
+  // clique {x1 = 0, x2 = 1, x3 = 1}
+  //
+  // the min-contribution literals are x1 = 0, x2 = 1 and x3 = 1. the standard
+  // minimum activity -2 assumes all of them, giving the threshold 3, so z = 1
+  // (weight 2) is not excluded. the clique allows only one of them, so the
+  // clique-aware minimum activity is 0 and the threshold is 1. hence z is
+  // fixed to 0. with two members only, the cliques found by the pair test
+  // would fix z as well; three members rule this out.
+  HighsLp lp;
+  lp.num_col_ = 4;
+  lp.num_row_ = 1;
+  lp.sense_ = ObjSense::kMinimize;
+  lp.col_cost_ = {0, 0, 0, 0};
+  lp.col_lower_ = {0, 0, 0, 0};
+  lp.col_upper_ = {1, 1, 1, 1};
+  lp.integrality_ = {HighsVarType::kInteger, HighsVarType::kInteger,
+                     HighsVarType::kInteger, HighsVarType::kInteger};
+  lp.row_lower_ = {-kHighsInf};
+  lp.row_upper_ = {1};
+  lp.a_matrix_.format_ = MatrixFormat::kColwise;
+  lp.a_matrix_.num_col_ = 4;
+  lp.a_matrix_.num_row_ = 1;
+  lp.a_matrix_.start_ = {0, 1, 2, 3, 4};
+  lp.a_matrix_.index_ = {0, 0, 0, 0};
+  lp.a_matrix_.value_ = {1, -1, -1, 2};
+
+  highs::parallel::initialize_scheduler(1);
+
+  Highs highs;
+  highs.setOptionValue("output_flag", dev_run);
+  highs.setOptionValue("presolve_rule_test",
+                       kPresolveRuleImplAwareConstrPropagation);
+  highs.passModel(lp);
+
+  HighsCallback callback(&highs);
+  const HighsOptions& options = highs.getOptions();
+  HighsSolution solution;
+  HighsProfiling profiling;
+
+  HighsMipSolver mipsolver(callback, options, lp, solution);
+  mipsolver.timer_.start();
+  profiling.initialize(mipsolver.timer_, true, true);
+  mipsolver.setProfiling(&profiling);
+  mipsolver.mipdata_ =
+      std::unique_ptr<HighsMipSolverData>(new HighsMipSolverData(mipsolver));
+  mipsolver.mipdata_->init();
+  mipsolver.mipdata_->setupDomainPropagation();
+  mipsolver.mipdata_->cliquesExtracted = true;
+
+  HighsCliqueTable& cliquetable = mipsolver.mipdata_->cliquetable;
+  HighsCliqueTable::CliqueVar clq[] = {{0, 0}, {1, 1}, {2, 1}};
+  cliquetable.doAddClique(clq, 3);
+
+  presolve::HighsPostsolveStack& postsolve_stack =
+      mipsolver.mipdata_->postSolveStack;
+
+  presolve::HPresolve presolve;
+  presolve.setInput(mipsolver, -1);
+  REQUIRE(presolve.okSetupPresolveDataStructures());
+  HighsModelStatus status = presolve.run(postsolve_stack);
+  REQUIRE(status == HighsModelStatus::kNotset);
+
+  // z is fixed and removed; x1, x2, x3 remain
+  REQUIRE(mipsolver.model_->num_col_ == 3);
+
+  // z is restored to 0 by postsolve
+  HighsSolution sol;
+  sol.value_valid = true;
+  sol.col_value = {1.0, 1.0, 0.0};
+  postsolve_stack.undoPrimal(options, sol);
+  REQUIRE(sol.col_value[3] <= 1e-6);
+
+  HighsTaskExecutor::shutdown(true);
+}
+
+TEST_CASE("test-impl-aware-clique-block-geq", "[highs_test_presolve_rules]") {
+  // test-impl-aware-clique-block-fixing with the row written as a
+  // >=-constraint.
+  //
+  // row 0: x1 + x2 + x3 - 2*z >= 0
+  // x1(col0), x2(col1), x3(col2), z(col3) binary
+  // clique {x1 = 1, x2 = 1, x3 = 1}
+  //
+  // the clique-aware maximum activity is 1, so z = 1 violates the row and z
+  // is fixed to 0.
+  HighsLp lp;
+  lp.num_col_ = 4;
+  lp.num_row_ = 1;
+  lp.sense_ = ObjSense::kMinimize;
+  lp.col_cost_ = {0, 0, 0, 0};
+  lp.col_lower_ = {0, 0, 0, 0};
+  lp.col_upper_ = {1, 1, 1, 1};
+  lp.integrality_ = {HighsVarType::kInteger, HighsVarType::kInteger,
+                     HighsVarType::kInteger, HighsVarType::kInteger};
+  lp.row_lower_ = {0};
+  lp.row_upper_ = {kHighsInf};
+  lp.a_matrix_.format_ = MatrixFormat::kColwise;
+  lp.a_matrix_.num_col_ = 4;
+  lp.a_matrix_.num_row_ = 1;
+  lp.a_matrix_.start_ = {0, 1, 2, 3, 4};
+  lp.a_matrix_.index_ = {0, 0, 0, 0};
+  lp.a_matrix_.value_ = {1, 1, 1, -2};
+
+  highs::parallel::initialize_scheduler(1);
+
+  Highs highs;
+  highs.setOptionValue("output_flag", dev_run);
+  highs.setOptionValue("presolve_rule_test",
+                       kPresolveRuleImplAwareConstrPropagation);
+  highs.passModel(lp);
+
+  HighsCallback callback(&highs);
+  const HighsOptions& options = highs.getOptions();
+  HighsSolution solution;
+  HighsProfiling profiling;
+
+  HighsMipSolver mipsolver(callback, options, lp, solution);
+  mipsolver.timer_.start();
+  profiling.initialize(mipsolver.timer_, true, true);
+  mipsolver.setProfiling(&profiling);
+  mipsolver.mipdata_ =
+      std::unique_ptr<HighsMipSolverData>(new HighsMipSolverData(mipsolver));
+  mipsolver.mipdata_->init();
+  mipsolver.mipdata_->setupDomainPropagation();
+  mipsolver.mipdata_->cliquesExtracted = true;
+
+  HighsCliqueTable& cliquetable = mipsolver.mipdata_->cliquetable;
+  HighsCliqueTable::CliqueVar clq[] = {{0, 1}, {1, 1}, {2, 1}};
+  cliquetable.doAddClique(clq, 3);
+
+  presolve::HighsPostsolveStack& postsolve_stack =
+      mipsolver.mipdata_->postSolveStack;
+
+  presolve::HPresolve presolve;
+  presolve.setInput(mipsolver, -1);
+  REQUIRE(presolve.okSetupPresolveDataStructures());
+  HighsModelStatus status = presolve.run(postsolve_stack);
+  REQUIRE(status == HighsModelStatus::kNotset);
+
+  // z is fixed and removed; x1, x2, x3 remain
+  REQUIRE(mipsolver.model_->num_col_ == 3);
+
+  // z is restored to 0 by postsolve
+  HighsSolution sol;
+  sol.value_valid = true;
+  sol.col_value = {1.0, 0.0, 0.0};
+  postsolve_stack.undoPrimal(options, sol);
+  REQUIRE(sol.col_value[3] <= 1e-6);
+
+  HighsTaskExecutor::shutdown(true);
+}
+
+TEST_CASE("test-impl-aware-clique-block-infeasible",
+          "[highs_test_presolve_rules]") {
+  // infeasibility detected by the clique-aware minimum activity.
+  //
+  // row 0: -x1 - x2 - x3 <= -2
+  // x1(col0), x2(col1), x3(col2) binary
+  // clique {x1 = 1, x2 = 1, x3 = 1}
+  //
+  // at most one of x1, x2, x3 can be 1, so the clique-aware minimum activity
+  // -1 exceeds the right-hand side -2: the row is infeasible.
+  HighsLp lp;
+  lp.num_col_ = 3;
+  lp.num_row_ = 1;
+  lp.sense_ = ObjSense::kMinimize;
+  lp.col_cost_ = {0, 0, 0};
+  lp.col_lower_ = {0, 0, 0};
+  lp.col_upper_ = {1, 1, 1};
+  lp.integrality_ = {HighsVarType::kInteger, HighsVarType::kInteger,
+                     HighsVarType::kInteger};
+  lp.row_lower_ = {-kHighsInf};
+  lp.row_upper_ = {-2};
+  lp.a_matrix_.format_ = MatrixFormat::kColwise;
+  lp.a_matrix_.num_col_ = 3;
+  lp.a_matrix_.num_row_ = 1;
+  lp.a_matrix_.start_ = {0, 1, 2, 3};
+  lp.a_matrix_.index_ = {0, 0, 0};
+  lp.a_matrix_.value_ = {-1, -1, -1};
+
+  highs::parallel::initialize_scheduler(1);
+
+  Highs highs;
+  highs.setOptionValue("output_flag", dev_run);
+  highs.setOptionValue("presolve_rule_test",
+                       kPresolveRuleImplAwareConstrPropagation);
+  highs.passModel(lp);
+
+  HighsCallback callback(&highs);
+  const HighsOptions& options = highs.getOptions();
+  HighsSolution solution;
+  HighsProfiling profiling;
+
+  HighsMipSolver mipsolver(callback, options, lp, solution);
+  mipsolver.timer_.start();
+  profiling.initialize(mipsolver.timer_, true, true);
+  mipsolver.setProfiling(&profiling);
+  mipsolver.mipdata_ =
+      std::unique_ptr<HighsMipSolverData>(new HighsMipSolverData(mipsolver));
+  mipsolver.mipdata_->init();
+  mipsolver.mipdata_->setupDomainPropagation();
+  mipsolver.mipdata_->cliquesExtracted = true;
+
+  HighsCliqueTable& cliquetable = mipsolver.mipdata_->cliquetable;
+  HighsCliqueTable::CliqueVar clq[] = {{0, 1}, {1, 1}, {2, 1}};
+  cliquetable.doAddClique(clq, 3);
+
+  presolve::HighsPostsolveStack& postsolve_stack =
+      mipsolver.mipdata_->postSolveStack;
+
+  presolve::HPresolve presolve;
+  presolve.setInput(mipsolver, -1);
+  REQUIRE(presolve.okSetupPresolveDataStructures());
+  HighsModelStatus status = presolve.run(postsolve_stack);
+  REQUIRE(status == HighsModelStatus::kInfeasible);
+
+  HighsTaskExecutor::shutdown(true);
+}
+
+TEST_CASE("test-impl-aware-clique-block-walk-two-members",
+          "[highs_test_presolve_rules]") {
+  // piecewise walk with breakpoints from two members of the same block.
+  //
+  // row 0: -2*x1 - 2*x2 + y <= 0
+  // x1(col0), x2(col1) binary, y(col2) integer in [0, 4]
+  // clique {x1 = 1, x2 = 1}; implications x1 = 1 => y <= 1, x2 = 1 => y <= 1
+  //
+  // for y > 1 both x's are forced to 0, so the row requires y <= 0: the
+  // tightest bound is y <= 1. walking from y = 4, both members are forced
+  // away (the whole block leaves its min-contribution value, +2 on top of
+  // the clique-aware threshold 2). at y = 1 one member returns, which drops
+  // the block increase to 0 and makes y = 1 feasible.
+  HighsLp lp;
+  lp.num_col_ = 3;
+  lp.num_row_ = 1;
+  lp.sense_ = ObjSense::kMinimize;
+  lp.col_cost_ = {0, 0, 0};
+  lp.col_lower_ = {0, 0, 0};
+  lp.col_upper_ = {1, 1, 4};
+  lp.integrality_ = {HighsVarType::kInteger, HighsVarType::kInteger,
+                     HighsVarType::kInteger};
+  lp.row_lower_ = {-kHighsInf};
+  lp.row_upper_ = {0};
+  lp.a_matrix_.format_ = MatrixFormat::kColwise;
+  lp.a_matrix_.num_col_ = 3;
+  lp.a_matrix_.num_row_ = 1;
+  lp.a_matrix_.start_ = {0, 1, 2, 3};
+  lp.a_matrix_.index_ = {0, 0, 0};
+  lp.a_matrix_.value_ = {-2, -2, 1};
+
+  highs::parallel::initialize_scheduler(1);
+
+  Highs highs;
+  highs.setOptionValue("output_flag", dev_run);
+  highs.setOptionValue("presolve_rule_test",
+                       kPresolveRuleImplAwareConstrPropagation);
+  highs.passModel(lp);
+
+  HighsCallback callback(&highs);
+  const HighsOptions& options = highs.getOptions();
+  HighsSolution solution;
+  HighsProfiling profiling;
+
+  HighsMipSolver mipsolver(callback, options, lp, solution);
+  mipsolver.timer_.start();
+  profiling.initialize(mipsolver.timer_, true, true);
+  mipsolver.setProfiling(&profiling);
+  mipsolver.mipdata_ =
+      std::unique_ptr<HighsMipSolverData>(new HighsMipSolverData(mipsolver));
+  mipsolver.mipdata_->init();
+  mipsolver.mipdata_->setupDomainPropagation();
+  mipsolver.mipdata_->cliquesExtracted = true;
+
+  HighsCliqueTable& cliquetable = mipsolver.mipdata_->cliquetable;
+  HighsCliqueTable::CliqueVar clq[] = {{0, 1}, {1, 1}};
+  cliquetable.doAddClique(clq, 2);
+
+  HighsImplications& implications = mipsolver.mipdata_->implications;
+  implications.addImplication(0, 1, 2,
+                              HighsImplications::Implication{-kHighsInf, 1.0});
+  implications.addImplication(1, 1, 2,
+                              HighsImplications::Implication{-kHighsInf, 1.0});
+
+  presolve::HighsPostsolveStack& postsolve_stack =
+      mipsolver.mipdata_->postSolveStack;
+
+  presolve::HPresolve presolve;
+  presolve.setInput(mipsolver, -1);
+  REQUIRE(presolve.okSetupPresolveDataStructures());
+  HighsModelStatus status = presolve.run(postsolve_stack);
+  REQUIRE(status == HighsModelStatus::kNotset);
+
+  // no column is removed; y's upper bound is tightened from 4 to 1
+  REQUIRE(mipsolver.model_->num_col_ == 3);
+  REQUIRE(mipsolver.model_->col_upper_[2] <= 1.0 + 1e-6);
+  REQUIRE(mipsolver.model_->col_upper_[2] >= 1.0 - 1e-6);
+
+  HighsTaskExecutor::shutdown(true);
+}
+
+TEST_CASE("test-impl-aware-clique-block-walk-lower",
+          "[highs_test_presolve_rules]") {
+  // piecewise walk from the lower bound with a lower-type breakpoint from a
+  // member of a clique block.
+  //
+  // row 0: -2*x1 - 2*x2 - y <= -4, i.e. 2*x1 + 2*x2 + y >= 4
+  // x1(col0), x2(col1) binary, y(col2) integer in [0, 4]
+  // clique {x1 = 1, x2 = 1}; implication x1 = 1 => y >= 3
+  //
+  // at most one x can be 1, so y >= 2. y = 2 is feasible (x2 = 1), hence
+  // y >= 2 is tight. for y < 3, x1 is forced to 0, but x2 can take its place
+  // in the block, which costs nothing on top of the clique-aware threshold 2.
+  // charging |a| = 2 for x1 would wrongly give y >= 3.
+  HighsLp lp;
+  lp.num_col_ = 3;
+  lp.num_row_ = 1;
+  lp.sense_ = ObjSense::kMinimize;
+  lp.col_cost_ = {0, 0, 0};
+  lp.col_lower_ = {0, 0, 0};
+  lp.col_upper_ = {1, 1, 4};
+  lp.integrality_ = {HighsVarType::kInteger, HighsVarType::kInteger,
+                     HighsVarType::kInteger};
+  lp.row_lower_ = {-kHighsInf};
+  lp.row_upper_ = {-4};
+  lp.a_matrix_.format_ = MatrixFormat::kColwise;
+  lp.a_matrix_.num_col_ = 3;
+  lp.a_matrix_.num_row_ = 1;
+  lp.a_matrix_.start_ = {0, 1, 2, 3};
+  lp.a_matrix_.index_ = {0, 0, 0};
+  lp.a_matrix_.value_ = {-2, -2, -1};
+
+  highs::parallel::initialize_scheduler(1);
+
+  Highs highs;
+  highs.setOptionValue("output_flag", dev_run);
+  highs.setOptionValue("presolve_rule_test",
+                       kPresolveRuleImplAwareConstrPropagation);
+  highs.passModel(lp);
+
+  HighsCallback callback(&highs);
+  const HighsOptions& options = highs.getOptions();
+  HighsSolution solution;
+  HighsProfiling profiling;
+
+  HighsMipSolver mipsolver(callback, options, lp, solution);
+  mipsolver.timer_.start();
+  profiling.initialize(mipsolver.timer_, true, true);
+  mipsolver.setProfiling(&profiling);
+  mipsolver.mipdata_ =
+      std::unique_ptr<HighsMipSolverData>(new HighsMipSolverData(mipsolver));
+  mipsolver.mipdata_->init();
+  mipsolver.mipdata_->setupDomainPropagation();
+  mipsolver.mipdata_->cliquesExtracted = true;
+
+  HighsCliqueTable& cliquetable = mipsolver.mipdata_->cliquetable;
+  HighsCliqueTable::CliqueVar clq[] = {{0, 1}, {1, 1}};
+  cliquetable.doAddClique(clq, 2);
+
+  HighsImplications& implications = mipsolver.mipdata_->implications;
+  implications.addImplication(0, 1, 2,
+                              HighsImplications::Implication{3.0, kHighsInf});
+
+  presolve::HighsPostsolveStack& postsolve_stack =
+      mipsolver.mipdata_->postSolveStack;
+
+  presolve::HPresolve presolve;
+  presolve.setInput(mipsolver, -1);
+  REQUIRE(presolve.okSetupPresolveDataStructures());
+  HighsModelStatus status = presolve.run(postsolve_stack);
+  REQUIRE(status == HighsModelStatus::kNotset);
+
+  // no column is removed; y's lower bound is tightened from 0 to 2, not 3
+  REQUIRE(mipsolver.model_->num_col_ == 3);
+  REQUIRE(mipsolver.model_->col_lower_[2] >= 2.0 - 1e-6);
+  REQUIRE(mipsolver.model_->col_lower_[2] <= 2.0 + 1e-6);
+
+  HighsTaskExecutor::shutdown(true);
+}
+
+TEST_CASE("test-impl-aware-clique-block-pair-member",
+          "[highs_test_presolve_rules]") {
+  // pair test with a member of a clique block as one of the two literals.
+  //
+  // row 0: -3*x1 - 2*x2 + 2.5*z <= 0
+  // x1(col0), x2(col1), z(col2) binary
+  // clique {x1 = 1, x2 = 1}
+  //
+  // the clique-aware minimum activity is -3, so the threshold is 3 and z = 1
+  // (weight 2.5) alone is feasible (x1 = 1). x1 = 0 together with z = 1
+  // leaves x2 = 1 at best (activity 0.5 > 0), and x2 = 1 together with
+  // z = 1 forces x1 = 0 with the same result. hence {x1 = 0, z = 1} and
+  // {x2 = 1, z = 1} are cliques: in both, the block increase is 3 - 2 = 1.
+  HighsLp lp;
+  lp.num_col_ = 3;
+  lp.num_row_ = 1;
+  lp.sense_ = ObjSense::kMinimize;
+  lp.col_cost_ = {0, 0, 0};
+  lp.col_lower_ = {0, 0, 0};
+  lp.col_upper_ = {1, 1, 1};
+  lp.integrality_ = {HighsVarType::kInteger, HighsVarType::kInteger,
+                     HighsVarType::kInteger};
+  lp.row_lower_ = {-kHighsInf};
+  lp.row_upper_ = {0};
+  lp.a_matrix_.format_ = MatrixFormat::kColwise;
+  lp.a_matrix_.num_col_ = 3;
+  lp.a_matrix_.num_row_ = 1;
+  lp.a_matrix_.start_ = {0, 1, 2, 3};
+  lp.a_matrix_.index_ = {0, 0, 0};
+  lp.a_matrix_.value_ = {-3, -2, 2.5};
+
+  highs::parallel::initialize_scheduler(1);
+
+  Highs highs;
+  highs.setOptionValue("output_flag", dev_run);
+  highs.setOptionValue("presolve_rule_test",
+                       kPresolveRuleImplAwareConstrPropagation);
+  highs.passModel(lp);
+
+  HighsCallback callback(&highs);
+  const HighsOptions& options = highs.getOptions();
+  HighsSolution solution;
+  HighsProfiling profiling;
+
+  HighsMipSolver mipsolver(callback, options, lp, solution);
+  mipsolver.timer_.start();
+  profiling.initialize(mipsolver.timer_, true, true);
+  mipsolver.setProfiling(&profiling);
+  mipsolver.mipdata_ =
+      std::unique_ptr<HighsMipSolverData>(new HighsMipSolverData(mipsolver));
+  mipsolver.mipdata_->init();
+  mipsolver.mipdata_->setupDomainPropagation();
+  mipsolver.mipdata_->cliquesExtracted = true;
+
+  HighsCliqueTable& cliquetable = mipsolver.mipdata_->cliquetable;
+  HighsCliqueTable::CliqueVar clq[] = {{0, 1}, {1, 1}};
+  cliquetable.doAddClique(clq, 2);
+
+  presolve::HighsPostsolveStack& postsolve_stack =
+      mipsolver.mipdata_->postSolveStack;
+
+  presolve::HPresolve presolve;
+  presolve.setInput(mipsolver, -1);
+  REQUIRE(presolve.okSetupPresolveDataStructures());
+  HighsModelStatus status = presolve.run(postsolve_stack);
+  REQUIRE(status == HighsModelStatus::kNotset);
+
+  // nothing is fixed; z = 1 implies x1 = 1 and x2 = 0
+  REQUIRE(mipsolver.model_->num_col_ == 3);
+  REQUIRE(cliquetable.haveCommonClique({0, 0}, {2, 1}));
+  REQUIRE(cliquetable.haveCommonClique({1, 1}, {2, 1}));
+
+  HighsTaskExecutor::shutdown(true);
+}
+
 TEST_CASE("issue-3364", "[highs_test_presolve_rules]") {
   // Row i (2) is an equation with two parallel candidates in its bucket:
   // A (0), which carries two integer singletons, and B (1), which is exactly

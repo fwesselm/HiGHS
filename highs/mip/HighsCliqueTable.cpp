@@ -997,50 +997,13 @@ void HighsCliqueTable::extractCliques(
   }
 }
 
-template <bool Sort, typename Comparator>
-HighsInt HighsCliqueTable::extendClique(
-    std::vector<HighsInt>& neighbourhoodInds, std::vector<CliqueVar>& clqVars,
-    HighsInt seedPos, HighsInt extensionEnd, const Comparator& candidateOrder) {
-  for (HighsInt i = seedPos; i < extensionEnd; ++i) {
-    if (Sort)
-      pdqsort_branchless(clqVars.begin() + i, clqVars.begin() + extensionEnd,
-                         candidateOrder);
-    CliqueVar v = clqVars[i];
-    HighsInt extensionStart = i + 1;
-    extensionEnd =
-        partitionNeighbourhood(neighbourhoodInds, numNeighbourhoodQueries, v,
-                               clqVars.data() + extensionStart,
-                               extensionEnd - extensionStart) +
-        extensionStart;
-  }
-  return extensionEnd;
-}
-
-HighsInt HighsCliqueTable::extendClique(
-    std::vector<HighsInt>& neighbourhoodInds, std::vector<CliqueVar>& clqVars,
-    HighsInt seedPos, HighsInt extensionEnd) {
-  auto noop = [](const CliqueVar&, const CliqueVar&) { return false; };
-  return extendClique<false>(neighbourhoodInds, clqVars, seedPos, extensionEnd,
-                             noop);
-}
-
 void HighsCliqueTable::cliquePartition(std::vector<CliqueVar>& clqVars,
                                        std::vector<HighsInt>& partitionStart) {
   randgen.shuffle(clqVars.data(), clqVars.size());
-
-  std::vector<HighsInt> neighbourhoodInds;
-  neighbourhoodInds.reserve(clqVars.size());
-
-  HighsInt numClqVars = clqVars.size();
-  partitionStart.clear();
-  partitionStart.reserve(clqVars.size());
-
-  HighsInt pos = 0;
-  while (pos < numClqVars) {
-    partitionStart.push_back(pos);
-    pos = extendClique(neighbourhoodInds, clqVars, pos, numClqVars);
-  }
-  partitionStart.push_back(numClqVars);
+  // the literals are extended in their shuffled order, no order is used
+  auto noOrder = [](const CliqueVar&, const CliqueVar&) { return false; };
+  partitionIntoCliques<false>(clqVars, partitionStart, noOrder,
+                              std::numeric_limits<int64_t>::max());
 }
 
 void HighsCliqueTable::cliquePartition(const std::vector<double>& objective,
@@ -1100,15 +1063,14 @@ void HighsCliqueTable::cliqueCover(std::vector<CliqueVar>& clqVars,
     return numcliquesvar[a.index()] > numcliquesvar[b.index()];
   };
 
-  std::vector<HighsInt> neighbourhoodInds;
-  neighbourhoodInds.reserve(clqVars.size());
+  // partition into cliques; extending a clique only reorders the literals
+  // after it, so the literals before each clique are final
+  std::vector<HighsInt> partitionStart;
+  cliquePartition(clqVars, partitionStart, candidateOrder);
 
-  HighsInt numClqVars = clqVars.size();
-  HighsInt pos = 0;
-
-  while (pos < numClqVars) {
-    HighsInt cliqueEnd = extendClique(neighbourhoodInds, clqVars, pos,
-                                      numClqVars, candidateOrder);
+  for (size_t p = 0; p + 1 < partitionStart.size(); ++p) {
+    HighsInt pos = partitionStart[p];
+    HighsInt cliqueEnd = partitionStart[p + 1];
 
     std::vector<CliqueVar> clique(clqVars.begin() + pos,
                                   clqVars.begin() + cliqueEnd);
@@ -1122,7 +1084,6 @@ void HighsCliqueTable::cliqueCover(std::vector<CliqueVar>& clqVars,
     }
 
     cover.push_back(std::move(clique));
-    pos = cliqueEnd;
   }
 
   // count variable occurrences
