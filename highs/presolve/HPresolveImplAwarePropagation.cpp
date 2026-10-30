@@ -533,6 +533,17 @@ HPresolve::Result HPresolve::implAwareConstrPropagation(
                                 byDecreasingAbsVal, maxPartitionQueries);
     cliquetable.numNeighbourhoodQueries = oldNumQueries;
 
+    // a single block of all binaries with equal coefficients and no
+    // non-binaries, e.g. the >= side of a set partitioning row, yields the
+    // same reductions without blocks, which is cheaper. with blocks, its
+    // clique-aware threshold would be zero and skip the pair test
+    HighsInt numVars = static_cast<HighsInt>(partitionVars.size());
+    if (partitionStarts.size() == 2 && numVars >= 2 &&
+        nonBinNonZeros.size() == 0 &&
+        std::abs(binNonZeros.find(partitionVars[0].col)->val) ==
+            std::abs(binNonZeros.find(partitionVars[numVars - 1].col)->val))
+      return HighsCDouble(0.0);
+
     HighsCDouble increase = 0.0;
     for (size_t p = 0; p + 1 < partitionStarts.size(); ++p) {
       HighsInt blockStart = partitionStarts[p];
