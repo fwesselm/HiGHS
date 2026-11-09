@@ -28,6 +28,18 @@ HPresolve::Result HPresolve::dominatedColumns(
   // for ≤-constraints, minimal for ≥-constraints) to obtain bounds that are
   // feasible independent of other variables' values.
 
+  // the two shortest rows of a column that the columns it dominates must also
+  // appear in
+  struct DominationRows {
+    HighsInt shortestRow = -1;
+    HighsInt secondShortestRow = -1;
+    double coefShortestRow = 0.0;
+    double coefSecondShortestRow = 0.0;
+    // whether the column has a positive normalised coefficient (multiplied by
+    // the direction) in some row. only then the direction is searched.
+    bool hasPositiveCoef = false;
+  };
+
   // non-zero signatures for comparing columns
   std::vector<std::pair<uint64_t, uint64_t>> signatures(model->num_col_);
 
@@ -154,6 +166,36 @@ HPresolve::Result HPresolve::dominatedColumns(
   bool allowPredBndAnalysis = true;
   std::vector<HighsInt> check_rowpositions;
 
+  // compare rows by their length and use the row index as a tie breaker
+  auto rowIsShorter = [&](HighsInt row1, HighsInt row2) {
+    return row2 == -1 || rowsize[row1] < rowsize[row2] ||
+           (rowsize[row1] == rowsize[row2] && row1 < row2);
+  };
+
+  // update the required rows of a direction with a row in which the
+  // normalised coefficient (multiplied by the direction) is 'val'
+  auto updateDominationRows = [&](DominationRows& rows, HighsInt row,
+                                  double coef, double val) {
+    if (val > 0.0) {
+      // the row is required and the direction is searched
+      rows.hasPositiveCoef = true;
+    } else if (!isRanged(row)) {
+      // the row is not required
+      return;
+    }
+    // equality and ranged rows are required in both directions, since the
+    // coefficients of dominating and dominated columns must be equal there
+    if (rowIsShorter(row, rows.shortestRow)) {
+      rows.secondShortestRow = rows.shortestRow;
+      rows.coefSecondShortestRow = rows.coefShortestRow;
+      rows.shortestRow = row;
+      rows.coefShortestRow = coef;
+    } else if (rowIsShorter(row, rows.secondShortestRow)) {
+      rows.secondShortestRow = row;
+      rows.coefSecondShortestRow = coef;
+    }
+  };
+
   for (HighsInt j = 0; j < model->num_col_; ++j) {
     // skip deleted columns
     if (colDeleted[j]) continue;
@@ -161,30 +203,16 @@ HPresolve::Result HPresolve::dominatedColumns(
     // increment counter for number of columns
     numCols++;
 
-    // initialise
-    HighsInt bestRowPlus = -1;
-    HighsInt bestRowPlusLen = kHighsIInf;
-    double ajBestRowPlus = 0.0;
-    HighsInt bestRowMinus = -1;
-    HighsInt bestRowMinusLen = kHighsIInf;
-    double ajBestRowMinus = 0.0;
-
+    // determine the required rows for both directions
+    DominationRows rowsPlus;
+    DominationRows rowsMinus;
     for (const HighsSliceNonzero& nonz : getColumnVector(j)) {
       HighsInt row = nonz.index();
       HighsInt scale = model->row_upper_[row] != kHighsInf ? 1 : -1;
 
       double val = scale * nonz.value();
-      if (val > 0.0 && rowsize[row] < bestRowPlusLen) {
-        bestRowPlus = row;
-        bestRowPlusLen = rowsize[row];
-        ajBestRowPlus = nonz.value();
-      }
-
-      if (val < 0.0 && rowsize[row] < bestRowMinusLen) {
-        bestRowMinus = row;
-        bestRowMinusLen = rowsize[row];
-        ajBestRowMinus = nonz.value();
-      }
+      updateDominationRows(rowsPlus, row, nonz.value(), val);
+      updateDominationRows(rowsMinus, row, nonz.value(), -val);
     }
 
     // lambda for fixing variables
@@ -354,9 +382,11 @@ HPresolve::Result HPresolve::dominatedColumns(
       return Result::kOk;
     };
 
-    // lambda for finding a domination relationship in the given row
-    auto checkRow = [&](HighsInt row, HighsInt col, HighsInt direction,
-                        double bestVal, bool hasCliques) {
+    // lambda for finding a domination relationship in the shortest required
+    // row
+    auto checkRow = [&](const DominationRows& rows, HighsInt col,
+                        HighsInt direction, bool hasCliques) {
+      HighsInt row = rows.shortestRow;
       if (rowDeleted[row]) return Result::kOk;
       getRowPositions(row, check_rowpositions);
       for (HighsInt pos : check_rowpositions) {
@@ -381,9 +411,21 @@ HPresolve::Result HPresolve::dominatedColumns(
 
           // check the coefficients in this row in advance to avoid the
           // (potentially slow) element-wise comparison of the columns
-          if (!checkDominationNonZero(row, direction * bestVal,
+          if (!checkDominationNonZero(row, direction * rows.coefShortestRow,
                                       multiplier * direction * Avalue[pos]))
             continue;
+
+          // the signatures may pass due to hash collisions, so also check the
+          // coefficients in the second shortest required row
+          HighsInt secondRow = rows.secondShortestRow;
+          if (secondRow != -1 && !rowDeleted[secondRow]) {
+            HighsInt secondPos = findNonzero(secondRow, k);
+            if (secondPos == -1 ||
+                !checkDominationNonZero(
+                    secondRow, direction * rows.coefSecondShortestRow,
+                    multiplier * direction * Avalue[secondPos]))
+              continue;
+          }
 
           // check if bound is implied (computed fresh due to earlier fixings)
           bool boundImplied =
@@ -414,17 +456,20 @@ HPresolve::Result HPresolve::dominatedColumns(
     bool hasPosCliques =
         isBinary(j) && mipsolver->mipdata_->cliquetable.numCliques(j, 1) > 0;
 
-    // use row 'bestRowMinus'
-    if (bestRowMinus != -1 &&
-        (allowPredBndAnalysis || lowerImplied || hasNegCliques))
-      HPRESOLVE_CHECKED_CALL(checkRow(bestRowMinus, j, HighsInt{-1},
-                                      ajBestRowMinus, hasNegCliques));
+    // directions without a positive coefficient are not searched (for columns
+    // that only appear in equality rows, the dominations are also found from
+    // the other column)
 
-    // use row 'bestRowPlus'
-    if (!colDeleted[j] && bestRowPlus != -1 &&
-        (allowPredBndAnalysis || upperImplied || hasPosCliques))
+    // use the required rows for direction -1
+    if (rowsMinus.hasPositiveCoef &&
+        (allowPredBndAnalysis || lowerImplied || hasNegCliques))
       HPRESOLVE_CHECKED_CALL(
-          checkRow(bestRowPlus, j, HighsInt{1}, ajBestRowPlus, hasPosCliques));
+          checkRow(rowsMinus, j, HighsInt{-1}, hasNegCliques));
+
+    // use the required rows for direction 1
+    if (!colDeleted[j] && rowsPlus.hasPositiveCoef &&
+        (allowPredBndAnalysis || upperImplied || hasPosCliques))
+      HPRESOLVE_CHECKED_CALL(checkRow(rowsPlus, j, HighsInt{1}, hasPosCliques));
 
     // do not use predictive bound analysis if it requires many domination
     // checks and only yields few fixings or improved bounds on average
