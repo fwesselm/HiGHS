@@ -29,17 +29,17 @@ HPresolve::Result HPresolve::dominatedColumns(
   // feasible independent of other variables' values.
 
   // non-zero signatures for comparing columns
-  std::vector<std::pair<uint32_t, uint32_t>> signatures(model->num_col_);
+  std::vector<std::pair<uint64_t, uint64_t>> signatures(model->num_col_);
 
   // count overall number of domination checks and number of checks performed
   // for predictive bound analysis
   size_t numDomChecks = 0;
   size_t numDomChecksPredBndAnalysis = 0;
 
-  auto addSignature = [&](HighsInt row, HighsInt col, uint32_t rowLowerFinite,
-                          uint32_t rowUpperFinite) {
-    HighsInt rowHashedPos = (HighsHashHelpers::hash(row) >> 59);
-    assert(rowHashedPos < 32);
+  auto addSignature = [&](HighsInt row, HighsInt col, uint64_t rowLowerFinite,
+                          uint64_t rowUpperFinite) {
+    HighsInt rowHashedPos = (HighsHashHelpers::hash(row) >> 58);
+    assert(rowHashedPos < 64);
     signatures[col].first |= rowLowerFinite << rowHashedPos;
     signatures[col].second |= rowUpperFinite << rowHashedPos;
   };
@@ -65,6 +65,27 @@ HPresolve::Result HPresolve::dominatedColumns(
     return true;
   };
 
+  auto checkSignatures = [&](HighsInt scalj, HighsInt j, HighsInt scalk,
+                             HighsInt k) {
+    uint64_t sjMinus = signatures[j].first;
+    uint64_t sjPlus = signatures[j].second;
+    if (scalj == -1) std::swap(sjPlus, sjMinus);
+
+    uint64_t skMinus = signatures[k].first;
+    uint64_t skPlus = signatures[k].second;
+    if (scalk == -1) std::swap(skPlus, skMinus);
+
+    // the set of rows with a negative coefficient must be a superset of the
+    // dominated columns set of rows with a negative coefficient
+    if ((~sjMinus & skMinus) != 0) return false;
+
+    // the set of rows with a positive coefficient must be a subset of the
+    // dominated columns set of rows with a positive coefficient
+    if ((sjPlus & ~skPlus) != 0) return false;
+
+    return true;
+  };
+
   auto checkDomination = [&](HighsInt scalj, HighsInt j, HighsInt scalk,
                              HighsInt k) {
     // increment counter
@@ -75,22 +96,8 @@ HPresolve::Result HPresolve::dominatedColumns(
         model->integrality_[k] == HighsVarType::kContinuous)
       return false;
 
-    // check the signatures
-    uint32_t sjMinus = signatures[j].first;
-    uint32_t sjPlus = signatures[j].second;
-    if (scalj == -1) std::swap(sjPlus, sjMinus);
-
-    uint32_t skMinus = signatures[k].first;
-    uint32_t skPlus = signatures[k].second;
-    if (scalk == -1) std::swap(skPlus, skMinus);
-
-    // the set of rows with a negative coefficient must be a superset of the
-    // dominated columns set of rows with a negative coefficient
-    if ((~sjMinus & skMinus) != 0) return false;
-
-    // the set of rows with a positive coefficient must be a subset of the
-    // dominated columns set of rows with a positive coefficient
-    if ((sjPlus & ~skPlus) != 0) return false;
+    // the signatures are checked before calling this function
+    assert(checkSignatures(scalj, j, scalk, k));
 
     // the dominating columns cost must be smaller or equal to the dominated
     // columns cost
@@ -361,36 +368,40 @@ HPresolve::Result HPresolve::dominatedColumns(
         // skip column 'col' and deleted columns
         if (k == col || colDeleted[k]) continue;
 
-        // get coefficient
-        double ak = Avalue[pos];
+        // check whether 'col' dominates k (multiplier 1) or its negation
+        // (multiplier -1)
+        for (HighsInt multiplier : {HighsInt{1}, HighsInt{-1}}) {
+          // the signatures rule out domination for most candidates, so check
+          // them first
+          if (!checkSignatures(direction, col, multiplier * direction, k))
+            continue;
 
-        // check if variables have the same type
-        bool sameVarType = varsHaveSameType(col, k);
+          // the non-zero might have been modified by a reduction
+          if (Avalue[pos] == 0.0 || Arow[pos] != row) break;
 
-        // check if bound is implied (computed fresh due to earlier fixings)
-        bool boundImplied =
-            direction > 0 ? isUpperImplied(col) : isLowerImplied(col);
+          // check the coefficients in this row in advance to avoid the
+          // (potentially slow) element-wise comparison of the columns
+          if (!checkDominationNonZero(row, direction * bestVal,
+                                      multiplier * direction * Avalue[pos]))
+            continue;
 
-        // skip checks if nothing to do
-        if (!boundImplied && !hasCliques && !sameVarType) continue;
+          // check if bound is implied (computed fresh due to earlier fixings)
+          bool boundImplied =
+              direction > 0 ? isUpperImplied(col) : isLowerImplied(col);
 
-        // try to fix variables or strengthen bounds
-        // check already known non-zeros in respective columns in advance to
-        // avoid (potentially slow) element-wise comparison if possible.
-        if (checkDominationNonZero(row, direction * bestVal, direction * ak)) {
-          HPRESOLVE_CHECKED_CALL(checkCols(row, col, k, direction, HighsInt{1},
+          // check if variables have the same type
+          bool sameVarType = varsHaveSameType(col, k);
+
+          // skip checks if nothing to do
+          if (!boundImplied && !hasCliques && !sameVarType) continue;
+
+          // try to fix variables or strengthen bounds
+          HPRESOLVE_CHECKED_CALL(checkCols(row, col, k, direction, multiplier,
                                            boundImplied, hasCliques,
                                            sameVarType));
-          if (colDeleted[col] || rowDeleted[row]) break;
+          if (colDeleted[col] || rowDeleted[row] || colDeleted[k]) break;
         }
-
-        if (!colDeleted[k] && Avalue[pos] != 0.0 && Arow[pos] == row &&
-            checkDominationNonZero(row, direction * bestVal, -direction * ak)) {
-          HPRESOLVE_CHECKED_CALL(checkCols(row, col, k, direction, HighsInt{-1},
-                                           boundImplied, hasCliques,
-                                           sameVarType));
-          if (colDeleted[col] || rowDeleted[row]) break;
-        }
+        if (colDeleted[col] || rowDeleted[row]) break;
       }
       return Result::kOk;
     };
