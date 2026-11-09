@@ -5,6 +5,7 @@
 /*    Available as open-source under the MIT License                     */
 /*                                                                       */
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
+#include "../extern/pdqsort/pdqsort.h"
 #include "mip/HighsMipSolverData.h"
 #include "presolve/HPresolve.h"
 #include "presolve/HPresolveUtils.h"
@@ -40,13 +41,49 @@ HPresolve::Result HPresolve::dominatedColumns(
     bool hasPositiveCoef = false;
   };
 
+  // a column and a direction to be searched, together with the two shortest
+  // required rows
+  struct ColToCheck {
+    HighsInt shortestRow;
+    HighsInt secondShortestRow;
+    HighsInt col;
+    HighsInt direction;
+  };
+  std::vector<ColToCheck> colsToCheck;
+
   // non-zero signatures for comparing columns
   std::vector<std::pair<uint64_t, uint64_t>> signatures(model->num_col_);
+
+  // positions of the candidates and of the row they are collected from
+  std::vector<HighsInt> check_rowpositions;
+  std::vector<HighsInt> collect_rowpositions;
+
+  // mark columns that have been counted
+  std::vector<uint8_t> colCounted(model->num_col_, 0);
+
+  // the rows for which the current candidates were collected (-1 if they have
+  // to be collected again, e.g. after fixing variables, since this modifies the
+  // matrix)
+  HighsInt candidatesRow = -1;
+  HighsInt candidatesFilterRow = -1;
 
   // count overall number of domination checks and number of checks performed
   // for predictive bound analysis
   size_t numDomChecks = 0;
   size_t numDomChecksPredBndAnalysis = 0;
+
+  // count number of fixed columns and modified bounds
+  HighsInt numCols = 0;
+  HighsInt numFixedCols = 0;
+  HighsInt numFixedColsPredBndAnalysis = 0;
+  HighsInt numModifiedBndsPredBndAnalysis = 0;
+
+  // parameters for predictive bound analysis
+  const size_t maxAverageNumDomChecksPredBndAnalysis = 10000;
+  const double minAverageNumRedsPredBndAnalysis = 1e-2;
+
+  // perform predictive bound analysis?
+  bool allowPredBndAnalysis = true;
 
   auto addSignature = [&](HighsInt row, HighsInt col, uint64_t rowLowerFinite,
                           uint64_t rowUpperFinite) {
@@ -138,33 +175,238 @@ HPresolve::Result HPresolve::dominatedColumns(
     return true;
   };
 
-  for (size_t i = 0; i != Avalue.size(); ++i) {
-    if (Avalue[i] == 0) continue;
+  // lambda for fixing variables
+  auto fixCol = [&](HighsInt col, HighsInt direction) {
+    numFixedCols++;
+    candidatesRow = -1;
+    if (direction > 0) {
+      HPRESOLVE_CHECKED_CALL(fixColToUpper(postsolve_stack, col));
+    } else {
+      HPRESOLVE_CHECKED_CALL(fixColToLower(postsolve_stack, col));
+    }
+    // remove row singletons and doubleton equations
+    HPRESOLVE_CHECKED_CALL(removeRowSingletons(postsolve_stack));
+    HPRESOLVE_CHECKED_CALL(removeDoubletonEquations(postsolve_stack));
+    return Result::kOk;
+  };
 
-    HighsInt row = Arow[i];
-    HighsInt col = Acol[i];
-    bool rowLowerFinite = model->row_lower_[row] != -kHighsInf;
-    bool rowUpperFinite = model->row_upper_[row] != kHighsInf;
+  // Predictive bound analysis (Theorem 3 from Gamrath et al. 2015).
+  // The paper defines x_j ≻ x_k (j dominates k). The code checks
+  // (direction * x_col) ≻ (direction_k * x_otherCol):
+  //   direction = +1, multiplier = +1: x_j =  x_col,      x_k =  x_otherCol
+  //   direction = +1, multiplier = -1: x_j =  x_col,      x_k = -x_otherCol
+  //   direction = -1, multiplier = +1: x_j =  x_otherCol, x_k =  x_col
+  //   direction = -1, multiplier = -1: x_j = -x_col,      x_k =  x_otherCol
+  // col is the column being tightened, otherCol is the conditioning
+  // column (whose value otherColBound is substituted).
+  // colIsAtUpper = true : col = x_j, apply (i)/(iii)/(v)
+  // colIsAtUpper = false: col = x_k, apply (ii)/(iv)/(vi)
+  // otherColCoeffPattern: +1 = same-sign, -1 = opposite-sign coefficient
+  //                       filter (opposite signs from negated-column
+  //                       domination)
+  auto tightenBounds = [&](HighsInt col, double colBound, bool colIsAtUpper,
+                           HighsInt otherCol, double otherColBound,
+                           HighsInt otherColCoeffPattern) {
+    // bound should be finite
+    assert(std::abs(otherColBound) != kHighsInf);
+    // return if variable is already fixed
+    if (model->col_lower_[col] == model->col_upper_[col]) return Result::kOk;
+    // initialise bounds
+    double lowerBound = -kHighsInf;
+    double upperBound = kHighsInf;
+    if (colIsAtUpper) {
+      // For negated-column domination the paper's x_k is negated,
+      // so (i)/(iii)/(v) below correspond to (ii)/(iv)/(vi) in the
+      // paper with negated bounds and cost.
+      // (i) x_j <= MINL^k_j(otherColBound)
+      upperBound = computeImpliedUpperBound(col, otherCol, otherColBound,
+                                            otherColCoeffPattern);
+      // (iii) x_j >= min{colBound, MAXL^k_j(otherColBound)}
+      lowerBound = std::min(
+          colBound, computeImpliedLowerBound(col, otherCol, otherColBound,
+                                             otherColCoeffPattern));
+      if (model->col_cost_[col] <= 0) {
+        // (v) if c_j <= 0, then x_j >= min{colBound,
+        //                                  MINU^k_j(otherColBound)}
+        double worstCaseUpper = computeWorstCaseUpperBound(
+            col, otherCol, otherColBound, otherColCoeffPattern);
+        lowerBound = std::max(lowerBound, std::min(colBound, worstCaseUpper));
+      }
+    } else {
+      // For negated-column domination the paper's x_j is negated,
+      // so (ii)/(iv)/(vi) below correspond to (i)/(iii)/(v) in the
+      // paper with negated bounds and cost.
+      // (ii) x_k >= MAXL^j_k(otherColBound)
+      lowerBound = computeImpliedLowerBound(col, otherCol, otherColBound,
+                                            otherColCoeffPattern);
+      // (iv) x_k <= max{colBound, MINL^j_k(otherColBound)}
+      upperBound = std::max(
+          colBound, computeImpliedUpperBound(col, otherCol, otherColBound,
+                                             otherColCoeffPattern));
+      if (model->col_cost_[col] >= 0) {
+        // (vi) if c_k >= 0, then x_k <= max{colBound,
+        //                                   MAXU^j_k(otherColBound)}
+        double worstCaseLower = computeWorstCaseLowerBound(
+            col, otherCol, otherColBound, otherColCoeffPattern);
+        upperBound = std::min(upperBound, std::max(colBound, worstCaseLower));
+      }
+    }
+    // update bounds
+    if (lowerBound < kHighsInf &&
+        lowerBound > model->col_lower_[col] + primal_feastol) {
+      if (lowerBound == model->col_upper_[col]) {
+        numFixedColsPredBndAnalysis++;
+        return fixCol(col, HighsInt{1});
+      } else if (model->integrality_[col] != HighsVarType::kContinuous) {
+        numModifiedBndsPredBndAnalysis++;
+        HPRESOLVE_CHECKED_CALL(changeColLower(col, lowerBound));
+      }
+    }
+    if (upperBound > -kHighsInf &&
+        upperBound < model->col_upper_[col] - primal_feastol) {
+      if (upperBound == model->col_lower_[col]) {
+        numFixedColsPredBndAnalysis++;
+        return fixCol(col, HighsInt{-1});
+      } else if (model->integrality_[col] != HighsVarType::kContinuous) {
+        numModifiedBndsPredBndAnalysis++;
+        HPRESOLVE_CHECKED_CALL(changeColUpper(col, upperBound));
+      }
+    }
+    return Result::kOk;
+  };
 
-    if (Avalue[i] > 0)
-      addSignature(row, col, rowLowerFinite, rowUpperFinite);
-    else
-      addSignature(row, col, rowUpperFinite, rowLowerFinite);
-  }
+  // lambda for checking whether two variables have the same type
+  auto varsHaveSameType = [&](HighsInt col1, HighsInt col2) {
+    return ((model->integrality_[col1] != HighsVarType::kContinuous &&
+             model->integrality_[col2] != HighsVarType::kContinuous) ||
+            (model->integrality_[col1] != HighsVarType::kInteger &&
+             model->integrality_[col2] != HighsVarType::kInteger));
+  };
 
-  // count number of fixed columns and modified bounds
-  HighsInt numCols = 0;
-  HighsInt numFixedCols = 0;
-  HighsInt numFixedColsPredBndAnalysis = 0;
-  HighsInt numModifiedBndsPredBndAnalysis = 0;
+  // lambda for (1) checking whether one of the two columns is dominated by
+  // the other one and (2) fixing variables or strengthening bounds
+  auto checkCols = [&](HighsInt row, HighsInt col, HighsInt k,
+                       HighsInt direction, HighsInt multiplier,
+                       bool boundImplied, bool hasCliques, bool sameVarType) {
+    // compute direction for dominated variable
+    // (1: lower bound; -1: upper bound)
+    HighsInt direction_k = multiplier * direction;
+    // get bounds
+    double dominatingBound =
+        direction > 0 ? model->col_upper_[col] : model->col_lower_[col];
+    double dominatedBound =
+        direction_k > 0 ? model->col_lower_[k] : model->col_upper_[k];
+    // check if bounds are finite
+    bool isDominatingBoundFinite = direction * dominatingBound != kHighsInf;
+    bool isDominatedBoundFinite = direction_k * dominatedBound != -kHighsInf;
+    // check whether variable 'k' can potentially be fixed. check if there are
+    // cliques in advance instead of directly searching for a common clique.
+    bool tryToFix = isDominatedBoundFinite && (boundImplied || hasCliques);
+    // check whether predictive bound analysis can be performed. both
+    // variables need to have the same type.
+    bool tryToStrengthenBounds =
+        (isDominatingBoundFinite || isDominatedBoundFinite) && sameVarType;
+    if (tryToFix || tryToStrengthenBounds) {
+      // increment counter for number of domination checks due to predictive
+      // bound analysis
+      if (!tryToFix) numDomChecksPredBndAnalysis++;
+      // check for domination
+      if (checkDomination(direction, col, direction_k, k)) {
+        if (tryToFix &&
+            (boundImplied ||
+             mipsolver->mipdata_->cliquetable.haveCommonClique(
+                 HighsCliqueTable::CliqueVar(col, direction > 0 ? 1 : 0),
+                 HighsCliqueTable::CliqueVar(k, direction_k > 0 ? 1 : 0)))) {
+          // direction =  1, multiplier =  1:
+          // case (i)   ub(x_j) =  inf,  x_j >  x_k: set x_k = lb(x_k)
+          // direction =  1, multiplier = -1:
+          // case (ii)  ub(x_j) =  inf,  x_j > -x_k: set x_k = ub(x_k)
+          // direction = -1, multiplier =  1:
+          // case (iii) lb(x_j) = -inf, -x_j > -x_k: set x_k = ub(x_k)
+          // direction = -1, multiplier = -1:
+          // case (iv)  lb(x_j) = -inf, -x_j >  x_k: set x_k = lb(x_k)
+          HPRESOLVE_CHECKED_CALL(fixCol(k, -direction_k));
+        } else if (tryToStrengthenBounds) {
+          // tighten bounds via predictive bound analysis, see Theorem 3
+          // from Gamrath et al.'s paper
+          if (isDominatedBoundFinite)
+            HPRESOLVE_CHECKED_CALL(
+                tightenBounds(col, dominatingBound, direction > 0, k,
+                              dominatedBound, direction * direction_k));
+          if (!colDeleted[col] && isDominatingBoundFinite)
+            HPRESOLVE_CHECKED_CALL(
+                tightenBounds(k, dominatedBound, direction_k < 0, col,
+                              dominatingBound, direction * direction_k));
+        }
+      }
+    }
+    return Result::kOk;
+  };
 
-  // parameters for predictive bound analysis
-  const size_t maxAverageNumDomChecksPredBndAnalysis = 10000;
-  const double minAverageNumRedsPredBndAnalysis = 1e-2;
+  // lambda for finding a domination relationship with the candidates (positions
+  // in the shortest required row)
+  auto checkRow = [&](const DominationRows& rows, HighsInt col,
+                      HighsInt direction, bool hasCliques) {
+    HighsInt row = rows.shortestRow;
+    if (rowDeleted[row]) return Result::kOk;
+    for (HighsInt pos : check_rowpositions) {
+      if (Avalue[pos] == 0.0 || Arow[pos] != row) continue;
 
-  // perform predictive bound analysis?
-  bool allowPredBndAnalysis = true;
-  std::vector<HighsInt> check_rowpositions;
+      // get column index
+      HighsInt k = Acol[pos];
+
+      // skip column 'col' and deleted columns
+      if (k == col || colDeleted[k]) continue;
+
+      // check whether 'col' dominates k (multiplier 1) or its negation
+      // (multiplier -1)
+      for (HighsInt multiplier : {HighsInt{1}, HighsInt{-1}}) {
+        // the signatures rule out domination for most candidates, so check
+        // them first
+        if (!checkSignatures(direction, col, multiplier * direction, k))
+          continue;
+
+        // the non-zero might have been modified by a reduction
+        if (Avalue[pos] == 0.0 || Arow[pos] != row) break;
+
+        // check the coefficients in this row in advance to avoid the
+        // (potentially slow) element-wise comparison of the columns
+        if (!checkDominationNonZero(row, direction * rows.coefShortestRow,
+                                    multiplier * direction * Avalue[pos]))
+          continue;
+
+        // the signatures may pass due to hash collisions, so also check the
+        // coefficients in the second shortest required row
+        HighsInt secondRow = rows.secondShortestRow;
+        if (secondRow != -1 && !rowDeleted[secondRow]) {
+          HighsInt secondPos = findNonzero(secondRow, k);
+          if (secondPos == -1 ||
+              !checkDominationNonZero(
+                  secondRow, direction * rows.coefSecondShortestRow,
+                  multiplier * direction * Avalue[secondPos]))
+            continue;
+        }
+
+        // check if bound is implied (computed fresh due to earlier fixings)
+        bool boundImplied =
+            direction > 0 ? isUpperImplied(col) : isLowerImplied(col);
+
+        // check if variables have the same type
+        bool sameVarType = varsHaveSameType(col, k);
+
+        // skip checks if nothing to do
+        if (!boundImplied && !hasCliques && !sameVarType) continue;
+
+        // try to fix variables or strengthen bounds
+        HPRESOLVE_CHECKED_CALL(checkCols(row, col, k, direction, multiplier,
+                                         boundImplied, hasCliques,
+                                         sameVarType));
+        if (colDeleted[col] || rowDeleted[row] || colDeleted[k]) break;
+      }
+      if (colDeleted[col] || rowDeleted[row]) break;
+    }
+    return Result::kOk;
+  };
 
   // compare rows by their length and use the row index as a tie breaker
   auto rowIsShorter = [&](HighsInt row1, HighsInt row2) {
@@ -196,295 +438,147 @@ HPresolve::Result HPresolve::dominatedColumns(
     }
   };
 
-  for (HighsInt j = 0; j < model->num_col_; ++j) {
-    // skip deleted columns
-    if (colDeleted[j]) continue;
-
-    // increment counter for number of columns
-    numCols++;
-
-    // determine the required rows for both directions
-    DominationRows rowsPlus;
-    DominationRows rowsMinus;
-    for (const HighsSliceNonzero& nonz : getColumnVector(j)) {
+  // determine the required rows of a column for the given direction
+  auto getDominationRows = [&](HighsInt col, HighsInt direction) {
+    DominationRows rows;
+    for (const HighsSliceNonzero& nonz : getColumnVector(col)) {
       HighsInt row = nonz.index();
       HighsInt scale = model->row_upper_[row] != kHighsInf ? 1 : -1;
-
-      double val = scale * nonz.value();
-      updateDominationRows(rowsPlus, row, nonz.value(), val);
-      updateDominationRows(rowsMinus, row, nonz.value(), -val);
+      updateDominationRows(rows, row, nonz.value(),
+                           direction * scale * nonz.value());
     }
+    return rows;
+  };
 
-    // lambda for fixing variables
-    auto fixCol = [&](HighsInt col, HighsInt direction) {
-      numFixedCols++;
-      if (direction > 0) {
-        HPRESOLVE_CHECKED_CALL(fixColToUpper(postsolve_stack, col));
-      } else {
-        HPRESOLVE_CHECKED_CALL(fixColToLower(postsolve_stack, col));
+  // check whether two columns to check share their two shortest required rows
+  auto haveSameRows = [&](size_t i1, size_t i2) {
+    return colsToCheck[i1].shortestRow == colsToCheck[i2].shortestRow &&
+           colsToCheck[i1].secondShortestRow ==
+               colsToCheck[i2].secondShortestRow;
+  };
+
+  // collect the positions in 'row' whose column also appears in 'filterRow'
+  // (all positions if 'filterRow' is -1)
+  auto collectCandidates = [&](HighsInt row, HighsInt filterRow) {
+    getRowPositions(row, collect_rowpositions);
+    check_rowpositions.clear();
+    for (HighsInt pos : collect_rowpositions)
+      if (filterRow == -1 || findNonzero(filterRow, Acol[pos]) != -1)
+        check_rowpositions.push_back(pos);
+  };
+
+  for (size_t i = 0; i != Avalue.size(); ++i) {
+    if (Avalue[i] == 0) continue;
+
+    HighsInt row = Arow[i];
+    HighsInt col = Acol[i];
+    bool rowLowerFinite = model->row_lower_[row] != -kHighsInf;
+    bool rowUpperFinite = model->row_upper_[row] != kHighsInf;
+
+    if (Avalue[i] > 0)
+      addSignature(row, col, rowLowerFinite, rowUpperFinite);
+    else
+      addSignature(row, col, rowUpperFinite, rowLowerFinite);
+  }
+
+  colsToCheck.reserve(2 * static_cast<size_t>(model->num_col_));
+  for (HighsInt j = 0; j < model->num_col_; ++j) {
+    if (colDeleted[j]) continue;
+    for (HighsInt direction : {HighsInt{-1}, HighsInt{1}}) {
+      DominationRows rows = getDominationRows(j, direction);
+      if (rows.hasPositiveCoef)
+        colsToCheck.push_back(
+            {rows.shortestRow, rows.secondShortestRow, j, direction});
+    }
+  }
+  // sort the columns to check by their two shortest required rows, so that
+  // columns sharing these rows are processed consecutively and their candidates
+  // only have to be collected once
+  pdqsort(colsToCheck.begin(), colsToCheck.end(),
+          [](const ColToCheck& a, const ColToCheck& b) {
+            if (a.shortestRow != b.shortestRow)
+              return a.shortestRow < b.shortestRow;
+            if (a.secondShortestRow != b.secondShortestRow)
+              return a.secondShortestRow < b.secondShortestRow;
+            if (a.col != b.col) return a.col < b.col;
+            return a.direction < b.direction;
+          });
+
+  for (size_t groupStart = 0; groupStart < colsToCheck.size();) {
+    // find the columns to check sharing the two shortest required rows
+    size_t groupEnd = groupStart + 1;
+    while (groupEnd < colsToCheck.size() && haveSameRows(groupStart, groupEnd))
+      ++groupEnd;
+    HighsInt groupRow = colsToCheck[groupStart].shortestRow;
+    HighsInt groupSecondRow = colsToCheck[groupStart].secondShortestRow;
+    // filter the candidates by the second shortest row only if they are used
+    // for more than one column to check
+    HighsInt groupFilterRow = groupEnd - groupStart > 1 ? groupSecondRow : -1;
+
+    for (size_t i = groupStart; i < groupEnd; ++i) {
+      HighsInt j = colsToCheck[i].col;
+      HighsInt direction = colsToCheck[i].direction;
+
+      // skip deleted columns
+      if (colDeleted[j]) continue;
+
+      // increment counter for number of columns
+      if (!colCounted[j]) {
+        colCounted[j] = 1;
+        numCols++;
       }
-      // remove row singletons and doubleton equations
-      HPRESOLVE_CHECKED_CALL(removeRowSingletons(postsolve_stack));
-      HPRESOLVE_CHECKED_CALL(removeDoubletonEquations(postsolve_stack));
-      return Result::kOk;
-    };
 
-    // Predictive bound analysis (Theorem 3 from Gamrath et al. 2015).
-    // The paper defines x_j ≻ x_k (j dominates k). The code checks
-    // (direction * x_col) ≻ (direction_k * x_otherCol):
-    //   direction = +1, multiplier = +1: x_j =  x_col,      x_k =  x_otherCol
-    //   direction = +1, multiplier = -1: x_j =  x_col,      x_k = -x_otherCol
-    //   direction = -1, multiplier = +1: x_j =  x_otherCol, x_k =  x_col
-    //   direction = -1, multiplier = -1: x_j = -x_col,      x_k =  x_otherCol
-    // col is the column being tightened, otherCol is the conditioning
-    // column (whose value otherColBound is substituted).
-    // colIsAtUpper = true : col = x_j, apply (i)/(iii)/(v)
-    // colIsAtUpper = false: col = x_k, apply (ii)/(iv)/(vi)
-    // otherColCoeffPattern: +1 = same-sign, -1 = opposite-sign coefficient
-    //                       filter (opposite signs from negated-column
-    //                       domination)
-    auto tightenBounds = [&](HighsInt col, double colBound, bool colIsAtUpper,
-                             HighsInt otherCol, double otherColBound,
-                             HighsInt otherColCoeffPattern) {
-      // bound should be finite
-      assert(std::abs(otherColBound) != kHighsInf);
-      // return if variable is already fixed
-      if (model->col_lower_[col] == model->col_upper_[col]) return Result::kOk;
-      // initialise bounds
-      double lowerBound = -kHighsInf;
-      double upperBound = kHighsInf;
-      if (colIsAtUpper) {
-        // For negated-column domination the paper's x_k is negated,
-        // so (i)/(iii)/(v) below correspond to (ii)/(iv)/(vi) in the
-        // paper with negated bounds and cost.
-        // (i) x_j <= MINL^k_j(otherColBound)
-        upperBound = computeImpliedUpperBound(col, otherCol, otherColBound,
-                                              otherColCoeffPattern);
-        // (iii) x_j >= min{colBound, MAXL^k_j(otherColBound)}
-        lowerBound = std::min(
-            colBound, computeImpliedLowerBound(col, otherCol, otherColBound,
-                                               otherColCoeffPattern));
-        if (model->col_cost_[col] <= 0) {
-          // (v) if c_j <= 0, then x_j >= min{colBound,
-          //                                  MINU^k_j(otherColBound)}
-          double worstCaseUpper = computeWorstCaseUpperBound(
-              col, otherCol, otherColBound, otherColCoeffPattern);
-          lowerBound = std::max(lowerBound, std::min(colBound, worstCaseUpper));
+      // determine the required rows again, since reductions may have changed
+      // them
+      DominationRows dominationRows = getDominationRows(j, direction);
+
+      // check if bound is implied or there are cliques
+      bool colBoundImplied =
+          direction > 0 ? isUpperImplied(j) : isLowerImplied(j);
+      bool colHasCliques =
+          isBinary(j) && mipsolver->mipdata_->cliquetable.numCliques(
+                             j, direction > 0 ? 1 : 0) > 0;
+
+      // directions without a positive coefficient are not searched (for
+      // columns that only appear in equality rows, the dominations are also
+      // found from the other column)
+      if (dominationRows.hasPositiveCoef &&
+          (allowPredBndAnalysis || colBoundImplied || colHasCliques)) {
+        // use the candidates of the group, or of the column if its rows have
+        // been changed by reductions
+        bool useGroupRows = dominationRows.shortestRow == groupRow &&
+                            dominationRows.secondShortestRow == groupSecondRow;
+        HighsInt row = useGroupRows ? groupRow : dominationRows.shortestRow;
+        // the candidates of a single column are used only once, so filtering
+        // them by the second shortest row would not pay off
+        HighsInt filterRow = useGroupRows ? groupFilterRow : -1;
+        // the candidates only have to be collected if they were collected for
+        // different rows or have become invalid
+        if (row != candidatesRow || filterRow != candidatesFilterRow) {
+          collectCandidates(row, filterRow);
+          candidatesRow = row;
+          candidatesFilterRow = filterRow;
         }
-      } else {
-        // For negated-column domination the paper's x_j is negated,
-        // so (ii)/(iv)/(vi) below correspond to (i)/(iii)/(v) in the
-        // paper with negated bounds and cost.
-        // (ii) x_k >= MAXL^j_k(otherColBound)
-        lowerBound = computeImpliedLowerBound(col, otherCol, otherColBound,
-                                              otherColCoeffPattern);
-        // (iv) x_k <= max{colBound, MINL^j_k(otherColBound)}
-        upperBound = std::max(
-            colBound, computeImpliedUpperBound(col, otherCol, otherColBound,
-                                               otherColCoeffPattern));
-        if (model->col_cost_[col] >= 0) {
-          // (vi) if c_k >= 0, then x_k <= max{colBound,
-          //                                   MAXU^j_k(otherColBound)}
-          double worstCaseLower = computeWorstCaseLowerBound(
-              col, otherCol, otherColBound, otherColCoeffPattern);
-          upperBound = std::min(upperBound, std::max(colBound, worstCaseLower));
-        }
+        HPRESOLVE_CHECKED_CALL(
+            checkRow(dominationRows, j, direction, colHasCliques));
       }
-      // update bounds
-      if (lowerBound < kHighsInf &&
-          lowerBound > model->col_lower_[col] + primal_feastol) {
-        if (lowerBound == model->col_upper_[col]) {
-          numFixedColsPredBndAnalysis++;
-          return fixCol(col, HighsInt{1});
-        } else if (model->integrality_[col] != HighsVarType::kContinuous) {
-          numModifiedBndsPredBndAnalysis++;
-          HPRESOLVE_CHECKED_CALL(changeColLower(col, lowerBound));
-        }
-      }
-      if (upperBound > -kHighsInf &&
-          upperBound < model->col_upper_[col] - primal_feastol) {
-        if (upperBound == model->col_lower_[col]) {
-          numFixedColsPredBndAnalysis++;
-          return fixCol(col, HighsInt{-1});
-        } else if (model->integrality_[col] != HighsVarType::kContinuous) {
-          numModifiedBndsPredBndAnalysis++;
-          HPRESOLVE_CHECKED_CALL(changeColUpper(col, upperBound));
-        }
-      }
-      return Result::kOk;
-    };
 
-    // lambda for checking whether two variables have the same type
-    auto varsHaveSameType = [&](HighsInt col1, HighsInt col2) {
-      return ((model->integrality_[col1] != HighsVarType::kContinuous &&
-               model->integrality_[col2] != HighsVarType::kContinuous) ||
-              (model->integrality_[col1] != HighsVarType::kInteger &&
-               model->integrality_[col2] != HighsVarType::kInteger));
-    };
-
-    // lambda for (1) checking whether one of the two columns is dominated by
-    // the other one and (2) fixing variables or strengthening bounds
-    auto checkCols = [&](HighsInt row, HighsInt col, HighsInt k,
-                         HighsInt direction, HighsInt multiplier,
-                         bool boundImplied, bool hasCliques, bool sameVarType) {
-      // compute direction for dominated variable
-      // (1: lower bound; -1: upper bound)
-      HighsInt direction_k = multiplier * direction;
-      // get bounds
-      double dominatingBound =
-          direction > 0 ? model->col_upper_[col] : model->col_lower_[col];
-      double dominatedBound =
-          direction_k > 0 ? model->col_lower_[k] : model->col_upper_[k];
-      // check if bounds are finite
-      bool isDominatingBoundFinite = direction * dominatingBound != kHighsInf;
-      bool isDominatedBoundFinite = direction_k * dominatedBound != -kHighsInf;
-      // check whether variable 'k' can potentially be fixed. check if there are
-      // cliques in advance instead of directly searching for a common clique.
-      bool tryToFix = isDominatedBoundFinite && (boundImplied || hasCliques);
-      // check whether predictive bound analysis can be performed. both
-      // variables need to have the same type.
-      bool tryToStrengthenBounds =
-          (isDominatingBoundFinite || isDominatedBoundFinite) && sameVarType;
-      if (tryToFix || tryToStrengthenBounds) {
-        // increment counter for number of domination checks due to predictive
-        // bound analysis
-        if (!tryToFix) numDomChecksPredBndAnalysis++;
-        // check for domination
-        if (checkDomination(direction, col, direction_k, k)) {
-          if (tryToFix &&
-              (boundImplied ||
-               mipsolver->mipdata_->cliquetable.haveCommonClique(
-                   HighsCliqueTable::CliqueVar(col, direction > 0 ? 1 : 0),
-                   HighsCliqueTable::CliqueVar(k, direction_k > 0 ? 1 : 0)))) {
-            // direction =  1, multiplier =  1:
-            // case (i)   ub(x_j) =  inf,  x_j >  x_k: set x_k = lb(x_k)
-            // direction =  1, multiplier = -1:
-            // case (ii)  ub(x_j) =  inf,  x_j > -x_k: set x_k = ub(x_k)
-            // direction = -1, multiplier =  1:
-            // case (iii) lb(x_j) = -inf, -x_j > -x_k: set x_k = ub(x_k)
-            // direction = -1, multiplier = -1:
-            // case (iv)  lb(x_j) = -inf, -x_j >  x_k: set x_k = lb(x_k)
-            HPRESOLVE_CHECKED_CALL(fixCol(k, -direction_k));
-          } else if (tryToStrengthenBounds) {
-            // tighten bounds via predictive bound analysis, see Theorem 3
-            // from Gamrath et al.'s paper
-            if (isDominatedBoundFinite)
-              HPRESOLVE_CHECKED_CALL(
-                  tightenBounds(col, dominatingBound, direction > 0, k,
-                                dominatedBound, direction * direction_k));
-            if (!colDeleted[col] && isDominatingBoundFinite)
-              HPRESOLVE_CHECKED_CALL(
-                  tightenBounds(k, dominatedBound, direction_k < 0, col,
-                                dominatingBound, direction * direction_k));
-          }
-        }
-      }
-      return Result::kOk;
-    };
-
-    // lambda for finding a domination relationship in the shortest required
-    // row
-    auto checkRow = [&](const DominationRows& rows, HighsInt col,
-                        HighsInt direction, bool hasCliques) {
-      HighsInt row = rows.shortestRow;
-      if (rowDeleted[row]) return Result::kOk;
-      getRowPositions(row, check_rowpositions);
-      for (HighsInt pos : check_rowpositions) {
-        if (Avalue[pos] == 0.0 || Arow[pos] != row) continue;
-
-        // get column index
-        HighsInt k = Acol[pos];
-
-        // skip column 'col' and deleted columns
-        if (k == col || colDeleted[k]) continue;
-
-        // check whether 'col' dominates k (multiplier 1) or its negation
-        // (multiplier -1)
-        for (HighsInt multiplier : {HighsInt{1}, HighsInt{-1}}) {
-          // the signatures rule out domination for most candidates, so check
-          // them first
-          if (!checkSignatures(direction, col, multiplier * direction, k))
-            continue;
-
-          // the non-zero might have been modified by a reduction
-          if (Avalue[pos] == 0.0 || Arow[pos] != row) break;
-
-          // check the coefficients in this row in advance to avoid the
-          // (potentially slow) element-wise comparison of the columns
-          if (!checkDominationNonZero(row, direction * rows.coefShortestRow,
-                                      multiplier * direction * Avalue[pos]))
-            continue;
-
-          // the signatures may pass due to hash collisions, so also check the
-          // coefficients in the second shortest required row
-          HighsInt secondRow = rows.secondShortestRow;
-          if (secondRow != -1 && !rowDeleted[secondRow]) {
-            HighsInt secondPos = findNonzero(secondRow, k);
-            if (secondPos == -1 ||
-                !checkDominationNonZero(
-                    secondRow, direction * rows.coefSecondShortestRow,
-                    multiplier * direction * Avalue[secondPos]))
-              continue;
-          }
-
-          // check if bound is implied (computed fresh due to earlier fixings)
-          bool boundImplied =
-              direction > 0 ? isUpperImplied(col) : isLowerImplied(col);
-
-          // check if variables have the same type
-          bool sameVarType = varsHaveSameType(col, k);
-
-          // skip checks if nothing to do
-          if (!boundImplied && !hasCliques && !sameVarType) continue;
-
-          // try to fix variables or strengthen bounds
-          HPRESOLVE_CHECKED_CALL(checkCols(row, col, k, direction, multiplier,
-                                           boundImplied, hasCliques,
-                                           sameVarType));
-          if (colDeleted[col] || rowDeleted[row] || colDeleted[k]) break;
-        }
-        if (colDeleted[col] || rowDeleted[row]) break;
-      }
-      return Result::kOk;
-    };
-
-    // check if bounds are implied or there are cliques
-    bool lowerImplied = isLowerImplied(j);
-    bool upperImplied = isUpperImplied(j);
-    bool hasNegCliques =
-        isBinary(j) && mipsolver->mipdata_->cliquetable.numCliques(j, 0) > 0;
-    bool hasPosCliques =
-        isBinary(j) && mipsolver->mipdata_->cliquetable.numCliques(j, 1) > 0;
-
-    // directions without a positive coefficient are not searched (for columns
-    // that only appear in equality rows, the dominations are also found from
-    // the other column)
-
-    // use the required rows for direction -1
-    if (rowsMinus.hasPositiveCoef &&
-        (allowPredBndAnalysis || lowerImplied || hasNegCliques))
-      HPRESOLVE_CHECKED_CALL(
-          checkRow(rowsMinus, j, HighsInt{-1}, hasNegCliques));
-
-    // use the required rows for direction 1
-    if (!colDeleted[j] && rowsPlus.hasPositiveCoef &&
-        (allowPredBndAnalysis || upperImplied || hasPosCliques))
-      HPRESOLVE_CHECKED_CALL(checkRow(rowsPlus, j, HighsInt{1}, hasPosCliques));
-
-    // do not use predictive bound analysis if it requires many domination
-    // checks and only yields few fixings or improved bounds on average
-    size_t averageNumDomChecksPredBndAnalysis =
-        numDomChecksPredBndAnalysis / static_cast<size_t>(numCols);
-    double averageNumRedsPredBndAnalysis =
-        (numFixedColsPredBndAnalysis + numModifiedBndsPredBndAnalysis) /
-        static_cast<double>(numCols);
-    allowPredBndAnalysis =
-        allowPredBndAnalysis &&
-        (numDomChecksPredBndAnalysis <=
-             30 * maxAverageNumDomChecksPredBndAnalysis ||
-         (averageNumDomChecksPredBndAnalysis <=
-              maxAverageNumDomChecksPredBndAnalysis &&
-          averageNumRedsPredBndAnalysis >= minAverageNumRedsPredBndAnalysis));
+      // do not use predictive bound analysis if it requires many domination
+      // checks and only yields few fixings or improved bounds on average
+      size_t averageNumDomChecksPredBndAnalysis =
+          numDomChecksPredBndAnalysis / static_cast<size_t>(numCols);
+      double averageNumRedsPredBndAnalysis =
+          (numFixedColsPredBndAnalysis + numModifiedBndsPredBndAnalysis) /
+          static_cast<double>(numCols);
+      allowPredBndAnalysis =
+          allowPredBndAnalysis &&
+          (numDomChecksPredBndAnalysis <=
+               30 * maxAverageNumDomChecksPredBndAnalysis ||
+           (averageNumDomChecksPredBndAnalysis <=
+                maxAverageNumDomChecksPredBndAnalysis &&
+            averageNumRedsPredBndAnalysis >= minAverageNumRedsPredBndAnalysis));
+    }
+    groupStart = groupEnd;
   }
 
   if (numFixedCols > 0 || numModifiedBndsPredBndAnalysis > 0)
