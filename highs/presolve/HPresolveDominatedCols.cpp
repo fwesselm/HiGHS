@@ -58,32 +58,33 @@ HPresolve::Result HPresolve::dominatedColumns(
   std::vector<HighsInt> check_rowpositions;
   std::vector<HighsInt> collect_rowpositions;
 
-  // mark columns that have been counted
-  std::vector<uint8_t> colCounted(model->num_col_, 0);
-
   // the rows for which the current candidates were collected (-1 if they have
   // to be collected again, e.g. after fixing variables, since this modifies the
   // matrix)
   HighsInt candidatesRow = -1;
   HighsInt candidatesFilterRow = -1;
 
-  // count overall number of domination checks and number of checks performed
-  // for predictive bound analysis
+  // count overall number of domination checks
   size_t numDomChecks = 0;
-  size_t numDomChecksPredBndAnalysis = 0;
 
   // count number of fixed columns and modified bounds
-  HighsInt numCols = 0;
   HighsInt numFixedCols = 0;
-  HighsInt numFixedColsPredBndAnalysis = 0;
-  HighsInt numModifiedBndsPredBndAnalysis = 0;
+  HighsInt numModifiedBnds = 0;
 
-  // parameters for predictive bound analysis
-  const size_t maxAverageNumDomChecksPredBndAnalysis = 10000;
-  const double minAverageNumRedsPredBndAnalysis = 1e-2;
-
-  // perform predictive bound analysis?
-  bool allowPredBndAnalysis = true;
+  // work limit: the work (candidates scanned, positions collected and
+  // nonzeros looked up) may not exceed a base, which is proportional to the
+  // number of nonzeros, plus a bonus for each reduction
+  const int64_t numNonzeros =
+      static_cast<int64_t>(Avalue.size() - freeslots.size());
+  const int64_t workLimitBase =
+      std::max(int64_t{10} * numNonzeros, int64_t{10000000});
+  const int64_t workBonusPerReduction = 10000;
+  int64_t work = 0;
+  auto currentWorkLimit = [&]() {
+    return workLimitBase +
+           workBonusPerReduction * (numFixedCols + numModifiedBnds);
+  };
+  auto workLimitReached = [&]() { return work > currentWorkLimit(); };
 
   auto addSignature = [&](HighsInt row, HighsInt col, uint64_t rowLowerFinite,
                           uint64_t rowUpperFinite) {
@@ -156,6 +157,7 @@ HPresolve::Result HPresolve::dominatedColumns(
 
     // finally check the column vectors
     for (const HighsSliceNonzero& nonz : getColumnVector(j)) {
+      work++;
       HighsInt row = nonz.index();
       HighsInt akPos = findNonzero(row, k);
       if (!checkDominationNonZero(row, scalj * nonz.value(),
@@ -165,6 +167,7 @@ HPresolve::Result HPresolve::dominatedColumns(
 
     // check row only occurring in the column vector of k
     for (const HighsSliceNonzero& nonz : getColumnVector(k)) {
+      work++;
       HighsInt row = nonz.index();
       HighsInt ajPos = findNonzero(row, j);
       // only rows in which aj does not occur are left to check
@@ -255,20 +258,18 @@ HPresolve::Result HPresolve::dominatedColumns(
     if (lowerBound < kHighsInf &&
         lowerBound > model->col_lower_[col] + primal_feastol) {
       if (lowerBound == model->col_upper_[col]) {
-        numFixedColsPredBndAnalysis++;
         return fixCol(col, HighsInt{1});
       } else if (model->integrality_[col] != HighsVarType::kContinuous) {
-        numModifiedBndsPredBndAnalysis++;
+        numModifiedBnds++;
         HPRESOLVE_CHECKED_CALL(changeColLower(col, lowerBound));
       }
     }
     if (upperBound > -kHighsInf &&
         upperBound < model->col_upper_[col] - primal_feastol) {
       if (upperBound == model->col_lower_[col]) {
-        numFixedColsPredBndAnalysis++;
         return fixCol(col, HighsInt{-1});
       } else if (model->integrality_[col] != HighsVarType::kContinuous) {
-        numModifiedBndsPredBndAnalysis++;
+        numModifiedBnds++;
         HPRESOLVE_CHECKED_CALL(changeColUpper(col, upperBound));
       }
     }
@@ -285,9 +286,9 @@ HPresolve::Result HPresolve::dominatedColumns(
 
   // lambda for (1) checking whether one of the two columns is dominated by
   // the other one and (2) fixing variables or strengthening bounds
-  auto checkCols = [&](HighsInt row, HighsInt col, HighsInt k,
-                       HighsInt direction, HighsInt multiplier,
-                       bool boundImplied, bool hasCliques, bool sameVarType) {
+  auto checkCols = [&](HighsInt col, HighsInt k, HighsInt direction,
+                       HighsInt multiplier, bool boundImplied, bool hasCliques,
+                       bool sameVarType) {
     // compute direction for dominated variable
     // (1: lower bound; -1: upper bound)
     HighsInt direction_k = multiplier * direction;
@@ -307,9 +308,6 @@ HPresolve::Result HPresolve::dominatedColumns(
     bool tryToStrengthenBounds =
         (isDominatingBoundFinite || isDominatedBoundFinite) && sameVarType;
     if (tryToFix || tryToStrengthenBounds) {
-      // increment counter for number of domination checks due to predictive
-      // bound analysis
-      if (!tryToFix) numDomChecksPredBndAnalysis++;
       // check for domination
       if (checkDomination(direction, col, direction_k, k)) {
         if (tryToFix &&
@@ -350,6 +348,7 @@ HPresolve::Result HPresolve::dominatedColumns(
     HighsInt row = rows.shortestRow;
     if (rowDeleted[row]) return Result::kOk;
     for (HighsInt pos : check_rowpositions) {
+      work++;
       if (Avalue[pos] == 0.0 || Arow[pos] != row) continue;
 
       // get column index
@@ -379,6 +378,7 @@ HPresolve::Result HPresolve::dominatedColumns(
         // coefficients in the second shortest required row
         HighsInt secondRow = rows.secondShortestRow;
         if (secondRow != -1 && !rowDeleted[secondRow]) {
+          work++;
           HighsInt secondPos = findNonzero(secondRow, k);
           if (secondPos == -1 ||
               !checkDominationNonZero(
@@ -398,7 +398,7 @@ HPresolve::Result HPresolve::dominatedColumns(
         if (!boundImplied && !hasCliques && !sameVarType) continue;
 
         // try to fix variables or strengthen bounds
-        HPRESOLVE_CHECKED_CALL(checkCols(row, col, k, direction, multiplier,
+        HPRESOLVE_CHECKED_CALL(checkCols(col, k, direction, multiplier,
                                          boundImplied, hasCliques,
                                          sameVarType));
         if (colDeleted[col] || rowDeleted[row] || colDeleted[k]) break;
@@ -461,10 +461,15 @@ HPresolve::Result HPresolve::dominatedColumns(
   // (all positions if 'filterRow' is -1)
   auto collectCandidates = [&](HighsInt row, HighsInt filterRow) {
     getRowPositions(row, collect_rowpositions);
+    work += static_cast<int64_t>(collect_rowpositions.size());
     check_rowpositions.clear();
-    for (HighsInt pos : collect_rowpositions)
-      if (filterRow == -1 || findNonzero(filterRow, Acol[pos]) != -1)
-        check_rowpositions.push_back(pos);
+    for (HighsInt pos : collect_rowpositions) {
+      if (filterRow != -1) {
+        work++;
+        if (findNonzero(filterRow, Acol[pos]) == -1) continue;
+      }
+      check_rowpositions.push_back(pos);
+    }
   };
 
   for (size_t i = 0; i != Avalue.size(); ++i) {
@@ -504,7 +509,8 @@ HPresolve::Result HPresolve::dominatedColumns(
             return a.direction < b.direction;
           });
 
-  for (size_t groupStart = 0; groupStart < colsToCheck.size();) {
+  for (size_t groupStart = 0;
+       groupStart < colsToCheck.size() && !workLimitReached();) {
     // find the columns to check sharing the two shortest required rows
     size_t groupEnd = groupStart + 1;
     while (groupEnd < colsToCheck.size() && haveSameRows(groupStart, groupEnd))
@@ -516,25 +522,23 @@ HPresolve::Result HPresolve::dominatedColumns(
     HighsInt groupFilterRow = groupEnd - groupStart > 1 ? groupSecondRow : -1;
 
     for (size_t i = groupStart; i < groupEnd; ++i) {
+      // check the time limit regularly
+      if ((i & 1023u) == 0) HPRESOLVE_CHECKED_CALL(checkTimeLimit());
+
+      // stop if the work limit is reached
+      if (workLimitReached()) break;
+
       HighsInt j = colsToCheck[i].col;
       HighsInt direction = colsToCheck[i].direction;
 
       // skip deleted columns
       if (colDeleted[j]) continue;
 
-      // increment counter for number of columns
-      if (!colCounted[j]) {
-        colCounted[j] = 1;
-        numCols++;
-      }
-
       // determine the required rows again, since reductions may have changed
       // them
       DominationRows dominationRows = getDominationRows(j, direction);
 
-      // check if bound is implied or there are cliques
-      bool colBoundImplied =
-          direction > 0 ? isUpperImplied(j) : isLowerImplied(j);
+      // check if there are cliques
       bool colHasCliques =
           isBinary(j) && mipsolver->mipdata_->cliquetable.numCliques(
                              j, direction > 0 ? 1 : 0) > 0;
@@ -542,8 +546,7 @@ HPresolve::Result HPresolve::dominatedColumns(
       // directions without a positive coefficient are not searched (for
       // columns that only appear in equality rows, the dominations are also
       // found from the other column)
-      if (dominationRows.hasPositiveCoef &&
-          (allowPredBndAnalysis || colBoundImplied || colHasCliques)) {
+      if (dominationRows.hasPositiveCoef) {
         // use the candidates of the group, or of the column if its rows have
         // been changed by reductions
         bool useGroupRows = dominationRows.shortestRow == groupRow &&
@@ -562,30 +565,16 @@ HPresolve::Result HPresolve::dominatedColumns(
         HPRESOLVE_CHECKED_CALL(
             checkRow(dominationRows, j, direction, colHasCliques));
       }
-
-      // do not use predictive bound analysis if it requires many domination
-      // checks and only yields few fixings or improved bounds on average
-      size_t averageNumDomChecksPredBndAnalysis =
-          numDomChecksPredBndAnalysis / static_cast<size_t>(numCols);
-      double averageNumRedsPredBndAnalysis =
-          (numFixedColsPredBndAnalysis + numModifiedBndsPredBndAnalysis) /
-          static_cast<double>(numCols);
-      allowPredBndAnalysis =
-          allowPredBndAnalysis &&
-          (numDomChecksPredBndAnalysis <=
-               30 * maxAverageNumDomChecksPredBndAnalysis ||
-           (averageNumDomChecksPredBndAnalysis <=
-                maxAverageNumDomChecksPredBndAnalysis &&
-            averageNumRedsPredBndAnalysis >= minAverageNumRedsPredBndAnalysis));
     }
     groupStart = groupEnd;
   }
 
-  if (numFixedCols > 0 || numModifiedBndsPredBndAnalysis > 0)
-    highsLogDev(options->log_options, HighsLogType::kInfo,
-                "Fixed %d dominated columns and strengthened %d bounds\n",
-                static_cast<int>(numFixedCols),
-                static_cast<int>(numModifiedBndsPredBndAnalysis));
+  highsLogDev(options->log_options, HighsLogType::kInfo,
+              "Dominated columns: fixed %" HIGHSINT_FORMAT
+              " columns, strengthened %" HIGHSINT_FORMAT
+              " bounds, used %" PRId64 " of %" PRId64 " work units%s\n",
+              numFixedCols, numModifiedBnds, work, currentWorkLimit(),
+              workLimitReached() ? " (limit reached)" : "");
 
   return Result::kOk;
 }
