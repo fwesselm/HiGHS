@@ -7,8 +7,6 @@
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 #include "parallel/HighsTaskExecutor.h"
 
-#include <atomic>
-
 #include "parallel/HighsParallel.h"
 
 #if defined(__linux__)
@@ -140,22 +138,20 @@ static unsigned int compute_available_core_count() {
 
 // the topology query is expensive (on Linux it reads two sysfs files per CPU)
 // and it is needed on every Highs::run(), so its result is cached (0 means not
-// computed yet). the cache is reset with the thread scheduler, which is the
-// only point where a changed result would be used (number of threads).
-static std::atomic<unsigned int> cached_available_core_count{0};
+// computed yet). like the scheduler, the cache is per thread, since the
+// affinity mask is per thread (on Linux). the cache is reset with the
+// scheduler, which is the only point where a changed result would be used
+// (number of threads).
+static thread_local unsigned int cached_available_core_count = 0;
 
 unsigned int highs::parallel::available_core_count() {
-  unsigned int core_count =
-      cached_available_core_count.load(std::memory_order_relaxed);
-  if (core_count == 0) {
-    core_count = compute_available_core_count();
-    cached_available_core_count.store(core_count, std::memory_order_relaxed);
-  }
-  return core_count;
+  if (cached_available_core_count == 0)
+    cached_available_core_count = compute_available_core_count();
+  return cached_available_core_count;
 }
 
 void highs::parallel::reset_available_core_count() {
-  cached_available_core_count.store(0, std::memory_order_relaxed);
+  cached_available_core_count = 0;
 }
 
 #ifdef _WIN32

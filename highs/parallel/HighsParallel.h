@@ -18,11 +18,12 @@ namespace parallel {
 using mutex = HighsMutex;
 
 // Returns the number of physical cores available to this process,
-// respecting the OS affinity mask. The result is computed once and cached.
+// respecting the OS affinity mask. The result is computed once per thread and
+// cached.
 unsigned int available_core_count();
 
-// Discards the cached number of physical cores, so that the next call to
-// available_core_count() queries the topology again.
+// Discards the cached number of physical cores of the calling thread, so that
+// the next call to available_core_count() queries the topology again.
 void reset_available_core_count();
 
 inline void initialize_scheduler(int numThreads = 0) {
