@@ -5243,6 +5243,9 @@ HighsStatus Highs::initializeMultiThreading() {
 
 void Highs::resetThreadScheduler(bool blocking) {
   HighsTaskExecutor::shutdown(blocking);
+  // a new scheduler queries the number of physical cores again (e.g. after a
+  // change of the affinity mask)
+  highs::parallel::reset_available_core_count();
 }
 
 void Highs::resetGlobalScheduler(bool blocking) {

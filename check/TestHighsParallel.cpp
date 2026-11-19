@@ -329,18 +329,26 @@ TEST_CASE("AffinityReducedCoreCount", "[parallel]") {
   highs::parallel::initialize_scheduler();
   int initial_threads = highs::parallel::num_threads();
 
+  const unsigned int initial_cores = highs::parallel::available_core_count();
+
   // Restrict affinity to a single core
   DWORD_PTR original_mask, system_mask;
   GetProcessAffinityMask(GetCurrentProcess(), &original_mask, &system_mask);
   SetProcessAffinityMask(GetCurrentProcess(), 1);
 
-  // available_core_count should now report 1
+  // the core count is cached, so it is unchanged until the cache is reset
+  REQUIRE(highs::parallel::available_core_count() == initial_cores);
+
+  // after a reset, available_core_count should report 1
+  highs::parallel::reset_available_core_count();
   unsigned int cores = highs::parallel::available_core_count();
   REQUIRE(cores == 1);
   REQUIRE(initial_threads >= static_cast<int>(cores));
 
   // Restore original affinity
   SetProcessAffinityMask(GetCurrentProcess(), original_mask);
+  highs::parallel::reset_available_core_count();
+  REQUIRE(highs::parallel::available_core_count() == initial_cores);
   HighsTaskExecutor::shutdown();
 }
 #elif defined(__linux__)
@@ -349,6 +357,8 @@ TEST_CASE("AffinityReducedCoreCount", "[parallel]") {
   highs::parallel::initialize_scheduler();
   int initial_threads = highs::parallel::num_threads();
 
+  const unsigned int initial_cores = highs::parallel::available_core_count();
+
   // Restrict affinity to a single core
   cpu_set_t original_set, restricted_set;
   sched_getaffinity(0, sizeof(original_set), &original_set);
@@ -356,13 +366,19 @@ TEST_CASE("AffinityReducedCoreCount", "[parallel]") {
   CPU_SET(0, &restricted_set);
   sched_setaffinity(0, sizeof(restricted_set), &restricted_set);
 
-  // available_core_count should now report 1
+  // the core count is cached, so it is unchanged until the cache is reset
+  REQUIRE(highs::parallel::available_core_count() == initial_cores);
+
+  // after a reset, available_core_count should report 1
+  highs::parallel::reset_available_core_count();
   unsigned int cores = highs::parallel::available_core_count();
   REQUIRE(cores == 1);
   REQUIRE(initial_threads >= static_cast<int>(cores));
 
   // Restore original affinity
   sched_setaffinity(0, sizeof(original_set), &original_set);
+  highs::parallel::reset_available_core_count();
+  REQUIRE(highs::parallel::available_core_count() == initial_cores);
   HighsTaskExecutor::shutdown();
 }
 #endif
