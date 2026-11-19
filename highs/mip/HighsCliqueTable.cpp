@@ -746,6 +746,52 @@ void HighsCliqueTable::recordSubstitution(Substitution substitution) {
                  substitution.replace.complement());
 }
 
+HighsInt HighsCliqueTable::findIdenticalClique(const HighsDomain& globaldom,
+                                               const CliqueVar* cliquevars,
+                                               HighsInt numcliquevars) {
+  // the given literals must be active, otherwise the comparison of the number
+  // of active literals below is wrong
+  for (HighsInt i = 0; i != numcliquevars; ++i)
+    assert(!colDeleted[cliquevars[i].col] &&
+           !globaldom.isFixed(cliquevars[i].col));
+
+  if (numcliquevars == 2) {
+    const HighsInt* cliqueid =
+        sizeTwoCliques.find(sortedEdge(cliquevars[0], cliquevars[1]));
+    return cliqueid != nullptr ? *cliqueid : -1;
+  }
+
+  // the candidates are the cliques of the literal with the shortest list of
+  // cliques
+  CliqueVar shortest = cliquevars[0];
+  for (HighsInt i = 1; i != numcliquevars; ++i)
+    if (numCliques(cliquevars[i]) < numCliques(shortest))
+      shortest = cliquevars[i];
+
+  iscandidate.resize(invertedHashList.size());
+  for (HighsInt i = 0; i != numcliquevars; ++i)
+    iscandidate[cliquevars[i].index()] = true;
+
+  // a candidate is identical if its active literals are the given literals,
+  // i.e. it has as many active literals and contains all given literals
+  HighsInt identical = -1;
+  invertedHashList[shortest.index()].for_each([&](HighsInt cliqueid) {
+    const Clique& clique = cliques[cliqueid];
+    if (clique.numActive() != numcliquevars) return false;
+    HighsInt numMarked = 0;
+    for (HighsInt i = clique.start; i != clique.end; ++i)
+      if (iscandidate[cliqueentries[i].index()]) numMarked++;
+    if (numMarked != numcliquevars) return false;
+    identical = cliqueid;
+    return true;
+  });
+
+  for (HighsInt i = 0; i != numcliquevars; ++i)
+    iscandidate[cliquevars[i].index()] = false;
+
+  return identical;
+}
+
 void HighsCliqueTable::addClique(const HighsMipSolver& mipsolver,
                                  CliqueVar* cliquevars, HighsInt numcliquevars,
                                  bool equality, HighsInt origin) {
@@ -906,6 +952,24 @@ void HighsCliqueTable::addClique(const HighsMipSolver& mipsolver,
                      [&](CliqueVar v) { return globaldom.isFixed(v.col); });
   numcliquevars = unfixedend - cliquevars;
   if (numcliquevars < 2) return;
+
+  // a row clique that is identical to a clique with the same row origin (the
+  // row is extracted again) or without a row origin (e.g. one whose origin was
+  // dropped by rebuild) is not added again: the existing clique keeps or takes
+  // over the row origin, so that clique merging can still extend it (and lift
+  // the row) or delete the row, but merges the clique only once
+  if (origin >= 0 && origin != kHighsIInf) {
+    const HighsInt identical =
+        findIdenticalClique(globaldom, cliquevars, numcliquevars);
+    if (identical != -1 && (cliques[identical].origin == origin ||
+                            cliques[identical].origin == kHighsIInf ||
+                            cliques[identical].origin == -1)) {
+      cliques[identical].origin = origin;
+      // an equation row makes the clique an equality clique
+      cliques[identical].equality = cliques[identical].equality || equality;
+      return;
+    }
+  }
 
   doAddClique(cliquevars, numcliquevars, equality, origin);
   processInfeasibleVertices(globaldom);

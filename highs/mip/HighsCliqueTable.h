@@ -159,6 +159,12 @@ class HighsCliqueTable {
     return findCommonCliqueId(numNeighbourhoodQueries, v1, v2);
   }
 
+  // returns the id of a clique whose active literals are the given literals,
+  // which must be active (unfixed and not deleted), or -1 if there is none
+  HighsInt findIdenticalClique(const HighsDomain& globaldom,
+                               const CliqueVar* cliquevars,
+                               HighsInt numcliquevars);
+
   HighsInt runCliqueSubsumption(const HighsDomain& globaldom,
                                 std::vector<CliqueVar>& clique);
 
