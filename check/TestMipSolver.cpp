@@ -1780,6 +1780,90 @@ TEST_CASE("MIP-clique-table-duplicate-size-two-cliques",
   }
 }
 
+TEST_CASE("MIP-clique-table-identical-row-clique", "[highs_test_mip_solver]") {
+  // a row clique that is identical to an existing clique is not added again;
+  // the existing clique takes over the row origin unless it stems from another
+  // row, and an equation makes it an equality clique
+  const HighsInt ncols = 3;
+  HighsLp lp;
+  lp.num_col_ = ncols;
+  lp.num_row_ = 0;
+  lp.col_cost_.assign(ncols, 0.0);
+  lp.col_lower_.assign(ncols, 0.0);
+  lp.col_upper_.assign(ncols, 1.0);
+  lp.integrality_.assign(ncols, HighsVarType::kInteger);
+  lp.a_matrix_.start_.assign(ncols + 1, 0);
+
+  Highs highs;
+  highs.setOptionValue("output_flag", dev_run);
+  highs.passModel(lp);
+
+  HighsCallback callback(&highs);
+  const HighsOptions& options = highs.getOptions();
+  HighsSolution solution;
+
+  // x0 + x1 + x2 <= 1
+  const HighsCliqueTable::CliqueVar clique[] = {{0, 1}, {1, 1}, {2, 1}};
+  const HighsInt row = 0;
+
+  // creates a mip solver whose clique table contains the clique with the given
+  // origin, then adds the row clique (equation or inequality) of the given row
+  auto addRowCliqueToTable = [&](HighsMipSolver& mipsolver,
+                                 HighsInt existingOrigin, bool equality) {
+    mipsolver.mipdata_ =
+        std::unique_ptr<HighsMipSolverData>(new HighsMipSolverData(mipsolver));
+    mipsolver.mipdata_->feastol = 1e-6;
+    mipsolver.mipdata_->setupDomainPropagation();
+    HighsCliqueTable& cliquetable = mipsolver.mipdata_->cliquetable;
+    cliquetable.doAddClique(clique, ncols, false, existingOrigin);
+    // addClique may change the literals, so pass a copy
+    HighsCliqueTable::CliqueVar rowClique[] = {clique[0], clique[1], clique[2]};
+    cliquetable.addClique(mipsolver, rowClique, ncols, equality, row);
+    return cliquetable.numCliques();
+  };
+
+  // the existing clique does not stem from a row: it takes over the origin,
+  // which is recorded as a deleted row when the clique is removed
+  {
+    HighsMipSolver mipsolver(callback, options, lp, solution);
+    REQUIRE(addRowCliqueToTable(mipsolver, kHighsIInf, false) == 1);
+    HighsCliqueTable& cliquetable = mipsolver.mipdata_->cliquetable;
+    cliquetable.removeClique(0);
+    REQUIRE(cliquetable.getDeletedRows().size() == 1);
+    REQUIRE(cliquetable.getDeletedRows()[0] == row);
+  }
+
+  // the existing clique stems from a model row whose index is unknown, or from
+  // the same row: the clique is not added again
+  for (const HighsInt existingOrigin : {HighsInt{-1}, row}) {
+    HighsMipSolver mipsolver(callback, options, lp, solution);
+    REQUIRE(addRowCliqueToTable(mipsolver, existingOrigin, false) == 1);
+  }
+
+  // the existing clique stems from another row: both cliques are kept
+  {
+    HighsMipSolver mipsolver(callback, options, lp, solution);
+    REQUIRE(addRowCliqueToTable(mipsolver, row + 1, false) == 2);
+  }
+
+  // an equation makes the existing clique an equality clique: fixing all but
+  // one variable to zero fixes the last one to one
+  {
+    HighsMipSolver mipsolver(callback, options, lp, solution);
+    REQUIRE(addRowCliqueToTable(mipsolver, kHighsIInf, true) == 1);
+    HighsCliqueTable& cliquetable = mipsolver.mipdata_->cliquetable;
+    HighsDomain& domain = mipsolver.mipdata_->getDomain();
+    for (HighsInt i = 0; i < ncols - 1; i++) {
+      domain.fixCol(i, 0.0);
+      cliquetable.vertexInfeasible(domain, i, 1);
+    }
+    REQUIRE(domain.isFixed(ncols - 1));
+    REQUIRE(domain.col_lower_[ncols - 1] == 1.0);
+  }
+
+  highs.resetThreadScheduler(true);
+}
+
 TEST_CASE("issue-3170", "[highs_test_mip_solver]") {
   std::string filename =
       std::string(HIGHS_DIR) + "/check/instances/issue-3170.mps";

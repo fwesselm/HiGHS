@@ -801,18 +801,26 @@ bool HighsCliqueTable::absorbIntoIdenticalClique(const HighsDomain& globaldom,
       findIdenticalClique(globaldom, cliquevars, numcliquevars);
   if (identical == -1) return false;
 
+  // lambda to check whether an origin is the index of a model row (-1 means
+  // that the clique stems from a model row whose index is not known anymore,
+  // kHighsIInf that it does not stem from a model row)
+  auto isModelRow = [](HighsInt cliqueOrigin) {
+    return cliqueOrigin != -1 && cliqueOrigin != kHighsIInf;
+  };
+
+  // the identical clique
   Clique& clique = cliques[identical];
-  if (origin != kHighsIInf && origin != -1) {
+
+  if (isModelRow(origin)) {
     // two identical rows: keep both cliques, so that each row can still be
     // extended or deleted
-    if (clique.origin != kHighsIInf && clique.origin != -1 &&
-        clique.origin != origin)
-      return false;
+    if (isModelRow(clique.origin) && clique.origin != origin) return false;
     // the existing clique keeps or takes over the row origin, so that clique
     // merging can still extend it (and lift the row) or delete the row
     clique.origin = origin;
   } else if (origin == -1 && clique.origin == kHighsIInf) {
-    // the clique stems from a row, so clique merging should consider it
+    // keep the information that the clique stems from a model row, so that
+    // clique merging still extends it
     clique.origin = -1;
   }
   // an equation makes the clique an equality clique
