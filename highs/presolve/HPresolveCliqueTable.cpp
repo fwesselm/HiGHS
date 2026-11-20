@@ -38,7 +38,7 @@ void HPresolveCliqueTable::checkCompactClique(const HighsInt cliqueId,
     table->removeClique(cliqueId, false);
     table->doAddClique(shortenedClique.data(),
                        static_cast<HighsInt>(shortenedClique.size()), equality,
-                       origin);
+                       origin, false);
   }
 }
 
@@ -111,6 +111,8 @@ bool HPresolveCliqueTable::fixCol(HighsInt col, bool val,
       const bool equality = clique.equality;
       const HighsInt origin = clique.origin;
       ++clique.numZeroFixed;
+      // a smaller clique may be extendable again
+      clique.maximal = false;
       const HighsInt actualSize = clique.end - clique.start;
       const HighsInt activeSize = clique.numActive();
       if (activeSize <= 1) {
@@ -168,6 +170,8 @@ void HPresolveCliqueTable::eliminateCol(const HighsInt col) {
     ++clique.numZeroFixed;
     clique.origin = -1;
     clique.equality = false;
+    // a smaller clique may be extendable again
+    clique.maximal = false;
     const HighsInt actualSize = clique.end - clique.start;
     const HighsInt activeSize = clique.numActive();
     if (activeSize <= 1) {

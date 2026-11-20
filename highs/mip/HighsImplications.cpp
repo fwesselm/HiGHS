@@ -822,8 +822,13 @@ void HighsImplications::separateImpliedBounds(
     if (nextCleanupCall < 0) {
       // HighsInt oldNumEntries =
       // mipsolver.mipdata_->cliquetable.getNumEntries();
-      if (!mipsolver.mipdata_->parallelLockActive())
+      if (!mipsolver.mipdata_->parallelLockActive()) {
+        // clique merging requires that the clique table processed the fixings
+        // (e.g. those found by probing)
+        mipsolver.mipdata_->cliquetable.cleanupFixed(globaldom);
+        if (globaldom.infeasible()) return;
         mipsolver.mipdata_->cliquetable.runCliqueMerging(globaldom);
+      }
 
       // printf("numEntries: %d, beforeMerging: %d\n",
       //        mipsolver.mipdata_->cliquetable.getNumEntries(), oldNumEntries);

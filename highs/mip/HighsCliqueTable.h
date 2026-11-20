@@ -63,6 +63,10 @@ class HighsCliqueTable {
     HighsInt origin;
     HighsInt numZeroFixed;
     bool equality;
+    // no unfixed literal is adjacent to all active literals of the clique (set
+    // by clique merging); this can only change if one of its literals gets a
+    // new edge or the clique gets smaller
+    bool maximal;
     HighsInt numActive() const { return end - start - numZeroFixed; }
   };
 
@@ -97,6 +101,66 @@ class HighsCliqueTable {
   std::vector<HighsInt> deletedrows;
   std::vector<std::pair<HighsInt, CliqueVar>> cliqueextensions;
   std::vector<HighsBool> iscandidate;
+  // literals that got new edges, for skipping unchanged cliques in clique
+  // merging; the stack contains each literal whose state is not kUnchanged
+  // once
+  struct ChangedLiterals {
+    enum State : uint8_t {
+      kUnchanged = 0,
+      // changed before the current clique merging call (since the previous
+      // call)
+      kChangedBefore = 1,
+      // changed in the current clique merging call (or since the previous call
+      // if no call is running)
+      kChangedNow = 2
+    };
+    std::vector<uint8_t> state;
+    std::vector<CliqueVar> stack;
+
+    void resize(size_t numCols) { state.resize(2 * numCols, kUnchanged); }
+
+    bool isChanged(CliqueVar v) const { return state[v.index()] != kUnchanged; }
+
+    void flag(CliqueVar v) {
+      if (state[v.index()] == kUnchanged) stack.push_back(v);
+      state[v.index()] = kChangedNow;
+    }
+
+    // at the start of a clique merging call, all changes so far are changes
+    // before it
+    void startMerging() {
+      for (CliqueVar v : stack) state[v.index()] = kChangedBefore;
+    }
+
+    // after a complete clique merging call, the changes before it are
+    // consumed; after an early stop, they are kept for the cliques that were
+    // not processed
+    void finishMerging(bool stoppedEarly) {
+      if (stoppedEarly) return;
+      size_t numKept = 0;
+      for (size_t i = 0; i != stack.size(); ++i) {
+        const CliqueVar v = stack[i];
+        if (state[v.index()] == kChangedBefore)
+          state[v.index()] = kUnchanged;
+        else
+          stack[numKept++] = v;
+      }
+      stack.resize(numKept);
+    }
+
+    // map the literals to the columns of a reduced problem with numCols
+    // columns (newColIndex is -1 for deleted columns); only used between
+    // clique merging calls
+    void reindex(const std::vector<HighsInt>& newColIndex, size_t numCols) {
+      std::vector<CliqueVar> oldStack;
+      std::swap(oldStack, stack);
+      state.assign(2 * numCols, kUnchanged);
+      for (CliqueVar v : oldStack)
+        if (newColIndex[v.col] != -1)
+          flag(CliqueVar(newColIndex[v.col], v.val));
+    }
+  };
+  ChangedLiterals changedLiterals;
   // position of each clique variable (by index()) in the vector that is being
   // partitioned into cliques, -1 for variables that are not being
   // partitioned; scratch storage of the partition functions, not thread-safe
@@ -173,6 +237,23 @@ class HighsCliqueTable {
                                  const CliqueVar* cliquevars,
                                  HighsInt numcliquevars, bool equality,
                                  HighsInt origin);
+
+  // records that the literals of the clique got new edges; the clique may be
+  // extendable then
+  void markChangedClique(HighsInt cliqueid) {
+    cliques[cliqueid].maximal = false;
+    for (HighsInt i = cliques[cliqueid].start; i != cliques[cliqueid].end; ++i)
+      changedLiterals.flag(cliqueentries[i]);
+  }
+
+  // whether clique merging can skip the clique: it was maximal after it was
+  // merged and none of its literals got a new edge since then
+  bool skipCliqueMerging(HighsInt cliqueid) const {
+    if (!cliques[cliqueid].maximal) return false;
+    for (HighsInt i = cliques[cliqueid].start; i != cliques[cliqueid].end; ++i)
+      if (changedLiterals.isChanged(cliqueentries[i])) return false;
+    return true;
+  }
 
   HighsInt runCliqueSubsumption(const HighsDomain& globaldom,
                                 std::vector<CliqueVar>& clique);
@@ -275,6 +356,7 @@ class HighsCliqueTable {
     invertedHashListSizeTwo.resize(2 * ncols);
     numcliquesvar.resize(2 * ncols, 0);
     clqVarPos.resize(2 * ncols, -1);
+    changedLiterals.resize(ncols);
     colsubstituted.resize(ncols);
     colDeleted.resize(ncols, false);
   }
@@ -302,8 +384,13 @@ class HighsCliqueTable {
 
   bool processNewEdge(HighsDomain& globaldom, CliqueVar v1, CliqueVar v2);
 
-  void doAddClique(const CliqueVar* cliquevars, HighsInt numcliquevars,
-                   bool equality = false, HighsInt origin = kHighsIInf);
+  // returns the id of the added clique, or -1 if no clique was added (fewer
+  // than two literals remain). newEdges states whether the clique may add new
+  // edges, then its literals are recorded for clique merging; it is false for
+  // cliques that are copies or subsets of existing cliques
+  HighsInt doAddClique(const CliqueVar* cliquevars, HighsInt numcliquevars,
+                       bool equality = false, HighsInt origin = kHighsIInf,
+                       bool newEdges = true);
 
   void addClique(const HighsMipSolver& mipsolver, CliqueVar* cliquevars,
                  HighsInt numcliquevars, bool equality = false,

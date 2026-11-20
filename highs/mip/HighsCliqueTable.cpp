@@ -371,9 +371,9 @@ static void printClique(
 }
 #endif
 
-void HighsCliqueTable::doAddClique(const CliqueVar* cliquevars,
-                                   HighsInt numcliquevars, bool equality,
-                                   HighsInt origin) {
+HighsInt HighsCliqueTable::doAddClique(const CliqueVar* cliquevars,
+                                       HighsInt numcliquevars, bool equality,
+                                       HighsInt origin, bool newEdges) {
   HighsInt cliqueid;
 
   if (freeslots.empty()) {
@@ -387,6 +387,7 @@ void HighsCliqueTable::doAddClique(const CliqueVar* cliquevars,
 
   cliques[cliqueid].equality = equality;
   cliques[cliqueid].origin = origin;
+  cliques[cliqueid].maximal = false;
 
   decltype(freespaces)::iterator it;
   HighsInt maxEnd;
@@ -473,7 +474,7 @@ void HighsCliqueTable::doAddClique(const CliqueVar* cliquevars,
           cliques[cliqueid].start = -1;
           cliques[cliqueid].end = -1;
           freeslots.push_back(cliqueid);
-          return;
+          return -1;
         case 1:
           // size 1 clique is redundant, so unlink the single linked entry
           // and mark it as deleted
@@ -481,7 +482,7 @@ void HighsCliqueTable::doAddClique(const CliqueVar* cliquevars,
           cliques[cliqueid].start = -1;
           cliques[cliqueid].end = -1;
           freeslots.push_back(cliqueid);
-          return;
+          return -1;
         case 2:
           // due to substitutions the clique became smaller and is now of size
           // two as a result we need to link it to the size two cliqueset
@@ -508,6 +509,8 @@ void HighsCliqueTable::doAddClique(const CliqueVar* cliquevars,
   HighsInt cliqueLen = cliques[cliqueid].end - cliques[cliqueid].start;
   numEntries += cliqueLen;
   addSizeTwoClique(cliqueid);
+  if (newEdges) markChangedClique(cliqueid);
+  return cliqueid;
 }
 struct ThreadNeighbourhoodQueryData {
   int64_t numQueries;
@@ -709,7 +712,12 @@ void HighsCliqueTable::replaceLiteral(const CliqueVar substitutedVar,
       numcliquesvar[substitutedVar.index()];
   numcliquesvar[substitutedVar.index()] = 0;
 
+  // the replacement gets edges to all literals of the cliques of the
+  // substituted literal, and these cliques change
+  changedLiterals.flag(replacementVar);
+
   substList.for_each([&](HighsInt cliqueid, HighsInt location) {
+    markChangedClique(cliqueid);
     replaceList.insert(cliqueid, location);
     cliqueentries[location] = replacementVar;
   });
@@ -722,6 +730,7 @@ void HighsCliqueTable::replaceLiteral(const CliqueVar substitutedVar,
       invertedHashListSizeTwo[replacementVar.index()];
 
   substListSizeTwo.for_each([&](HighsInt cliqueid) {
+    markChangedClique(cliqueid);
     HighsInt pos = cliques[cliqueid].start;
     HighsInt otherPos = pos + 1;
 
@@ -998,7 +1007,9 @@ void HighsCliqueTable::addClique(const HighsMipSolver& mipsolver,
                                                numcliquevars, equality, origin))
     return;
 
-  doAddClique(cliquevars, numcliquevars, equality, origin);
+  // the edges of large cliques are not checked, so they may be new
+  doAddClique(cliquevars, numcliquevars, equality, origin,
+              hasNewEdge || numcliquevars > maxNumCliqueVars);
   processInfeasibleVertices(globaldom);
 }
 
@@ -1828,6 +1839,7 @@ void HighsCliqueTable::processInfeasibleVertices(HighsDomain& globaldom) {
 
     vHashListsSizeTwo.for_each([&](HighsInt cliqueid) {
       ++cliques[cliqueid].numZeroFixed;
+      cliques[cliqueid].maximal = false;
       fixLastActiveAndRemove(globaldom, cliqueid);
     });
 
@@ -1837,6 +1849,8 @@ void HighsCliqueTable::processInfeasibleVertices(HighsDomain& globaldom) {
       // assert(cliqueentries[entry.value()].val == 1 - v.val);
 
       cliques[cliqueid].numZeroFixed += 1;
+      // a smaller clique may be extendable again
+      cliques[cliqueid].maximal = false;
       if (cliques[cliqueid].numActive() <= 1) {
         fixLastActiveAndRemove(globaldom, cliqueid);
       } else if (!inPresolveProbing &&
@@ -1866,7 +1880,7 @@ void HighsCliqueTable::processInfeasibleVertices(HighsDomain& globaldom) {
                            }),
             clq.end());
         if (clq.size() > 1) {
-          doAddClique(clq.data(), clq.size(), equality, origin);
+          doAddClique(clq.data(), clq.size(), equality, origin, false);
         } else if (equality) {
           if (clq.empty() ||
               globaldom.isFixedToVal(static_cast<HighsInt>(clq[0].col),
@@ -2025,7 +2039,9 @@ void HighsCliqueTable::separateCliques(const HighsMipSolver& mipsolver,
       HighsInt nremoved = runCliqueSubsumption(globaldom, clique);
 
       if (clique.empty()) continue;
-      if (nremoved != 0) doAddClique(clique.data(), clique.size(), false, -1);
+      // the clique was found in the clique table, so it has no new edges
+      if (nremoved != 0)
+        doAddClique(clique.data(), clique.size(), false, -1, false);
     }
   }
 }
@@ -2300,10 +2316,18 @@ void HighsCliqueTable::runCliqueMerging(HighsDomain& globaldomain,
 }
 
 void HighsCliqueTable::runCliqueMerging(HighsDomain& globaldomain) {
+  // the fixings in the domain must have been processed (see cleanupFixed()),
+  // so that the fixed literals are deleted and no clique contains a literal
+  // that is fixed to one
   std::vector<CliqueVar> extensionvars;
   iscandidate.resize(invertedHashList.size());
   std::vector<HighsInt> neighbourhoodInds;
   neighbourhoodInds.reserve(invertedHashList.size());
+
+  // the literals that got new edges since the previous call; the literals that
+  // get new edges in this call are recorded for the next call
+  changedLiterals.startMerging();
+  bool stoppedEarly = false;
 
   HighsInt numcliqueslots = static_cast<HighsInt>(cliques.size());
   const HighsInt maxNewEntries = numEntries + globaldomain.numModelNonzeros();
@@ -2318,18 +2342,35 @@ void HighsCliqueTable::runCliqueMerging(HighsDomain& globaldomain) {
     HighsInt numclqvars = cliques[k].end - cliques[k].start;
     assert(numclqvars != 0);
     if (numclqvars == 0) continue;
+    if (skipCliqueMerging(k)) continue;
 
     CliqueVar* clqvars = &cliqueentries[cliques[k].start];
 
-    CliqueVar extensionstart = clqvars[0];
-    HighsInt numcliques = numCliques(clqvars[0]);
-    for (HighsInt i = 1; i != numclqvars; ++i) {
+    // lambda to check whether a member is inactive (fixed to zero or its
+    // column was eliminated); inactive members do not contribute to the clique
+    // and are skipped. since the fixings have been processed, no member is
+    // fixed to one, and the members that are fixed to zero are deleted
+    auto isInactive = [&](CliqueVar v) {
+      assert(
+          !globaldomain.isFixed(v.col) ||
+          (colDeleted[v.col] && globaldomain.isFixedToVal(v.col, 1 - v.val)));
+      return colDeleted[v.col];
+    };
+
+    // start the extension from the active member with the fewest cliques
+    CliqueVar extensionstart;
+    HighsInt numcliques = kHighsIInf;
+    for (HighsInt i = 0; i != numclqvars; ++i) {
+      if (isInactive(clqvars[i])) continue;
       HighsInt thisNumClqs = numCliques(clqvars[i]);
       if (thisNumClqs < numcliques) {
         numcliques = thisNumClqs;
         extensionstart = clqvars[i];
       }
     }
+    // cliques with fewer than two active members are removed when the fixings
+    // are processed
+    assert(numcliques != kHighsIInf);
 
     for (HighsInt i = 0; i != numclqvars; ++i)
       iscandidate[clqvars[i].index()] = true;
@@ -2358,8 +2399,10 @@ void HighsCliqueTable::runCliqueMerging(HighsDomain& globaldomain) {
       iscandidate[clqvars[i].index()] = false;
     for (CliqueVar v : extensionvars) iscandidate[v.index()] = false;
 
+    // keep the candidates that are adjacent to all active members (the common
+    // neighbours)
     for (HighsInt i = 0; i != numclqvars && !extensionvars.empty(); ++i) {
-      if (clqvars[i] == extensionstart) continue;
+      if (clqvars[i] == extensionstart || isInactive(clqvars[i])) continue;
 
       HighsInt newSize = shrinkToNeighbourhood(
           neighbourhoodInds, numNeighbourhoodQueries, clqvars[i],
@@ -2367,29 +2410,34 @@ void HighsCliqueTable::runCliqueMerging(HighsDomain& globaldomain) {
       extensionvars.erase(extensionvars.begin() + newSize, extensionvars.end());
     }
 
-    if (!extensionvars.empty()) {
-      // todo, shuffle extension vars?
-      randgen.shuffle(extensionvars.data(),
-                      static_cast<HighsInt>(extensionvars.size()));
-      HighsInt i = 0;
-      while (i < static_cast<HighsInt>(extensionvars.size())) {
-        CliqueVar extvar = extensionvars[i];
-        i += 1;
-
-        HighsInt newSize =
-            i + shrinkToNeighbourhood(
-                    neighbourhoodInds, numNeighbourhoodQueries, extvar,
-                    extensionvars.data() + i,
-                    static_cast<HighsInt>(extensionvars.size()) - i);
-        extensionvars.erase(extensionvars.begin() + newSize,
-                            extensionvars.end());
-      }
-    }
-
     if (cliques[k].equality) {
+      // a common neighbour of an equation cannot be one, since all literals
+      // of the equation would be zero then; all common neighbours are fixed
+      // to zero (they do not need to form a clique), so the clique is maximal
       for (CliqueVar v : extensionvars)
         vertexInfeasible(globaldomain, v.col, v.val);
+      cliques[k].maximal = true;
     } else {
+      // extend the clique by a clique of common neighbours
+      if (!extensionvars.empty()) {
+        // todo, shuffle extension vars?
+        randgen.shuffle(extensionvars.data(),
+                        static_cast<HighsInt>(extensionvars.size()));
+        HighsInt i = 0;
+        while (i < static_cast<HighsInt>(extensionvars.size())) {
+          CliqueVar extvar = extensionvars[i];
+          i += 1;
+
+          HighsInt newSize =
+              i + shrinkToNeighbourhood(
+                      neighbourhoodInds, numNeighbourhoodQueries, extvar,
+                      extensionvars.data() + i,
+                      static_cast<HighsInt>(extensionvars.size()) - i);
+          extensionvars.erase(extensionvars.begin() + newSize,
+                              extensionvars.end());
+        }
+      }
+
       HighsInt originrow = cliques[k].origin;
       cliques[k].origin = kHighsIInf;
 
@@ -2424,10 +2472,13 @@ void HighsCliqueTable::runCliqueMerging(HighsDomain& globaldomain) {
                            }),
             extensionvars.end());
 
-        if (extensionvars.size() > 1)
-          doAddClique(extensionvars.data(),
-                      static_cast<HighsInt>(extensionvars.size()), false,
-                      originrow);
+        if (extensionvars.size() > 1) {
+          // the clique only gets new edges if it was extended
+          const HighsInt cliqueid = doAddClique(
+              extensionvars.data(), static_cast<HighsInt>(extensionvars.size()),
+              false, originrow, numExtensions > 0);
+          if (cliqueid != -1) cliques[cliqueid].maximal = true;
+        }
       } else {
         // the extended clique is redundant, check if the row can be removed
         if (dominatingOrigin != kHighsIInf)
@@ -2446,7 +2497,10 @@ void HighsCliqueTable::runCliqueMerging(HighsDomain& globaldomain) {
     extensionvars.clear();
     processInfeasibleVertices(globaldomain);
 
-    if (numEntries >= maxNewEntries) break;
+    if (numEntries >= maxNewEntries) {
+      stoppedEarly = true;
+      break;
+    }
     // printf("nonzeroDelta: %d, maxNonzeroDelta: %d\n", nonzeroDelta,
     // maxNonzeroDelta);
   }
@@ -2455,6 +2509,7 @@ void HighsCliqueTable::runCliqueMerging(HighsDomain& globaldomain) {
     for (HighsInt k = 0; k != numcliqueslots; ++k) {
       if (cliques[k].start == -1) continue;
       if (cliques[k].origin != -1) continue;
+      if (skipCliqueMerging(k)) continue;
       // if (cliques[k].end - cliques[k].start <= 1000) continue;
 
       // printf("numEntries before: %d\n", numEntries);
@@ -2462,14 +2517,19 @@ void HighsCliqueTable::runCliqueMerging(HighsDomain& globaldomain) {
       extensionvars.insert(extensionvars.end(),
                            cliqueentries.begin() + cliques[k].start,
                            cliqueentries.begin() + cliques[k].end);
+      const size_t numclqvars = extensionvars.size();
       removeClique(k);
       runCliqueMerging(globaldomain, extensionvars);
 
+      // the clique only gets new edges if it was extended
       if (extensionvars.size() > 1)
         doAddClique(extensionvars.data(),
-                    static_cast<HighsInt>(extensionvars.size()));
+                    static_cast<HighsInt>(extensionvars.size()), false,
+                    kHighsIInf, extensionvars.size() > numclqvars);
     }
   }
+
+  changedLiterals.finishMerging(stoppedEarly);
 }
 
 void HighsCliqueTable::rebuild(
@@ -2483,6 +2543,7 @@ void HighsCliqueTable::rebuild(
   for (size_t i = 0; i != cliques.size(); ++i) {
     if (cliques[i].start == -1) continue;
     const HighsInt numActive = cliques[i].numActive();
+    const HighsInt numClqVars = cliques[i].end - cliques[i].start;
 
     for (HighsInt k = cliques[i].start; k != cliques[i].end; ++k) {
       HighsInt col = orig2reducedcol[cliqueentries[k].col];
@@ -2505,10 +2566,18 @@ void HighsCliqueTable::rebuild(
     if (numvars <= 1) continue;
 
     HighsInt origin = cliques[i].origin != kHighsIInf ? -1 : kHighsIInf;
-    newCliqueTable.doAddClique(&cliqueentries[cliques[i].start], numvars,
-                               numvars == numActive && cliques[i].equality,
-                               origin);
+    const HighsInt cliqueid = newCliqueTable.doAddClique(
+        &cliqueentries[cliques[i].start], numvars,
+        numvars == numActive && cliques[i].equality, origin, false);
+    // a clique that was not shortened stays maximal
+    if (cliqueid != -1)
+      newCliqueTable.cliques[cliqueid].maximal =
+          cliques[i].maximal && numvars == numClqVars;
   }
+
+  // keep the literals that got new edges
+  changedLiterals.reindex(orig2reducedcol, ncols);
+  newCliqueTable.changedLiterals = std::move(changedLiterals);
 
   newCliqueTable.setAllowParallel(allowParallel);
   *this = std::move(newCliqueTable);
@@ -2543,7 +2612,7 @@ void HighsCliqueTable::buildFrom(const HighsLp* origModel,
     HighsInt origin = init.cliques[i].origin != kHighsIInf ? -1 : kHighsIInf;
     newCliqueTable.doAddClique(clqBuffer.data(),
                                static_cast<HighsInt>(clqBuffer.size()), false,
-                               origin);
+                               origin, false);
   }
 
   newCliqueTable.colsubstituted = init.colsubstituted;
