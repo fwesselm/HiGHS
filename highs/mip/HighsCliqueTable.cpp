@@ -2223,9 +2223,20 @@ void HighsCliqueTable::runCliqueMerging(HighsDomain& globaldomain,
   std::vector<HighsInt> neighbourhoodInds;
   neighbourhoodInds.reserve(invertedHashList.size());
 
+  // lambda to check whether a literal of the clique is inactive (fixed to zero
+  // or its column was eliminated); inactive literals do not contribute to the
+  // clique and are skipped. since the fixings have been processed, no literal
+  // is fixed to one, and the literals that are fixed to zero are deleted
+  auto isInactive = [&](CliqueVar v) {
+    assert(!globaldomain.isFixed(v.col) ||
+           (colDeleted[v.col] && globaldomain.isFixedToVal(v.col, 1 - v.val)));
+    return colDeleted[v.col];
+  };
+
+  // start the extension from the active literal with the fewest cliques
   HighsInt initialCliqueSize = clique.size();
   for (HighsInt i = 0; i != initialCliqueSize; ++i) {
-    if (globaldomain.isFixed(clique[i].col)) continue;
+    if (isInactive(clique[i])) continue;
 
     HighsInt thisNumClqs = numCliques(clique[i]);
     if (thisNumClqs < numcliques) {
@@ -2266,10 +2277,12 @@ void HighsCliqueTable::runCliqueMerging(HighsDomain& globaldomain,
   for (HighsInt i = 0; i != sizeWithCandidates; ++i)
     iscandidate[clique[i].index()] = false;
 
+  // keep the candidates that are adjacent to all active literals of the clique
+  // (the common neighbours)
   for (HighsInt i = 0; i != initialCliqueSize &&
                        initialCliqueSize < static_cast<HighsInt>(clique.size());
        ++i) {
-    if (clique[i] == extensionstart) continue;
+    if (clique[i] == extensionstart || isInactive(clique[i])) continue;
 
     HighsInt newSize =
         initialCliqueSize +
@@ -2279,27 +2292,36 @@ void HighsCliqueTable::runCliqueMerging(HighsDomain& globaldomain,
     clique.erase(clique.begin() + newSize, clique.end());
   }
 
-  if (static_cast<size_t>(initialCliqueSize) < clique.size()) {
-    // todo, shuffle extension vars?
-    randgen.shuffle(clique.data() + initialCliqueSize,
-                    clique.size() - initialCliqueSize);
-    HighsInt i = initialCliqueSize;
-    while (i < static_cast<HighsInt>(clique.size())) {
-      CliqueVar extvar = clique[i];
-      i += 1;
-
-      HighsInt newSize = i + shrinkToNeighbourhood(
-                                 neighbourhoodInds, numNeighbourhoodQueries,
-                                 extvar, clique.data() + i, clique.size() - i);
-      clique.erase(clique.begin() + newSize, clique.end());
-    }
-  }
-
   if (equation) {
+    // setting a common neighbour to one would set all literals of the
+    // equation to zero (each of them is adjacent to it), which violates the
+    // equation; so all common neighbours are fixed to zero, independently of
+    // each other (they do not need to form a clique)
     for (HighsInt i = initialCliqueSize;
          i < static_cast<HighsInt>(clique.size()); ++i)
       vertexInfeasible(globaldomain, clique[i].col, clique[i].val);
   } else {
+    // the common neighbours need not be adjacent to each other, but the
+    // extended clique must be a clique (two non-adjacent literals could both
+    // be one), so the clique is extended greedily by a maximal clique of
+    // common neighbours
+    if (static_cast<size_t>(initialCliqueSize) < clique.size()) {
+      // todo, shuffle extension vars?
+      randgen.shuffle(clique.data() + initialCliqueSize,
+                      clique.size() - initialCliqueSize);
+      HighsInt i = initialCliqueSize;
+      while (i < static_cast<HighsInt>(clique.size())) {
+        CliqueVar extvar = clique[i];
+        i += 1;
+
+        HighsInt newSize =
+            i + shrinkToNeighbourhood(neighbourhoodInds,
+                                      numNeighbourhoodQueries, extvar,
+                                      clique.data() + i, clique.size() - i);
+        clique.erase(clique.begin() + newSize, clique.end());
+      }
+    }
+
     runCliqueSubsumption(globaldomain, clique);
 
     if (!clique.empty()) {
@@ -2411,14 +2433,19 @@ void HighsCliqueTable::runCliqueMerging(HighsDomain& globaldomain) {
     }
 
     if (cliques[k].equality) {
-      // a common neighbour of an equation cannot be one, since all literals
-      // of the equation would be zero then; all common neighbours are fixed
-      // to zero (they do not need to form a clique), so the clique is maximal
+      // setting a common neighbour to one would set all active literals of the
+      // equation to zero (each of them is adjacent to it), which violates the
+      // equation; so all common neighbours are fixed to zero, independently of
+      // each other (they do not need to form a clique), and the clique is
+      // maximal then
       for (CliqueVar v : extensionvars)
         vertexInfeasible(globaldomain, v.col, v.val);
       cliques[k].maximal = true;
     } else {
-      // extend the clique by a clique of common neighbours
+      // the common neighbours need not be adjacent to each other, but the
+      // extended clique must be a clique (two non-adjacent literals could both
+      // be one), so the clique is extended greedily by a maximal clique of
+      // common neighbours
       if (!extensionvars.empty()) {
         // todo, shuffle extension vars?
         randgen.shuffle(extensionvars.data(),

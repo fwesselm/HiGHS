@@ -1864,6 +1864,74 @@ TEST_CASE("MIP-clique-table-identical-row-clique", "[highs_test_mip_solver]") {
   highs.resetThreadScheduler(true);
 }
 
+TEST_CASE("MIP-clique-merging-equation-neighbours", "[highs_test_mip_solver]") {
+  // clique merging fixes all common neighbours of an equation to zero, even if
+  // they are not adjacent to each other, and it ignores members that are
+  // fixed to zero
+  const HighsInt ncols = 5;
+  HighsLp lp;
+  lp.num_col_ = ncols;
+  lp.num_row_ = 0;
+  lp.col_cost_.assign(ncols, 0.0);
+  lp.col_lower_.assign(ncols, 0.0);
+  lp.col_upper_.assign(ncols, 1.0);
+  lp.integrality_.assign(ncols, HighsVarType::kInteger);
+  lp.a_matrix_.start_.assign(ncols + 1, 0);
+
+  Highs highs;
+  highs.setOptionValue("output_flag", dev_run);
+  highs.passModel(lp);
+
+  HighsCallback callback(&highs);
+  const HighsOptions& options = highs.getOptions();
+  HighsSolution solution;
+
+  // x3 and x4 are adjacent to x0 and x1, but not to each other
+  const HighsCliqueTable::CliqueVar edges[][2] = {
+      {{3, 1}, {0, 1}}, {{3, 1}, {1, 1}}, {{4, 1}, {0, 1}}, {{4, 1}, {1, 1}}};
+
+  // creates a mip solver whose clique table contains the edges and the
+  // equation over the first numEquationVars columns, then runs clique merging
+  // after fixing the given columns to zero
+  auto runMerging = [&](HighsMipSolver& mipsolver, HighsInt numEquationVars,
+                        const std::vector<HighsInt>& zeroCols) {
+    mipsolver.mipdata_ =
+        std::unique_ptr<HighsMipSolverData>(new HighsMipSolverData(mipsolver));
+    mipsolver.mipdata_->feastol = 1e-6;
+    mipsolver.mipdata_->setupDomainPropagation();
+    HighsCliqueTable& cliquetable = mipsolver.mipdata_->cliquetable;
+    HighsDomain& domain = mipsolver.mipdata_->getDomain();
+    for (const auto& edge : edges) cliquetable.doAddClique(edge, 2);
+    const HighsCliqueTable::CliqueVar equation[] = {{0, 1}, {1, 1}, {2, 1}};
+    cliquetable.doAddClique(equation, numEquationVars, true, 0);
+    for (HighsInt col : zeroCols) {
+      domain.fixCol(col, 0.0);
+      cliquetable.vertexInfeasible(domain, col, 1);
+    }
+    cliquetable.runCliqueMerging(domain);
+    return std::make_pair(domain.isFixedToVal(3, 0), domain.isFixedToVal(4, 0));
+  };
+
+  // x0 + x1 = 1: both common neighbours are fixed to zero
+  {
+    HighsMipSolver mipsolver(callback, options, lp, solution);
+    const auto fixed = runMerging(mipsolver, 2, {});
+    REQUIRE(fixed.first);
+    REQUIRE(fixed.second);
+  }
+
+  // x0 + x1 + x2 = 1 with x2 fixed to zero: x2 is ignored, so both common
+  // neighbours of x0 and x1 are fixed to zero
+  {
+    HighsMipSolver mipsolver(callback, options, lp, solution);
+    const auto fixed = runMerging(mipsolver, 3, {2});
+    REQUIRE(fixed.first);
+    REQUIRE(fixed.second);
+  }
+
+  highs.resetThreadScheduler(true);
+}
+
 TEST_CASE("issue-3170", "[highs_test_mip_solver]") {
   std::string filename =
       std::string(HIGHS_DIR) + "/check/instances/issue-3170.mps";
