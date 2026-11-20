@@ -792,6 +792,34 @@ HighsInt HighsCliqueTable::findIdenticalClique(const HighsDomain& globaldom,
   return identical;
 }
 
+bool HighsCliqueTable::absorbIntoIdenticalClique(const HighsDomain& globaldom,
+                                                 const CliqueVar* cliquevars,
+                                                 HighsInt numcliquevars,
+                                                 bool equality,
+                                                 HighsInt origin) {
+  const HighsInt identical =
+      findIdenticalClique(globaldom, cliquevars, numcliquevars);
+  if (identical == -1) return false;
+
+  Clique& clique = cliques[identical];
+  if (origin != kHighsIInf && origin != -1) {
+    // two identical rows: keep both cliques, so that each row can still be
+    // extended or deleted
+    if (clique.origin != kHighsIInf && clique.origin != -1 &&
+        clique.origin != origin)
+      return false;
+    // the existing clique keeps or takes over the row origin, so that clique
+    // merging can still extend it (and lift the row) or delete the row
+    clique.origin = origin;
+  } else if (origin == -1 && clique.origin == kHighsIInf) {
+    // the clique stems from a row, so clique merging should consider it
+    clique.origin = -1;
+  }
+  // an equation makes the clique an equality clique
+  clique.equality = clique.equality || equality;
+  return true;
+}
+
 void HighsCliqueTable::addClique(const HighsMipSolver& mipsolver,
                                  CliqueVar* cliquevars, HighsInt numcliquevars,
                                  bool equality, HighsInt origin) {
@@ -953,23 +981,14 @@ void HighsCliqueTable::addClique(const HighsMipSolver& mipsolver,
   numcliquevars = unfixedend - cliquevars;
   if (numcliquevars < 2) return;
 
-  // a row clique that is identical to a clique with the same row origin (the
-  // row is extracted again) or without a row origin (e.g. one whose origin was
-  // dropped by rebuild) is not added again: the existing clique keeps or takes
-  // over the row origin, so that clique merging can still extend it (and lift
-  // the row) or delete the row, but merges the clique only once
-  if (origin >= 0 && origin != kHighsIInf) {
-    const HighsInt identical =
-        findIdenticalClique(globaldom, cliquevars, numcliquevars);
-    if (identical != -1 && (cliques[identical].origin == origin ||
-                            cliques[identical].origin == kHighsIInf ||
-                            cliques[identical].origin == -1)) {
-      cliques[identical].origin = origin;
-      // an equation row makes the clique an equality clique
-      cliques[identical].equality = cliques[identical].equality || equality;
-      return;
-    }
-  }
+  // row cliques are added even without new edges (so that clique merging can
+  // extend or delete their rows); such a clique may be identical to an existing
+  // clique, e.g. a row clique that is extracted again after clique merging
+  // dropped the row origin of the clique because it was redundant. a clique
+  // with a new edge cannot be identical to an existing clique
+  if (!hasNewEdge && absorbIntoIdenticalClique(globaldom, cliquevars,
+                                               numcliquevars, equality, origin))
+    return;
 
   doAddClique(cliquevars, numcliquevars, equality, origin);
   processInfeasibleVertices(globaldom);

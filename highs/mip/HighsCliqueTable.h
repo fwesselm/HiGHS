@@ -165,6 +165,15 @@ class HighsCliqueTable {
                                const CliqueVar* cliquevars,
                                HighsInt numcliquevars);
 
+  // if a clique whose active literals are the given (active) literals exists,
+  // it absorbs the given clique (origin and equality) and true is returned;
+  // false is returned if there is no such clique or if both cliques stem from
+  // different rows
+  bool absorbIntoIdenticalClique(const HighsDomain& globaldom,
+                                 const CliqueVar* cliquevars,
+                                 HighsInt numcliquevars, bool equality,
+                                 HighsInt origin);
+
   HighsInt runCliqueSubsumption(const HighsDomain& globaldom,
                                 std::vector<CliqueVar>& clique);
 
