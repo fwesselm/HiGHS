@@ -2214,6 +2214,13 @@ HighsInt HighsCliqueTable::getNumImplications(HighsInt col, bool val) const {
   return numimplics;
 }
 
+bool HighsCliqueTable::isInactive(const HighsDomain& globaldom,
+                                  CliqueVar v) const {
+  assert(!globaldom.isFixed(v.col) ||
+         (colDeleted[v.col] && globaldom.isFixedToVal(v.col, 1 - v.val)));
+  return colDeleted[v.col];
+}
+
 void HighsCliqueTable::runCliqueMerging(HighsDomain& globaldomain,
                                         std::vector<CliqueVar>& clique,
                                         bool equation) {
@@ -2223,20 +2230,11 @@ void HighsCliqueTable::runCliqueMerging(HighsDomain& globaldomain,
   std::vector<HighsInt> neighbourhoodInds;
   neighbourhoodInds.reserve(invertedHashList.size());
 
-  // lambda to check whether a literal of the clique is inactive (fixed to zero
-  // or its column was eliminated); inactive literals do not contribute to the
-  // clique and are skipped. since the fixings have been processed, no literal
-  // is fixed to one, and the literals that are fixed to zero are deleted
-  auto isInactive = [&](CliqueVar v) {
-    assert(!globaldomain.isFixed(v.col) ||
-           (colDeleted[v.col] && globaldomain.isFixedToVal(v.col, 1 - v.val)));
-    return colDeleted[v.col];
-  };
-
   // start the extension from the active literal with the fewest cliques
+  // (inactive literals do not contribute to the clique and are skipped)
   HighsInt initialCliqueSize = clique.size();
   for (HighsInt i = 0; i != initialCliqueSize; ++i) {
-    if (isInactive(clique[i])) continue;
+    if (isInactive(globaldomain, clique[i])) continue;
 
     HighsInt thisNumClqs = numCliques(clique[i]);
     if (thisNumClqs < numcliques) {
@@ -2282,7 +2280,8 @@ void HighsCliqueTable::runCliqueMerging(HighsDomain& globaldomain,
   for (HighsInt i = 0; i != initialCliqueSize &&
                        initialCliqueSize < static_cast<HighsInt>(clique.size());
        ++i) {
-    if (clique[i] == extensionstart || isInactive(clique[i])) continue;
+    if (clique[i] == extensionstart || isInactive(globaldomain, clique[i]))
+      continue;
 
     HighsInt newSize =
         initialCliqueSize +
@@ -2368,22 +2367,12 @@ void HighsCliqueTable::runCliqueMerging(HighsDomain& globaldomain) {
 
     CliqueVar* clqvars = &cliqueentries[cliques[k].start];
 
-    // lambda to check whether a member is inactive (fixed to zero or its
-    // column was eliminated); inactive members do not contribute to the clique
-    // and are skipped. since the fixings have been processed, no member is
-    // fixed to one, and the members that are fixed to zero are deleted
-    auto isInactive = [&](CliqueVar v) {
-      assert(
-          !globaldomain.isFixed(v.col) ||
-          (colDeleted[v.col] && globaldomain.isFixedToVal(v.col, 1 - v.val)));
-      return colDeleted[v.col];
-    };
-
     // start the extension from the active member with the fewest cliques
+    // (inactive members do not contribute to the clique and are skipped)
     CliqueVar extensionstart;
     HighsInt numcliques = kHighsIInf;
     for (HighsInt i = 0; i != numclqvars; ++i) {
-      if (isInactive(clqvars[i])) continue;
+      if (isInactive(globaldomain, clqvars[i])) continue;
       HighsInt thisNumClqs = numCliques(clqvars[i]);
       if (thisNumClqs < numcliques) {
         numcliques = thisNumClqs;
@@ -2424,7 +2413,8 @@ void HighsCliqueTable::runCliqueMerging(HighsDomain& globaldomain) {
     // keep the candidates that are adjacent to all active members (the common
     // neighbours)
     for (HighsInt i = 0; i != numclqvars && !extensionvars.empty(); ++i) {
-      if (clqvars[i] == extensionstart || isInactive(clqvars[i])) continue;
+      if (clqvars[i] == extensionstart || isInactive(globaldomain, clqvars[i]))
+        continue;
 
       HighsInt newSize = shrinkToNeighbourhood(
           neighbourhoodInds, numNeighbourhoodQueries, clqvars[i],

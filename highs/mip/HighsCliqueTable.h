@@ -246,6 +246,12 @@ class HighsCliqueTable {
       changedLiterals.flag(cliqueentries[i]);
   }
 
+  // whether a literal of a clique is inactive (fixed to zero or its column was
+  // eliminated); inactive literals do not contribute to the clique. requires
+  // that the fixings have been processed (see cleanupFixed()), so that no
+  // literal is fixed to one and the literals that are fixed to zero are deleted
+  bool isInactive(const HighsDomain& globaldom, CliqueVar v) const;
+
   // whether clique merging can skip the clique: it was maximal after it was
   // merged and none of its literals got a new edge since then
   bool skipCliqueMerging(HighsInt cliqueid) const {
