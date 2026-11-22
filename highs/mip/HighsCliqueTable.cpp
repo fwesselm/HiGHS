@@ -33,7 +33,7 @@ sortedEdge(HighsCliqueTable::CliqueVar v1, HighsCliqueTable::CliqueVar v2) {
 
 void HighsCliqueTable::addSizeTwoClique(HighsInt cliqueid) {
   HighsInt start = cliques[cliqueid].start;
-  if (cliques[cliqueid].end - start != 2) return;
+  if (cliques[cliqueid].size() != 2) return;
   auto edge = sortedEdge(cliqueentries[start], cliqueentries[start + 1]);
   HighsInt* sizeTwoCliqueId = sizeTwoCliques.find(edge);
   if (sizeTwoCliqueId == nullptr) {
@@ -52,7 +52,7 @@ void HighsCliqueTable::addSizeTwoClique(HighsInt cliqueid) {
 
 void HighsCliqueTable::removeSizeTwoClique(HighsInt cliqueid) {
   HighsInt start = cliques[cliqueid].start;
-  if (cliques[cliqueid].end - start != 2) return;
+  if (cliques[cliqueid].size() != 2) return;
   HighsInt prev = sizeTwoLinks[cliqueid].prev;
   HighsInt next = sizeTwoLinks[cliqueid].next;
   if (prev != -1) {
@@ -75,7 +75,7 @@ void HighsCliqueTable::unlink(HighsInt pos, HighsInt cliqueid) {
   assert(pos >= 0);
   --numcliquesvar[cliqueentries[pos].index()];
 
-  HighsInt cliquelen = cliques[cliqueid].end - cliques[cliqueid].start;
+  HighsInt cliquelen = cliques[cliqueid].size();
   if (cliquelen == 2)
     invertedHashListSizeTwo[cliqueentries[pos].index()].erase(cliqueid);
   else
@@ -87,7 +87,7 @@ void HighsCliqueTable::link(HighsInt pos, HighsInt cliqueid) {
   assert(!colDeleted[cliqueentries[pos].col]);
   ++numcliquesvar[cliqueentries[pos].index()];
 
-  HighsInt cliquelen = cliques[cliqueid].end - cliques[cliqueid].start;
+  HighsInt cliquelen = cliques[cliqueid].size();
   if (cliquelen == 2)
     invertedHashListSizeTwo[cliqueentries[pos].index()].insert(cliqueid);
   else
@@ -196,7 +196,7 @@ void HighsCliqueTable::cliqueSubsumption(
       if (cliques[cliqueid].equality) {
         // subset of clique is an equality clique (stored in the clique table),
         // thus the remaining variables can be fixed
-        bool sizeTwo = cliques[cliqueid].end - cliques[cliqueid].start == 2;
+        bool sizeTwo = cliques[cliqueid].size() == 2;
         for (CliqueVar v : clique) {
           bool vHasClq =
               sizeTwo ? invertedHashListSizeTwo[v.index()].contains(cliqueid)
@@ -218,9 +218,21 @@ void HighsCliqueTable::collectCliques(const std::vector<CliqueVar>& clique) {
   // resize vector
   if (cliquehits.size() < cliques.size()) cliquehits.resize(cliques.size());
 
+  // the clique subsumption only acts on cliques that share at least two
+  // literals with the provided vector (all of its literals, or all active
+  // literals of a stored clique, which has at least two). hence, the clique
+  // list of the literal in the most cliques does not need to be scanned: the
+  // relevant cliques are found through the other literals and are checked for
+  // this literal by a lookup
+  assert(clique.size() >= 2);
+  CliqueVar skipVar = clique[0];
+  for (CliqueVar v : clique)
+    if (numcliquesvar[v.index()] > numcliquesvar[skipVar.index()]) skipVar = v;
+
   // collect indices of cliques that contain variables from the
   // provided vector
   for (CliqueVar v : clique) {
+    if (v == skipVar) continue;
     invertedHashList[v.index()].for_each([&](HighsInt cliqueid) {
       if (cliquehits[cliqueid] == 0) cliquehitinds.push_back(cliqueid);
       ++cliquehits[cliqueid];
@@ -230,6 +242,15 @@ void HighsCliqueTable::collectCliques(const std::vector<CliqueVar>& clique) {
       if (cliquehits[cliqueid] == 0) cliquehitinds.push_back(cliqueid);
       ++cliquehits[cliqueid];
     });
+  }
+
+  // count the skipped literal
+  for (HighsInt cliqueid : cliquehitinds) {
+    bool sizeTwo = cliques[cliqueid].size() == 2;
+    bool skipVarHasClq =
+        sizeTwo ? invertedHashListSizeTwo[skipVar.index()].contains(cliqueid)
+                : invertedHashList[skipVar.index()].contains(cliqueid);
+    if (skipVarHasClq) cliquehits[cliqueid]++;
   }
 }
 
@@ -506,7 +527,7 @@ HighsInt HighsCliqueTable::doAddClique(const CliqueVar* cliquevars,
     }
   }
 
-  HighsInt cliqueLen = cliques[cliqueid].end - cliques[cliqueid].start;
+  HighsInt cliqueLen = cliques[cliqueid].size();
   numEntries += cliqueLen;
   addSizeTwoClique(cliqueid);
   if (newEdges) markChangedClique(cliqueid);
@@ -566,7 +587,7 @@ bool HighsCliqueTable::findNeighbourhoodByCliques(
   const HighsInt numCandidates = end - start;
   HighsInt numCliqueEntries = 0;
   if (invertedHashList[v.index()].for_each([&](HighsInt cliqueid) {
-        numCliqueEntries += cliques[cliqueid].end - cliques[cliqueid].start;
+        numCliqueEntries += cliques[cliqueid].size();
         return numCliqueEntries > numCandidates;
       }))
     return false;
@@ -1855,9 +1876,7 @@ void HighsCliqueTable::processInfeasibleVertices(HighsDomain& globaldom) {
         fixLastActiveAndRemove(globaldom, cliqueid);
       } else if (!inPresolveProbing &&
                  cliques[cliqueid].numZeroFixed >=
-                     std::max(HighsInt{10}, (cliques[cliqueid].end -
-                                             cliques[cliqueid].start) >>
-                                                1)) {
+                     std::max(HighsInt{10}, cliques[cliqueid].size() >> 1)) {
         const bool equality = cliques[cliqueid].equality;
         const HighsInt origin = cliques[cliqueid].origin;
         clq.assign(cliqueentries.begin() + cliques[cliqueid].start,
@@ -2360,7 +2379,7 @@ void HighsCliqueTable::runCliqueMerging(HighsDomain& globaldomain) {
       haveNonModelCliquesToMerge = true;
       continue;
     }
-    HighsInt numclqvars = cliques[k].end - cliques[k].start;
+    HighsInt numclqvars = cliques[k].size();
     assert(numclqvars != 0);
     if (numclqvars == 0) continue;
     if (skipCliqueMerging(k)) continue;
@@ -2560,7 +2579,7 @@ void HighsCliqueTable::rebuild(
   for (size_t i = 0; i != cliques.size(); ++i) {
     if (cliques[i].start == -1) continue;
     const HighsInt numActive = cliques[i].numActive();
-    const HighsInt numClqVars = cliques[i].end - cliques[i].start;
+    const HighsInt numClqVars = cliques[i].size();
 
     for (HighsInt k = cliques[i].start; k != cliques[i].end; ++k) {
       HighsInt col = orig2reducedcol[cliqueentries[k].col];

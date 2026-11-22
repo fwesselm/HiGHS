@@ -67,7 +67,9 @@ class HighsCliqueTable {
     // by clique merging); this can only change if one of its literals gets a
     // new edge or the clique gets smaller
     bool maximal;
-    HighsInt numActive() const { return end - start - numZeroFixed; }
+    // number of entries (active and inactive literals)
+    HighsInt size() const { return end - start; }
+    HighsInt numActive() const { return size() - numZeroFixed; }
   };
 
   struct Substitution {
@@ -269,6 +271,9 @@ class HighsCliqueTable {
       HighsInt& dominatingOrigin,
       const std::function<void(HighsInt)>& removeCliqueCallback);
 
+  // collects the cliques that share at least two literals with the given
+  // literals, together with the number of shared literals (cliques that share
+  // only one literal may be missing); used by cliqueSubsumption()
   void collectCliques(const std::vector<CliqueVar>& clique);
 
   struct BronKerboschData {
@@ -492,7 +497,7 @@ class HighsCliqueTable {
     if (clq == -1) return c;
 
     c.first = &cliqueentries[cliques[clq].start];
-    c.second = cliques[clq].end - cliques[clq].start;
+    c.second = cliques[clq].size();
     return c;
   }
 
