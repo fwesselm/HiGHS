@@ -13,10 +13,11 @@
 #include "mip/HighsCutPool.h"
 #include "mip/HighsLpRelaxation.h"
 #include "mip/HighsMipSolver.h"
+#include "util/ScrMemLog.h"
 
 HighsSeparator::HighsSeparator(const HighsMipSolver& mipsolver,
                                const std::string& name)
-    : numCutsFound(0), numCalls(0) {
+    : numCutsFound(0), numCalls(0), scrName(name.c_str()) {
   /*
   this->clockIndex = -1;
   // Don't get the clock index when analyse_mip_time is false - as
@@ -32,6 +33,7 @@ HighsSeparator::HighsSeparator(const HighsMipSolver& mipsolver,
 void HighsSeparator::run(HighsLpRelaxation& lpRelaxation,
                          HighsLpAggregator& lpAggregator,
                          HighsTransformedLp& transLp, HighsCutPool& cutpool) {
+  ScrPhase scrPhase("separator", scrName);
   ++numCalls;
   HighsInt currNumCuts = cutpool.getNumCuts();
 

@@ -25,6 +25,9 @@
 #include "presolve/PresolveComponent.h"
 #include "util/HighsCDouble.h"
 #include "util/HighsIntegers.h"
+// SCRATCH memory logging
+#include "Highs.h"
+#include "util/ScrMemLog.h"
 
 using std::fabs;
 
@@ -87,18 +90,24 @@ void HighsMipSolver::runTask(F&& f, highs::parallel::TaskGroup& tg,
                            !options_mip_->mip_search_simulate_concurrency;
   for (HighsInt i : indices) {
     if (spawn_tasks) {
-      tg.spawn([&f, i] { f(i); });
+      tg.spawn([&f, i] {
+        ScrPhase scrPhase("worker task", scrWorkerName(static_cast<int>(i)));
+        f(i);
+      });
     } else {
+      ScrPhase scrPhase("worker task", scrWorkerName(static_cast<int>(i)));
       f(i);
     }
   }
   if (spawn_tasks) {
+    ScrPhase scrPhase("waiting for workers");
     tg.taskWait();
   }
   setParallelLock(false);
 }
 
 void HighsMipSolver::run() {
+  ScrPhase scrRun(submip ? "sub-MIP" : "MIP");
   modelstatus_ = HighsModelStatus::kNotset;
   max_submip_level = std::max(submip_level, max_submip_level);
   // Start the timer local to HighsMipSolver - independent of the
@@ -127,7 +136,10 @@ void HighsMipSolver::run() {
 #endif
   profiling_->stop(kMipClockInit);
   profiling_->start(kMipClockRunPresolve);
-  mipdata_->runMipPresolve(options_mip_->presolve_reduction_limit);
+  {
+    ScrPhase scrPhase("presolve");
+    mipdata_->runMipPresolve(options_mip_->presolve_reduction_limit);
+  }
   profiling_->stop(kMipClockRunPresolve);
   profiling_->stop(kPresolveTime);
   if (profiling_->mip_ && !submip)
@@ -198,7 +210,10 @@ void HighsMipSolver::run() {
 #ifdef HIGHS_DEBUGSOL
   mipdata_->debugSolution.debugSolActive = debugSolActive;
 #endif
-  mipdata_->runSetup();
+  {
+    ScrPhase scrPhase("setup");
+    mipdata_->runSetup();
+  }
   profiling_->stop(kMipClockRunSetup);
   if (profiling_->mip_ && !submip)
     highsLogUser(options_mip_->log_options, HighsLogType::kInfo,
@@ -229,6 +244,7 @@ restart:
 
     // Apply the trivial heuristics
     profiling_->start(kMipClockTrivialHeuristics);
+    ScrPhase scrPreRoot("pre-root heuristics");
     HighsModelStatus returned_model_status = mipdata_->trivialHeuristics();
     profiling_->stop(kMipClockTrivialHeuristics);
     if (modelstatus_ == HighsModelStatus::kNotset &&
@@ -252,12 +268,16 @@ restart:
       }
     }
     // End of pre-root-node heuristics
+    scrPreRoot.end();
     if (profiling_->mip_ && !submip)
       highsLogUser(options_mip_->log_options, HighsLogType::kInfo,
                    "MIP-Timing: %11.2g - starting evaluate root node\n",
                    timer_.read());
     profiling_->start(kMipClockEvaluateRootNode);
-    mipdata_->evaluateRootNode(master_worker);
+    {
+      ScrPhase scrPhase("root node");
+      mipdata_->evaluateRootNode(master_worker);
+    }
     profiling_->stop(kMipClockEvaluateRootNode);
     if (this->terminate()) {
       modelstatus_ = this->terminationStatus();
@@ -687,6 +707,7 @@ restart:
   };
 
   auto evaluateNode = [&](HighsInt i) -> bool {
+    ScrPhase scrPhase("evaluate node");
     if (!mipdata_->parallelLockActive())
       profiling_->start(kMipClockEvaluateNode1);
     HighsMipWorker& worker = mipdata_->workers[i];
@@ -731,6 +752,7 @@ restart:
   };
 
   auto separateAndStoreBasis = [&](const HighsInt i, bool& infeasible) -> void {
+    ScrPhase scrPhase("node separation");
     HighsMipWorker& worker = mipdata_->workers[i];
     if (options_mip_->mip_allow_cut_separation_at_nodes) {
       if (!mipdata_->parallelLockActive())
@@ -788,6 +810,7 @@ restart:
   };
 
   auto runHeuristics = [&](const HighsInt i, bool& infeasible) -> bool {
+    ScrPhase scrPhase("node heuristics");
     HighsMipWorker& worker = mipdata_->workers[i];
     if (!mipdata_->parallelLockActive())
       profiling_->start(kMipClockDiveEvaluateNode);
@@ -846,6 +869,7 @@ restart:
   };
 
   auto dive = [&](HighsInt i, HighsInt nodeLim) -> bool {
+    ScrPhase scrPhase("dive");
     HighsMipWorker& worker = mipdata_->workers[i];
     const int64_t diveNodeLim = nodeLim == kHighsIInf
                                     ? std::numeric_limits<int64_t>::max()
@@ -991,6 +1015,7 @@ restart:
   std::vector<HighsInt> stallNodesPerWorker(getMaxNumWorkers());
   bool root_node = true;  // Don't separate the root node again
   HighsInt nodeLim = max_num_workers > 1 ? 1 : maxNodesPerWorkerLim;  // ramp-up
+  ScrPhase scrSearch("B&B");
   while (!mipdata_->nodequeue.empty()) {
     // Possibly query existence of an external solution
     if (!submip)
@@ -1107,6 +1132,56 @@ restart:
           mipdata_->upper_bound, mipdata_->nodequeue.getBestLowerBound()));
     }
 
+    // SCRMEM: sizes of the structures that may grow (scratch, every 60 s)
+    if (!submip) {
+      static double scrMemLast = -1e100;
+      static double scrMallocLast = -1e100;
+      const double scrNow = timer_.read();
+      // a new solve in the same process restarts the timer
+      if (scrNow < scrMemLast) scrMemLast = scrMallocLast = -1e100;
+      if (scrNow - scrMemLast >= 60.0) {
+        FILE* f = scrMemLogFile();
+        std::lock_guard<std::mutex> scrLock(scrMemMutex());
+        if (scrMemLast < 0)
+          fprintf(f,
+                  "SCRSTART %s version %s githash %s model rows=%d cols=%d "
+                  "nnz=%d threads=%d\n",
+                  scrMemNow().c_str(), highsVersion(), highsGithash(),
+                  (int)numRow(), (int)numCol(), (int)numNonzero(),
+                  (int)getMaxNumWorkers());
+        scrMemLast = scrNow;
+        long rssKb, peakKb;
+        scrMemRss(rssKb, peakKb);
+        fprintf(f,
+                "SCRMEM %s t=%.0f rssMB=%ld peakMB=%ld nodes=%lld queue=%lld",
+                scrMemNow().c_str(), scrNow, rssKb / 1024, peakKb / 1024,
+                (long long)mipdata_->num_nodes,
+                (long long)mipdata_->nodequeue.numNodes());
+        for (size_t k = 0; k < mipdata_->cutpools.size(); ++k) {
+          const HighsCutPool& p = mipdata_->cutpools[k];
+          fprintf(f, " | cp%d cuts=%d rows=%d nzcap=%lld", (int)k,
+                  (int)p.getNumCuts(), (int)p.getMatrix().getNumRows(),
+                  (long long)p.getMatrix().nonzeroCapacity());
+        }
+        for (size_t k = 0; k < mipdata_->conflictpools.size(); ++k) {
+          const HighsConflictPool& c = mipdata_->conflictpools[k];
+          fprintf(f, " | cf%d n=%d entries=%lld", (int)k,
+                  (int)c.getNumConflicts(),
+                  (long long)c.getConflictEntryVector().size());
+        }
+        for (size_t k = 0; k < mipdata_->lps.size(); ++k)
+          fprintf(f, " | lp%d rows=%d nnz=%d", (int)k,
+                  (int)mipdata_->lps[k].numRows(),
+                  (int)mipdata_->lps[k].numNonzeros());
+        fprintf(f, "\n");
+        // glibc's heap summary every 5 minutes
+        if (scrNow - scrMallocLast >= 300.0) {
+          scrMallocLast = scrNow;
+          scrMemMallocInfo(f);
+        }
+        fflush(f);
+      }
+    }
     limit_reached = mipdata_->checkLimits();
     if (limit_reached || early_terminated_worker != -1) {
       mipdata_->printDisplayLine();

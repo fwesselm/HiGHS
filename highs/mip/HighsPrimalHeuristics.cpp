@@ -21,6 +21,7 @@
 #include "mip/MipTimer.h"
 #include "util/HighsHash.h"
 #include "util/HighsIntegers.h"
+#include "util/ScrMemLog.h"
 
 // GCC floating point errors are well-known for 32-bit architectures;
 // see https://gcc.gnu.org/bugzilla/show_bug.cgi?id=323.
@@ -104,6 +105,7 @@ bool HighsPrimalHeuristics::solveSubMip(
     double fixingRate, std::vector<double> colLower,
     std::vector<double> colUpper, HighsInt maxleaves, HighsInt maxnodes,
     HighsInt stallnodes) {
+  ScrPhase scrPhase("heuristic", "sub-MIP");
   HighsOptions submipoptions = *mipsolver.options_mip_;
   HighsLp submip = lp;
 
@@ -337,6 +339,7 @@ class HeuristicNeighbourhood {
 };
 
 void HighsPrimalHeuristics::rootReducedCost(HighsMipWorker& worker) {
+  ScrPhase scrPhase("heuristic", "reduced cost");
   std::vector<std::pair<double, HighsDomainChange>> lurkingBounds =
       mipsolver.mipdata_->redcostfixing.getLurkingBounds(
           mipsolver, worker.getGlobalDomain());
@@ -420,6 +423,7 @@ static constexpr int64_t kDepthFirstNodeLimit = 1000;
 
 void HighsPrimalHeuristics::RENS(HighsMipWorker& worker,
                                  const std::vector<double>& tmp) {
+  ScrPhase scrPhase("heuristic", "RENS");
   // return if domain is infeasible
   if (worker.getGlobalDomain().infeasible()) return;
 
@@ -669,6 +673,7 @@ retry:
 
 void HighsPrimalHeuristics::RINS(HighsMipWorker& worker,
                                  const std::vector<double>& relaxationsol) {
+  ScrPhase scrPhase("heuristic", "RINS");
   // return if domain is infeasible
   if (worker.getGlobalDomain().infeasible()) return;
 
@@ -1108,6 +1113,7 @@ bool HighsPrimalHeuristics::linesearchRounding(
 
 void HighsPrimalHeuristics::randomizedRounding(
     HighsMipWorker& worker, const std::vector<double>& relaxationsol) {
+  ScrPhase scrPhase("heuristic", "randomized rounding");
   if (relaxationsol.size() != static_cast<size_t>(mipsolver.numCol())) return;
 
   HighsDomain localdom = worker.getGlobalDomain();
@@ -1195,6 +1201,7 @@ void HighsPrimalHeuristics::randomizedRounding(
 
 void HighsPrimalHeuristics::shifting(HighsMipWorker& worker,
                                      const std::vector<double>& relaxationsol) {
+  ScrPhase scrPhase("heuristic", "shifting");
   if (relaxationsol.size() != static_cast<size_t>(mipsolver.numCol())) return;
 
   std::vector<double> current_relax_solution = relaxationsol;
@@ -1456,6 +1463,7 @@ void HighsPrimalHeuristics::shifting(HighsMipWorker& worker,
 
 void HighsPrimalHeuristics::ziRound(HighsMipWorker& worker,
                                     const std::vector<double>& relaxationsol) {
+  ScrPhase scrPhase("heuristic", "ZI round");
   // if (mipsolver.submip) return;
   if (relaxationsol.size() != static_cast<size_t>(mipsolver.numCol())) return;
 
@@ -1568,6 +1576,7 @@ void HighsPrimalHeuristics::ziRound(HighsMipWorker& worker,
 }
 
 void HighsPrimalHeuristics::feasibilityPump(HighsMipWorker& worker) {
+  ScrPhase scrPhase("heuristic", "feasibility pump");
   // LP relaxation instantiation
   HighsLpRelaxation lprelax(worker.getLpRelaxation());
   lprelax.setMipWorker(worker);
@@ -1687,6 +1696,7 @@ void HighsPrimalHeuristics::feasibilityPump(HighsMipWorker& worker) {
 }
 
 void HighsPrimalHeuristics::centralRounding(HighsMipWorker& worker) {
+  ScrPhase scrPhase("heuristic", "central rounding");
   if (mipsolver.mipdata_->analyticCenter.size() !=
       static_cast<size_t>(mipsolver.numCol()))
     return;

@@ -38,6 +38,8 @@ class HighsSeparator {
   HighsInt numCutsFound;
   HighsInt numCalls;
   int clockIndex;
+  // SCRATCH: name for the memory log (the names are static strings)
+  const char* scrName;
 
  public:
   HighsSeparator(const HighsMipSolver& mipsolver, const std::string& name);

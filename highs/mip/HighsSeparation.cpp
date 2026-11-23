@@ -22,6 +22,7 @@
 #include "mip/HighsPathSeparator.h"
 #include "mip/HighsTableauSeparator.h"
 #include "mip/HighsTransformedLp.h"
+#include "util/ScrMemLog.h"
 
 HighsSeparation::HighsSeparation(HighsMipWorker& mipworker)
     : mipworker_(mipworker) {
@@ -44,6 +45,7 @@ HighsSeparation::HighsSeparation(HighsMipWorker& mipworker)
 
 HighsInt HighsSeparation::separationRound(HighsDomain& propdomain,
                                           HighsLpRelaxation::Status& status) {
+  ScrPhase scrPhase("separation round");
   const HighsSolution& sol = lp->getLpSolver().getSolution();
 
   HighsMipSolverData& mipdata = *lp->getMipSolver().mipdata_;

@@ -20,6 +20,7 @@
 #include "util/HighsCDouble.h"
 #include "util/HighsHash.h"
 #include "util/HighsSolverSelect.h"
+#include "util/ScrMemLog.h"
 
 // Cap on IPM iterations in MIP LP solves. Of 1309 IPM solves on the benchmark
 // sets, 3 needed more than this
@@ -1133,6 +1134,7 @@ void HighsLpRelaxation::setObjectiveLimit(double objlim) {
 }
 
 HighsLpRelaxation::Status HighsLpRelaxation::run(bool resolve_on_error) {
+  ScrPhase scrPhase("LP");
   const HighsInfo& info = lpsolver.getInfo();
   const double this_time_limit =
       std::max(lpsolver.getRunTime() + mipsolver.options_mip_->time_limit -
