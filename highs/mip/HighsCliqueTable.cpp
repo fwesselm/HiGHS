@@ -643,14 +643,13 @@ bool HighsCliqueTable::findNeighbourhoodByCliques(
   // count the entries of the cliques of v; enumerating them is only cheaper
   // than querying all candidates if there are at most as many as candidates
   const HighsInt numCandidates = end - start;
-  HighsInt numCliqueEntries = 0;
+  // the size-two cliques have two entries each (the count matches the list
+  // since the literal is active)
+  assert(!colDeleted[v.col]);
+  HighsInt numCliqueEntries = 2 * numCliquesSizeTwo(v);
+  if (numCliqueEntries > numCandidates) return false;
   if (invertedHashList[v.index()].for_each([&](HighsInt cliqueid) {
         numCliqueEntries += cliques[cliqueid].size();
-        return numCliqueEntries > numCandidates;
-      }))
-    return false;
-  if (invertedHashListSizeTwo[v.index()].for_each([&](HighsInt) {
-        numCliqueEntries += 2;
         return numCliqueEntries > numCandidates;
       }))
     return false;
@@ -693,6 +692,12 @@ HighsInt HighsCliqueTable::partitionNeighbourhood(
 HighsInt HighsCliqueTable::partitionNeighbourhood(
     std::vector<HighsInt>& neighbourhoodInds, int64_t& numQueries, CliqueVar v,
     IndexedCliqueVars& vars, HighsInt start, HighsInt end) const {
+  // a deleted literal has no cliques in its lists, so no neighbours
+  if (colDeleted[v.col]) {
+    neighbourhoodInds.clear();
+    return 0;
+  }
+
   // the positions of the candidates are known, so the neighbourhood may be
   // found by enumerating the cliques of v instead of querying all candidates
   if (!findNeighbourhoodByCliques(neighbourhoodInds, numQueries, v, vars, start,
@@ -852,12 +857,17 @@ HighsInt HighsCliqueTable::findIdenticalClique(const HighsDomain& globaldom,
     return cliqueid != nullptr ? *cliqueid : -1;
   }
 
-  // the candidates are the cliques of the literal with the shortest list of
-  // cliques
+  // an identical clique has at least three active literals, so it is in the
+  // list of cliques larger than two of each given literal. the candidates are
+  // the cliques in the shortest of these lists
+  auto numLargeCliques = [&](CliqueVar v) {
+    return numCliques(v) - numCliquesSizeTwo(v);
+  };
   CliqueVar shortest = cliquevars[0];
   for (HighsInt i = 1; i != numcliquevars; ++i)
-    if (numCliques(cliquevars[i]) < numCliques(shortest))
+    if (numLargeCliques(cliquevars[i]) < numLargeCliques(shortest))
       shortest = cliquevars[i];
+  if (numLargeCliques(shortest) == 0) return -1;
 
   iscandidate.resize(invertedHashList.size());
   for (HighsInt i = 0; i != numcliquevars; ++i)
