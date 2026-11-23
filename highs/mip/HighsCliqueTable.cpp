@@ -76,10 +76,12 @@ void HighsCliqueTable::unlink(HighsInt pos, HighsInt cliqueid) {
   --numcliquesvar[cliqueentries[pos].index()];
 
   HighsInt cliquelen = cliques[cliqueid].size();
-  if (cliquelen == 2)
+  if (cliquelen == 2) {
+    numcliquesvarsizetwo[cliqueentries[pos].index()]--;
     invertedHashListSizeTwo[cliqueentries[pos].index()].erase(cliqueid);
-  else
+  } else {
     invertedHashList[cliqueentries[pos].index()].erase(cliqueid);
+  }
 }
 
 void HighsCliqueTable::link(HighsInt pos, HighsInt cliqueid) {
@@ -88,10 +90,12 @@ void HighsCliqueTable::link(HighsInt pos, HighsInt cliqueid) {
   ++numcliquesvar[cliqueentries[pos].index()];
 
   HighsInt cliquelen = cliques[cliqueid].size();
-  if (cliquelen == 2)
+  if (cliquelen == 2) {
+    numcliquesvarsizetwo[cliqueentries[pos].index()]++;
     invertedHashListSizeTwo[cliqueentries[pos].index()].insert(cliqueid);
-  else
+  } else {
     invertedHashList[cliqueentries[pos].index()].insert(cliqueid, pos);
+  }
 }
 
 HighsInt HighsCliqueTable::findCommonCliqueId(int64_t& numQueries, CliqueVar v1,
@@ -220,14 +224,27 @@ void HighsCliqueTable::collectCliques(const std::vector<CliqueVar>& clique) {
 
   // the clique subsumption only acts on cliques that share at least two
   // literals with the provided vector (all of its literals, or all active
-  // literals of a stored clique, which has at least two). hence, the clique
-  // list of the literal in the most cliques does not need to be scanned: the
-  // relevant cliques are found through the other literals and are checked for
-  // this literal by a lookup
+  // literals of a stored clique, which has at least two). this allows two
+  // shortcuts:
+  // - the size-two cliques sharing two literals with the provided vector are
+  //   the size-two cliques on the pairs of its literals, which can be looked up
+  //   instead of scanning the size-two clique lists
+  // - the clique lists of the literal with the most entries to scan do not need
+  //   to be scanned: the relevant cliques are found through the other literals
+  //   and are checked for this literal by a lookup
   assert(clique.size() >= 2);
-  CliqueVar skipVar = clique[0];
-  for (CliqueVar v : clique)
-    if (numCliques(v) > numCliques(skipVar)) skipVar = v;
+
+  // look up the pairs if there are fewer pairs than size-two clique entries
+  const int64_t numPairs =
+      static_cast<int64_t>(clique.size()) * (clique.size() - 1) / 2;
+  int64_t numSizeTwoEntries = 0;
+  for (CliqueVar v : clique) numSizeTwoEntries += numCliquesSizeTwo(v);
+  const bool lookUpPairs = numPairs < numSizeTwoEntries;
+
+  // number of clique list entries of the given literal that are scanned
+  auto numScannedEntries = [&](CliqueVar v) {
+    return lookUpPairs ? numCliques(v) - numCliquesSizeTwo(v) : numCliques(v);
+  };
 
   // collect indices of cliques that contain the given literal
   auto scanCliqueLists = [&](CliqueVar v) {
@@ -236,14 +253,20 @@ void HighsCliqueTable::collectCliques(const std::vector<CliqueVar>& clique) {
       ++cliquehits[cliqueid];
     });
 
-    invertedHashListSizeTwo[v.index()].for_each([&](HighsInt cliqueid) {
-      if (cliquehits[cliqueid] == 0) cliquehitinds.push_back(cliqueid);
-      ++cliquehits[cliqueid];
-    });
+    if (!lookUpPairs) {
+      invertedHashListSizeTwo[v.index()].for_each([&](HighsInt cliqueid) {
+        if (cliquehits[cliqueid] == 0) cliquehitinds.push_back(cliqueid);
+        ++cliquehits[cliqueid];
+      });
+    }
   };
 
-  // collect indices of cliques that contain variables from the
-  // provided vector
+  // find the literal with the most clique list entries to scan
+  CliqueVar skipVar = clique[0];
+  for (CliqueVar v : clique)
+    if (numScannedEntries(v) > numScannedEntries(skipVar)) skipVar = v;
+
+  // collect indices of cliques that contain the other literals
   for (CliqueVar v : clique) {
     if (v == skipVar) continue;
     scanCliqueLists(v);
@@ -251,7 +274,8 @@ void HighsCliqueTable::collectCliques(const std::vector<CliqueVar>& clique) {
 
   // the lookups are only cheaper than scanning the clique lists of the skipped
   // literal if these lists are longer than the number of cliques found
-  if (numCliques(skipVar) <= static_cast<HighsInt>(cliquehitinds.size())) {
+  if (numScannedEntries(skipVar) <=
+      static_cast<HighsInt>(cliquehitinds.size())) {
     // scan the clique lists of the skipped literal
     scanCliqueLists(skipVar);
   } else {
@@ -262,6 +286,27 @@ void HighsCliqueTable::collectCliques(const std::vector<CliqueVar>& clique) {
           sizeTwo ? invertedHashListSizeTwo[skipVar.index()].contains(cliqueid)
                   : invertedHashList[skipVar.index()].contains(cliqueid);
       if (skipVarHasClq) cliquehits[cliqueid]++;
+    }
+  }
+
+  // collect the size-two cliques on the pairs of literals (after the lookups
+  // above, which only check the cliques found by scanning)
+  if (lookUpPairs) {
+    for (size_t i = 0; i + 1 < clique.size(); i++) {
+      if (invertedHashListSizeTwo[clique[i].index()].empty()) continue;
+      for (size_t j = i + 1; j < clique.size(); j++) {
+        if (invertedHashListSizeTwo[clique[j].index()].empty()) continue;
+        const HighsInt* sizeTwoCliqueId =
+            sizeTwoCliques.find(sortedEdge(clique[i], clique[j]));
+        if (sizeTwoCliqueId == nullptr) continue;
+        // all size-two cliques on this edge are linked
+        for (HighsInt cliqueid = *sizeTwoCliqueId; cliqueid != -1;
+             cliqueid = sizeTwoLinks[cliqueid].next) {
+          assert(cliquehits[cliqueid] == 0);
+          cliquehitinds.push_back(cliqueid);
+          cliquehits[cliqueid] = 2;
+        }
+      }
     }
   }
 }
@@ -491,6 +536,7 @@ HighsInt HighsCliqueTable::doAddClique(const CliqueVar* cliquevars,
 
     cliqueentries[k] = v;
     ++numcliquesvar[v.index()];
+    if (numcliquevars == 2) numcliquesvarsizetwo[v.index()]++;
     ++k;
   }
 
@@ -744,6 +790,9 @@ void HighsCliqueTable::replaceLiteral(const CliqueVar substitutedVar,
   numcliquesvar[replacementVar.index()] +=
       numcliquesvar[substitutedVar.index()];
   numcliquesvar[substitutedVar.index()] = 0;
+  numcliquesvarsizetwo[replacementVar.index()] +=
+      numcliquesvarsizetwo[substitutedVar.index()];
+  numcliquesvarsizetwo[substitutedVar.index()] = 0;
 
   // the replacement gets edges to all literals of the cliques of the
   // substituted literal, and these cliques change

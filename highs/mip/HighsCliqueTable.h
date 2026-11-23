@@ -96,6 +96,8 @@ class HighsCliqueTable {
   std::vector<HighsInt> freeslots;
   std::vector<Clique> cliques;
   std::vector<HighsInt> numcliquesvar;
+  // number of size-two cliques per literal (included in numcliquesvar)
+  std::vector<HighsInt> numcliquesvarsizetwo;
   std::vector<CliqueVar> infeasvertexstack;
 
   std::vector<HighsInt> colsubstituted;
@@ -366,6 +368,7 @@ class HighsCliqueTable {
     invertedHashList.resize(2 * ncols);
     invertedHashListSizeTwo.resize(2 * ncols);
     numcliquesvar.resize(2 * ncols, 0);
+    numcliquesvarsizetwo.resize(2 * ncols, 0);
     clqVarPos.resize(2 * ncols, -1);
     changedLiterals.resize(ncols);
     colsubstituted.resize(ncols);
@@ -537,6 +540,10 @@ class HighsCliqueTable {
   HighsInt numCliques() const { return cliques.size() - freeslots.size(); }
 
   HighsInt numCliques(CliqueVar v) const { return numcliquesvar[v.index()]; }
+
+  HighsInt numCliquesSizeTwo(CliqueVar v) const {
+    return numcliquesvarsizetwo[v.index()];
+  }
 
   HighsInt numCliques(HighsInt col, bool val) const {
     return numcliquesvar[CliqueVar(col, val).index()];
