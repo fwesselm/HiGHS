@@ -227,12 +227,10 @@ void HighsCliqueTable::collectCliques(const std::vector<CliqueVar>& clique) {
   assert(clique.size() >= 2);
   CliqueVar skipVar = clique[0];
   for (CliqueVar v : clique)
-    if (numcliquesvar[v.index()] > numcliquesvar[skipVar.index()]) skipVar = v;
+    if (numCliques(v) > numCliques(skipVar)) skipVar = v;
 
-  // collect indices of cliques that contain variables from the
-  // provided vector
-  for (CliqueVar v : clique) {
-    if (v == skipVar) continue;
+  // collect indices of cliques that contain the given literal
+  auto scanCliqueLists = [&](CliqueVar v) {
     invertedHashList[v.index()].for_each([&](HighsInt cliqueid) {
       if (cliquehits[cliqueid] == 0) cliquehitinds.push_back(cliqueid);
       ++cliquehits[cliqueid];
@@ -242,15 +240,29 @@ void HighsCliqueTable::collectCliques(const std::vector<CliqueVar>& clique) {
       if (cliquehits[cliqueid] == 0) cliquehitinds.push_back(cliqueid);
       ++cliquehits[cliqueid];
     });
+  };
+
+  // collect indices of cliques that contain variables from the
+  // provided vector
+  for (CliqueVar v : clique) {
+    if (v == skipVar) continue;
+    scanCliqueLists(v);
   }
 
-  // count the skipped literal
-  for (HighsInt cliqueid : cliquehitinds) {
-    bool sizeTwo = cliques[cliqueid].size() == 2;
-    bool skipVarHasClq =
-        sizeTwo ? invertedHashListSizeTwo[skipVar.index()].contains(cliqueid)
-                : invertedHashList[skipVar.index()].contains(cliqueid);
-    if (skipVarHasClq) cliquehits[cliqueid]++;
+  // the lookups are only cheaper than scanning the clique lists of the skipped
+  // literal if these lists are longer than the number of cliques found
+  if (numCliques(skipVar) <= static_cast<HighsInt>(cliquehitinds.size())) {
+    // scan the clique lists of the skipped literal
+    scanCliqueLists(skipVar);
+  } else {
+    // count the skipped literal by lookups
+    for (HighsInt cliqueid : cliquehitinds) {
+      bool sizeTwo = cliques[cliqueid].size() == 2;
+      bool skipVarHasClq =
+          sizeTwo ? invertedHashListSizeTwo[skipVar.index()].contains(cliqueid)
+                  : invertedHashList[skipVar.index()].contains(cliqueid);
+      if (skipVarHasClq) cliquehits[cliqueid]++;
+    }
   }
 }
 
